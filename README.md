@@ -168,8 +168,9 @@ the watch offers two things, and neither is mass storage:
 | No | Garmin's proprietary protocol (`idProduct 0x0003`) | No, and it may not even charge |
 
 So answer **yes** to *Use MTP?*, then `make install` opens [OpenMTP](https://openmtp.ganeshrvel.com/)
-and reveals the `.prg` in Finder. Drag it into **GARMIN/Apps/**, then on the watch hold
-**MENU → Watch Face → Crossover Face**.
+and reveals the `.prg` in Finder. Drag it into **GARMIN/Apps/** — that one file is all the watch needs. The
+`.prg.debug.xml` beside it stays on your Mac; it symbolicates crash logs pulled from
+`GARMIN/Apps/LOGS/`. Then on the watch hold **MENU → Watch Face → Crossover Face**.
 
 `libmtp`'s CLI (`mtp-sendfile`) does *detect* the watch, but cannot write to it: Garmin's
 MTP implementation does not support the bulk-metadata call libmtp uses to resolve a parent
@@ -186,8 +187,15 @@ working for older Garmin devices.
 
 ## Settings
 
-The face ships with one user-facing setting, editable in the Garmin Connect app or Garmin
-Express under the app's settings:
+The face ships with one user-facing setting — the layout — and it can be changed **on the
+watch itself**, which matters because phone-side settings are unreliable for a sideloaded
+app. From the watch face, hold **MENU → Watch Face → Crossover Face → Settings**.
+
+`AppBase.getSettingsView()` provides this (`source/settings/LayoutMenu.mc`). Watch faces
+cannot normally accept input; that hook is the sanctioned exception. The same setting also
+appears in Garmin Connect or Garmin Express if the face is installed from the store.
+
+The three options:
 
 | Layout | Behaviour |
 |---|---|
@@ -227,6 +235,7 @@ source/
   data/WatchData.mc   device state, formatted. Pure queries, no drawing
   matrix/DotGrid.mc   lattice geometry: pitch, circle clip, hub
   matrix/StatMap.mc   dot -> stat mapping; the layout seam
+  settings/           on-device layout picker
   render/Palette.mc   four hues, two tiers, two power modes
   render/MatrixRenderer.mc  draws the field with a given palette
   tests/              geometry, mapping and luminance-budget tests
