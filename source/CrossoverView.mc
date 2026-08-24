@@ -16,11 +16,40 @@ class CrossoverView extends WatchUi.WatchFace {
 
     function onLayout(dc as Dc) as Void {
         Palette.build();
+        holdHandsAtSystemTime();
     }
 
     function onUpdate(dc as Dc) as Void {
-        var palette = isLowPower() ? Palette.alwaysOn : Palette.active;
-        MatrixRenderer.draw(dc, WatchData.normalised(), palette);
+        var lowPower = isLowPower();
+        var palette = lowPower ? Palette.alwaysOn : Palette.active;
+        // Backing is awake-only: in always-on it would cost luminance for a
+        // detail nobody is looking at.
+        MatrixRenderer.draw(dc, WatchData.normalised(), palette,
+                            lowPower ? null : backingColour());
+    }
+
+    //! The colour to place under the hands, or null when the option is off.
+    private function backingColour() as Number? {
+        if (StatMap.backing == StatMap.BACKING_WHITE) {
+            return Palette.BACKING_WHITE;
+        }
+        if (StatMap.backing == StatMap.BACKING_DARK) {
+            return Palette.BACKING_DARK;
+        }
+        return null;
+    }
+
+    //! Backing is only correct while the hands show the time, so ask for that
+    //! explicitly rather than hoping the watch has not parked them elsewhere.
+    private function holdHandsAtSystemTime() as Void {
+        if (StatMap.backing == StatMap.BACKING_OFF) {
+            return;
+        }
+        if (self has :setClockHandPosition &&
+            WatchUi has :ANALOG_CLOCK_STATE_SYSTEM_TIME) {
+            setClockHandPosition(
+                {:clockState => WatchUi.ANALOG_CLOCK_STATE_SYSTEM_TIME});
+        }
     }
 
     function onEnterSleep() as Void {
@@ -30,6 +59,7 @@ class CrossoverView extends WatchUi.WatchFace {
 
     function onExitSleep() as Void {
         _asleep = false;
+        holdHandsAtSystemTime();
         WatchUi.requestUpdate();
     }
 

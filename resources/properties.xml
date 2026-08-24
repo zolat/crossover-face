@@ -2,4 +2,6 @@
     <!-- 0 bands from the bottom, 1 bands from the centre, 2 rings.
          Kept in sync with StatMap.Layout. -->
     <property id="layout" type="number">0</property>
+    <!-- 0 off, 1 white, 2 dark. Kept in sync with StatMap.Backing. -->
+    <property id="handBacking" type="number">0</property>
 </properties>

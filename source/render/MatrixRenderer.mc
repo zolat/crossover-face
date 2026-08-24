@@ -11,7 +11,10 @@ import Toybox.Lang;
 //! the inside-circle test avoids a square root.
 module MatrixRenderer {
 
-    function draw(dc as Dc, values as Array<Float>, palette as Array<Number>) as Void {
+    //! backing is the colour to give dots lying under the analogue hands, or
+    //! null to leave them alone. Only ever set while the watch is awake.
+    function draw(dc as Dc, values as Array<Float>, palette as Array<Number>,
+                  backing as Number?) as Void {
         dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_BLACK);
         dc.clear();
 
@@ -20,18 +23,33 @@ module MatrixRenderer {
         var size = DotGrid.DOT;
         var half = size / 2;
 
+        // Burn-in drift shifts where dots are drawn, never which dots exist —
+        // so the field translates rigidly instead of popping at the rim.
+        var drift = Drift.current();
+        var shiftX = centreX - half + drift[0];
+        var shiftY = centreY - half + drift[1];
+
+        // Hand axes cost two trig calls, so they are computed per frame rather
+        // than per dot; the test itself is then only dot products.
+        var axes = (backing != null) ? HandBacking.axes() : null;
+
         for (var row = 0; row < DotGrid.ROWS; row++) {
             var dy = DotGrid.offsetAt(row);
-            var y = centreY + dy - half;
+            var y = shiftY + dy;
 
             for (var col = 0; col < DotGrid.COLS; col++) {
                 var dx = DotGrid.offsetAt(col);
                 if (!DotGrid.contains(dx, dy)) {
                     continue;
                 }
-                dc.setColor(palette[StatMap.classify(col, dx, dy, values)],
-                            Graphics.COLOR_TRANSPARENT);
-                dc.fillRectangle(centreX + dx - half, y, size, size);
+                var colour;
+                if (axes != null && HandBacking.covers(dx, dy, axes)) {
+                    colour = backing as Number;
+                } else {
+                    colour = palette[StatMap.classify(col, dx, dy, values)];
+                }
+                dc.setColor(colour, Graphics.COLOR_TRANSPARENT);
+                dc.fillRectangle(shiftX + dx, y, size, size);
             }
         }
     }

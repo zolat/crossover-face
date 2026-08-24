@@ -10,6 +10,12 @@ import Toybox.Math;
 //! resources/settings/settings.xml — nothing else moves.
 module StatMap {
 
+    enum Backing {
+        BACKING_OFF = 0,
+        BACKING_WHITE = 1,
+        BACKING_DARK = 2
+    }
+
     enum Layout {
         LAYOUT_BANDS_BOTTOM = 0,    //! Column picks the stat, fill rises from the rim.
         LAYOUT_BANDS_CENTRE = 1,    //! As above, but fill grows out from the midline.
@@ -17,11 +23,15 @@ module StatMap {
     }
 
     const PROPERTY_LAYOUT = "layout";
+    const PROPERTY_BACKING = "handBacking";
     const STATS = 4;
     const RING_THICKNESS = (DotGrid.RADIUS - DotGrid.HUB) / STATS;
 
     //! Current layout. Owned here, refreshed from app settings by load().
     var layout as Number = LAYOUT_BANDS_BOTTOM;
+
+    //! Whether to back the analogue hands, and with what. Active mode only.
+    var backing as Number = BACKING_OFF;
 
     //! Re-read the user's choice. Safe to call at any time; falls back to the
     //! default rather than throwing if the property is missing or malformed.
@@ -39,6 +49,26 @@ module StatMap {
             chosen = LAYOUT_BANDS_BOTTOM;
         }
         layout = chosen;
+        backing = readNumber(PROPERTY_BACKING, BACKING_OFF, BACKING_OFF, BACKING_DARK);
+    }
+
+    //! Read a numeric property, falling back to a default rather than throwing
+    //! when it is missing, the wrong type, or outside the expected range.
+    function readNumber(key as String, fallback as Number,
+                        low as Number, high as Number) as Number {
+        var value = fallback;
+        try {
+            var stored = Properties.getValue(key);
+            if (stored != null) {
+                value = (stored as Number).toNumber();
+            }
+        } catch (ex) {
+            value = fallback;
+        }
+        if (value < low || value > high) {
+            value = fallback;
+        }
+        return value;
     }
 
     //! Classify one dot into a palette slot: stat * 2, plus 1 when filled.

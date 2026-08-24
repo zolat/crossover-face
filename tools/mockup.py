@@ -91,13 +91,46 @@ VARIANTS = {
 }
 
 
+# --- analogue hands ----------------------------------------------------------
+# Mirrors source/matrix/HandBacking.mc. Geometry from the device simulator.json.
+
+HAND_HALF_WIDTH = 14
+HAND_COUNTERWEIGHT = 46
+HOUR_REACH = 131
+MINUTE_REACH = 176
+HAND_MARGIN = 10
+
+
+def hand_axes(hour: int, minute: int):
+    """Unit vectors for both hands at a given time, screen y downward."""
+    out = []
+    for degrees in (((hour % 12) * 30.0) + minute * 0.5, minute * 6.0):
+        r = math.radians(degrees)
+        out.append((math.sin(r), -math.cos(r)))
+    return out
+
+
+def hand_covers(dx: float, dy: float, axes) -> bool:
+    for (ux, uy), reach in zip(axes, (HOUR_REACH, MINUTE_REACH)):
+        along = dx * ux + dy * uy
+        if along > reach + HAND_MARGIN or along < -(HAND_COUNTERWEIGHT + HAND_MARGIN):
+            continue
+        if abs(dx * -uy + dy * ux) <= HAND_HALF_WIDTH + HAND_MARGIN:
+            return True
+    return False
+
+
 # --- rendering ---------------------------------------------------------------
 
 
-def render(variant: str, values: list[float], *, always_on: bool = False) -> Image.Image:
+def render(variant: str, values: list[float], *, always_on: bool = False,
+           backing: tuple[int, int, int] | None = None,
+           at_time: tuple[int, int] = (10, 9),
+           drift: tuple[int, int] = (0, 0)) -> Image.Image:
     img = Image.new("RGB", (SIZE, SIZE), (0, 0, 0))
     draw = ImageDraw.Draw(img)
     mapper = VARIANTS[variant]
+    axes = hand_axes(*at_time) if backing else None
     centre = SIZE // 2
     half = DOT // 2
 
@@ -110,17 +143,20 @@ def render(variant: str, values: list[float], *, always_on: bool = False) -> Ima
                 continue
 
             x, y = centre + dx, centre + dy
-            stat, filled = mapper(col, row, x, y, values)
-            colour = HUES[stat][1]
-            if not filled:
-                colour = scale(colour, WEAK_FACTOR)
-            if always_on:
-                colour = scale(colour, DIM_FACTOR)
+            if axes is not None and hand_covers(dx, dy, axes):
+                colour = backing
+            else:
+                stat, filled = mapper(col, row, x, y, values)
+                colour = HUES[stat][1]
+                if not filled:
+                    colour = scale(colour, WEAK_FACTOR)
+                if always_on:
+                    colour = scale(colour, DIM_FACTOR)
 
             # PIL's rectangle() includes both endpoints, so the far corner is
             # +DOT-1, not +DOT. Getting this wrong drew 6x6 dots against the
             # watch's 5x5 and inflated every luminance reading by ~44%.
-            left, top = x - half, y - half
+            left, top = x - half + drift[0], y - half + drift[1]
             draw.rectangle(
                 [left, top, left + DOT - 1, top + DOT - 1], fill=colour
             )
@@ -130,13 +166,13 @@ def render(variant: str, values: list[float], *, always_on: bool = False) -> Ima
 # --- device compositing ------------------------------------------------------
 
 
-def _hand_polygon(hand: dict, reach_scale: float = 1.0):
+def _hand_polygon(hand: dict, reach_scale: float = 1.0, degrees: float | None = None):
     """Rotate a hand polyline from simulator.json into screen coordinates.
 
     The polylines are authored pointing +y (6 o'clock); `position` is degrees
     clockwise from 12. So the rotation applied is position - 180.
     """
-    rot = math.radians(hand["position"] - 180.0)
+    rot = math.radians((hand["position"] if degrees is None else degrees) - 180.0)
     cos_r, sin_r = math.cos(rot), math.sin(rot)
     pts = []
     for p in hand["polyline"]:
@@ -145,7 +181,8 @@ def _hand_polygon(hand: dict, reach_scale: float = 1.0):
     return pts
 
 
-def composite(face: Image.Image, *, hands: bool = True) -> Image.Image:
+def composite(face: Image.Image, *, hands: bool = True,
+              at_time: tuple[int, int] | None = None) -> Image.Image:
     """Drop a rendered face into the device art, optionally with the hands."""
     with open(os.path.join(DEVICE_DIR, "simulator.json")) as fh:
         sim = json.load(fh)
@@ -171,11 +208,18 @@ def composite(face: Image.Image, *, hands: bool = True) -> Image.Image:
         def rgb(key):
             return tuple(int(colours[key][i : i + 2], 16) for i in (0, 2, 4))
 
+        angles = None
+        if at_time is not None:
+            h, m = at_time
+            angles = {"hour": ((h % 12) * 30.0) + m * 0.5, "minute": m * 6.0}
+
         for name, fill_key, outline_key, width_key in (
             ("hour", "hourHand", "hourOutline", "hourHandOutlineWidth"),
             ("minute", "minuteHand", "minuteOutline", "minuteHandOutlineWidth"),
         ):
-            pts = [(cx + px, cy + py) for px, py in _hand_polygon(ah[name])]
+            deg = angles[name] if angles else None
+            pts = [(cx + px, cy + py)
+                   for px, py in _hand_polygon(ah[name], degrees=deg)]
             draw.polygon(pts, fill=rgb(fill_key), outline=rgb(outline_key),
                          width=ah[width_key])
 
@@ -276,6 +320,33 @@ def main(outdir: str = "build/mockups") -> int:
     path = os.path.join(outdir, "04-worst-case.png")
     sheet(panels, "Worst case — every stat 100%, always-on").save(path)
     written.append(path)
+
+    # 5. Hand backing — the awake-only option, hands drawn at system time.
+    when = (10, 9)
+    panels = []
+    for label, backing in (("OFF", None), ("WHITE", (255, 255, 255)),
+                           ("DARK", (16, 16, 16))):
+        face = render("bands", values, backing=backing, at_time=when)
+        panels.append((f"{label}   luminance {measure(face) * 100:.2f}%",
+                       composite(face, at_time=when)))
+    path = os.path.join(outdir, "05-hand-backing.png")
+    sheet(panels, "Behind hands — awake only, hands held at system time").save(path)
+    written.append(path)
+
+    # 6. Burn-in drift: how long any one pixel stays lit over a full cycle.
+    phases = [(-3, -3), (3, 3), (3, -3), (-3, 3)]
+    duty = {}
+    for dx, dy in phases:
+        img = render("bands", [1.0] * 4, drift=(dx, dy))
+        px = img.load()
+        for y in range(SIZE):
+            for x in range(SIZE):
+                if px[x, y] != (0, 0, 0):
+                    duty[(x, y)] = duty.get((x, y), 0) + 1
+    worst = max(duty.values()) if duty else 0
+    print(f"burn-in drift: {len(duty)} pixels touched, "
+          f"worst duty cycle {worst}/{len(phases)} phases "
+          f"({worst / len(phases) * 100:.0f}%)")
 
     for p in written:
         print(p)

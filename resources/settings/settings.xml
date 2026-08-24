@@ -6,4 +6,11 @@
             <listEntry value="2">@Strings.LayoutRings</listEntry>
         </settingConfig>
     </setting>
+    <setting propertyKey="@Properties.handBacking" title="@Strings.BackingTitle" prompt="@Strings.BackingPrompt">
+        <settingConfig type="list">
+            <listEntry value="0">@Strings.BackingOff</listEntry>
+            <listEntry value="1">@Strings.BackingWhite</listEntry>
+            <listEntry value="2">@Strings.BackingDark</listEntry>
+        </settingConfig>
+    </setting>
 </settings>

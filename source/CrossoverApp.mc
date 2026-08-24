@@ -29,6 +29,6 @@ class CrossoverApp extends Application.AppBase {
 
     //! The on-device settings menu, offered by the system Watch Face menu.
     function getSettingsView() as [Views] or [Views, InputDelegates] or Null {
-        return [new LayoutMenu(), new LayoutMenuDelegate()];
+        return [new SettingsMenu(), new SettingsMenuDelegate()];
     }
 }

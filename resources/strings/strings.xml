@@ -6,5 +6,12 @@
     <string id="LayoutBandsBottom">Bands — fill upward</string>
     <string id="LayoutBandsCentre">Bands — fill from centre</string>
     <string id="LayoutRings">Rings — fill clockwise</string>
-    <string id="LayoutInUse">In use</string>
+    <string id="SettingsTitle">Crossover Face</string>
+    <string id="InUse">In use</string>
+
+    <string id="BackingTitle">Behind hands</string>
+    <string id="BackingPrompt">Clears the dots under the hands while the watch is awake</string>
+    <string id="BackingOff">Off</string>
+    <string id="BackingWhite">White</string>
+    <string id="BackingDark">Dark</string>
 </strings>

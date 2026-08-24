@@ -153,6 +153,68 @@ module MatrixTest {
         return true;
     }
 
+    //! The drift must never push a dot past the edge of the screen. This is the
+    //! constraint that pins Drift.AMPLITUDE — the outermost dots sit 189px out
+    //! on a screen whose half-width is 195.
+    (:test)
+    function driftKeepsDotsOnScreen(logger as Logger) as Boolean {
+        var furthest = DotGrid.offsetAt(DotGrid.COLS - 1);
+        var reach = furthest + Drift.AMPLITUDE + (DotGrid.DOT / 2);
+        logger.debug("furthest lit pixel from centre: " + reach);
+        Test.assertMessage(reach <= 194,
+            "drift pushes dots off the 390px screen");
+        return true;
+    }
+
+    //! Consecutive phases must not share pixels, or the drift buys nothing.
+    //! Dots are DOT wide, so the phases have to differ by at least that much.
+    (:test)
+    function driftPhasesAreDecorrelated(logger as Logger) as Boolean {
+        for (var minute = 0; minute < 60; minute++) {
+            var here = Drift.offsetFor(minute);
+            var next = Drift.offsetFor(minute + Drift.PERIOD_MINUTES);
+            if (here[0] == next[0] && here[1] == next[1]) {
+                continue;   // same phase, nothing to compare
+            }
+            var moved = (here[0] - next[0]).abs();
+            var movedY = (here[1] - next[1]).abs();
+            if (movedY > moved) { moved = movedY; }
+            Test.assertMessage(moved >= DotGrid.DOT,
+                "consecutive drift phases overlap, so pixels stay lit");
+        }
+        return true;
+    }
+
+    //! Every phase must actually get used, or some pixels never rest.
+    (:test)
+    function driftVisitsEveryPhase(logger as Logger) as Boolean {
+        var seen = 0;
+        for (var minute = 0; minute < 60; minute++) {
+            seen |= 1 << Drift.phaseFor(minute);
+        }
+        Test.assertEqualMessage(seen, (1 << Drift.PHASES.size()) - 1,
+            "drift does not visit every phase within an hour");
+        return true;
+    }
+
+    //! The backing must land on the hands, and only on the hands.
+    (:test)
+    function handBackingFollowsTheHands(logger as Logger) as Boolean {
+        // Minute hand straight up, hour hand straight down: 12:30 exactly.
+        var up = [0.0, -1.0, 0.0, -1.0] as Array<Float>;
+        Test.assertMessage(HandBacking.covers(0, -100, up),
+            "a dot on the hand axis must be covered");
+        Test.assertMessage(!HandBacking.covers(100, 0, up),
+            "a dot at right angles to the hand must not be covered");
+        Test.assertMessage(!HandBacking.covers(0, -HandBacking.MINUTE_REACH - 40, up),
+            "a dot beyond the hand tip must not be covered");
+        Test.assertMessage(HandBacking.covers(HandBacking.HALF_WIDTH - 1, -100, up),
+            "a dot within the hand's width must be covered");
+        Test.assertMessage(!HandBacking.covers(HandBacking.HALF_WIDTH * 3, -100, up),
+            "a dot well outside the hand's width must not be covered");
+        return true;
+    }
+
     //! Always-on must be strictly dimmer than awake, or the dimming is a no-op.
     (:test)
     function alwaysOnIsDimmerThanActive(logger as Logger) as Boolean {

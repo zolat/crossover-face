@@ -125,6 +125,24 @@ simulator draws them, so what you see in the simulator is what you get. From
 The grey minute hand is the one real constraint on the palette: mid-grey elements crossing
 mid-grey dots would disappear.
 
+## Burn-in drift
+
+The lattice walks a four-phase cycle, shifting ±3px and changing every two minutes
+(`source/matrix/Drift.mc`). The numbers are forced by the geometry rather than chosen:
+
+- Dots are 5px wide, so phases must differ by **at least 5px** or a pixel stays lit
+  across the change. Opposite phases differ by 6px.
+- The outermost dots sit 189px from centre on a screen 195px half-wide, leaving 4px of
+  headroom after the 2px half-dot. **±3 is the largest amplitude that does not clip the rim.**
+
+Drift is applied when drawing, never when deciding which dots exist, so the field
+translates rigidly instead of popping dots in and out at the edge.
+
+Measured over a full cycle by `tools/mockup.py`: **57,200 pixels touched, worst duty cycle
+1 phase in 4.** No pixel is lit in more than one phase, so each rests 75% of the time and
+is never lit for more than two minutes running. `make test` asserts the decorrelation and
+the on-screen bound directly.
+
 ## AMOLED always-on rules
 
 Garmin turns the screen off if an always-on watch face burns too much of the panel. On this
@@ -195,7 +213,7 @@ app. From the watch face, hold **MENU → Watch Face → Crossover Face → Sett
 cannot normally accept input; that hook is the sanctioned exception. The same setting also
 appears in Garmin Connect or Garmin Express if the face is installed from the store.
 
-The three options:
+### Layout
 
 | Layout | Behaviour |
 |---|---|
@@ -203,9 +221,23 @@ The three options:
 | **Bands — fill from centre** | As above, but fill grows out from the midline |
 | **Rings — fill clockwise** | Radius picks the ring, fill sweeps clockwise from 12 |
 
-The property is `layout` (`resources/properties.xml`), surfaced by
-`resources/settings/settings.xml` and read by `StatMap.load()`. An out-of-range or missing
-value falls back to the default rather than throwing — there is a test for that.
+### Behind hands
+
+Off (default), White, or Dark. When on, dots lying under the analogue hands are recoloured
+so the hands read against a plain corridor instead of a field of colour. **Awake only** — in
+always-on it would spend luminance on a detail nobody is looking at.
+
+Two things make this work:
+
+- `View.setClockHandPosition({:clockState => ANALOG_CLOCK_STATE_SYSTEM_TIME})` is called on
+  wake, so the hands are known to be showing the time rather than parked somewhere else.
+  That API exists on exactly two devices, both Crossovers.
+- `HandBacking.MARGIN` widens the cleared area past the hands' own outline. The hands are
+  opaque, so a backing cut to their exact shape is invisible — it hides underneath them.
+
+Properties live in `resources/properties.xml`, are surfaced by
+`resources/settings/settings.xml`, and are read by `StatMap.load()`. An out-of-range or
+missing value falls back to its default rather than throwing — there are tests for that.
 
 To try the layouts in the simulator without touching settings on a phone:
 **File → Edit Persistent Storage → Edit Application.Properties data**.
@@ -235,6 +267,8 @@ source/
   data/WatchData.mc   device state, formatted. Pure queries, no drawing
   matrix/DotGrid.mc   lattice geometry: pitch, circle clip, hub
   matrix/StatMap.mc   dot -> stat mapping; the layout seam
+  matrix/Drift.mc     burn-in mitigation cycle
+  matrix/HandBacking.mc  which dots sit under the analogue hands
   settings/           on-device layout picker
   render/Palette.mc   four hues, two tiers, two power modes
   render/MatrixRenderer.mc  draws the field with a given palette

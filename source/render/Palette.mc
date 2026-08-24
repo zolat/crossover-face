@@ -16,6 +16,12 @@ module Palette {
     const WEAK = 0.18;          //! Unfilled tier, relative to the hue.
     const DIM = 0.45;           //! Always-on, applied on top of either tier.
 
+    //! Backing drawn under the analogue hands when that option is on.
+    //! White silhouettes the hands' dark outlines; dark lets the white hour
+    //! hand shine. Which reads better is a matter for the wrist, so both ship.
+    const BACKING_WHITE = 0xFFFFFF;
+    const BACKING_DARK = 0x101010;
+
     //! Every colour the face can draw. Built once — see build().
     var active as Array<Number> = [] as Array<Number>;
     var alwaysOn as Array<Number> = [] as Array<Number>;
