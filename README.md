@@ -206,8 +206,16 @@ Two ways to check a design against the budget:
   compresses a 24-hour run into minutes. Only enabled for watch faces on devices with
   screen protection, which this one has.
 
-Current design: **~2.5% active, ~1.1% always-on**, and **~3.5% / ~1.6% at the worst case**
-of every ring reading full. `tools/mockup.py` agrees
+Current design: **~2.0% active, ~2.8% always-on**, and **~2.6% / ~3.9% at the worst case**
+of every ring reading full.
+
+Always-on renders *brighter* values than awake, which looks backwards until you account
+for the panel: the system already drops screen brightness in always-on, so rendering darker
+values on top of that compounds into near-invisibility. `Palette.LIFT` raises them to
+compensate; awake needs no such correction and draws the colours as they are. Awake also
+carries the brighter unfilled tier (`WEAK_ACTIVE` 0.42 against `WEAK_ALWAYS_ON` 0.30) —
+at full panel brightness a very dark tint reads as nothing, and the design rests on every
+dot carrying its ring's colour whether lit or not. `tools/mockup.py` agrees
 to within a tenth of a percent, and `make test` asserts the lattice matches it exactly, so
 the mockups stay an honest preview rather than drifting into wishful thinking.
 
@@ -385,8 +393,16 @@ Two ways to check a design against the budget:
   compresses a 24-hour run into minutes. Only enabled for watch faces on devices with
   screen protection, which this one has.
 
-Current design: **~2.5% active, ~1.1% always-on**, and **~3.5% / ~1.6% at the worst case**
-of every ring reading full. `tools/mockup.py` agrees
+Current design: **~2.0% active, ~2.8% always-on**, and **~2.6% / ~3.9% at the worst case**
+of every ring reading full.
+
+Always-on renders *brighter* values than awake, which looks backwards until you account
+for the panel: the system already drops screen brightness in always-on, so rendering darker
+values on top of that compounds into near-invisibility. `Palette.LIFT` raises them to
+compensate; awake needs no such correction and draws the colours as they are. Awake also
+carries the brighter unfilled tier (`WEAK_ACTIVE` 0.42 against `WEAK_ALWAYS_ON` 0.30) —
+at full panel brightness a very dark tint reads as nothing, and the design rests on every
+dot carrying its ring's colour whether lit or not. `tools/mockup.py` agrees
 to within a tenth of a percent, and `make test` asserts the lattice matches it exactly, so
 the mockups stay an honest preview rather than drifting into wishful thinking.
 

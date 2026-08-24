@@ -71,8 +71,12 @@ def temperature_colour(fraction: float):
 # luminance. Mirrors DotGrid.SHAPE in Monkey C.
 DOT_SHAPE = "cross"    # square | cross | cross-thick
 
-WEAK_FACTOR = 0.30   # unfilled portion, relative to the strong hue
-DIM_FACTOR = 0.45    # always-on, applied to both tiers
+# Mirrors Palette.mc: awake carries the brighter unfilled tier, and always-on
+# lifts the colours rather than dimming them, because the panel is already
+# dimmed by the system in that mode.
+WEAK_ACTIVE = 0.42
+WEAK_ALWAYS_ON = 0.30
+LIFT = 1.5
 
 
 def scale(rgb: tuple[int, int, int], factor: float) -> tuple[int, int, int]:
@@ -175,10 +179,11 @@ def render(variant: str, spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
                     colour = temperature_colour(position)
                 else:
                     colour = THEME[ring % len(THEME)]
-                    if not lit:
-                        colour = scale(colour, WEAK_FACTOR)
                 if always_on:
-                    colour = scale(colour, DIM_FACTOR)
+                    colour = scale(colour, LIFT)
+                if not lit:
+                    colour = scale(
+                        colour, WEAK_ALWAYS_ON if always_on else WEAK_ACTIVE)
 
             # PIL's rectangle() includes both endpoints, so the far corner is
             # +DOT-1, not +DOT. Getting this wrong drew 6x6 dots against the
@@ -324,16 +329,16 @@ def main(outdir: str = "build/mockups") -> int:
     written.append(path)
 
     # 2. Weak-tier sweep on each layout: how dark before the hues stop reading.
-    global WEAK_FACTOR
-    original = WEAK_FACTOR
+    global WEAK_ACTIVE
+    original = WEAK_ACTIVE
     for variant in VARIANTS:
         panels = []
         for factor in (0.10, 0.18, 0.30):
-            WEAK_FACTOR = factor
+            globals()['WEAK_ACTIVE'] = factor
             face = render(variant, values)
             panels.append((f"weak {factor:.2f}   lum {measure(face) * 100:.2f}%",
                            composite(face)))
-        WEAK_FACTOR = original
+        WEAK_ACTIVE = original
         path = os.path.join(outdir, f"02-weak-tier-{variant}.png")
         sheet(panels, f"{variant.upper()} — unfilled-tier strength").save(path)
         written.append(path)

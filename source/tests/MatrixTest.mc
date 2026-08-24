@@ -17,6 +17,11 @@ module MatrixTest {
     //! Garmin blanks an always-on face above this share of screen luminance.
     const BUDGET = 0.10;
 
+    //! Lit pixels per dot. Dots are crosses: two DOT-long strokes sharing
+    //! their centre pixel, so 2 * DOT - 1 — not DOT squared. Using the square
+    //! figure here over-reported every luminance measurement by nearly 3x.
+    const LIT_PIXELS_PER_DOT = (2 * DotGrid.DOT) - 1;
+
     //! Rec. 709 luma coefficients, matching tools/luminance.py.
     const LUMA_R = 0.2126;
     const LUMA_G = 0.7152;
@@ -56,7 +61,7 @@ module MatrixTest {
                     continue;
                 }
                 var slot = StatMap.classify(col, dx, dy, spans);
-                total += relativeLuminance(palette[slot]) * DotGrid.DOT * DotGrid.DOT;
+                total += relativeLuminance(palette[slot]) * LIT_PIXELS_PER_DOT;
             }
         }
         return total / (Math.PI * DotGrid.RADIUS * DotGrid.RADIUS);
@@ -238,14 +243,48 @@ module MatrixTest {
         return true;
     }
 
+    //! Always-on renders *brighter* values than awake, on purpose: the system
+    //! already dims the panel there, so darker values compound into nothing.
+    //! The budget test above is what keeps that honest.
     (:test)
-    function alwaysOnIsDimmerThanActive(logger as Logger) as Boolean {
+    function alwaysOnIsLiftedNotDimmed(logger as Logger) as Boolean {
         Config.reload();
         var spans = everySpan(0.0, 0.7);
         var awake = frameLuminance(spans, Palette.active);
         var asleep = frameLuminance(spans, Palette.alwaysOn);
         logger.debug("active " + awake + " / always-on " + asleep);
-        Test.assertMessage(asleep < awake, "always-on is not dimmer than active");
+        Test.assertMessage(asleep > awake,
+            "always-on should lift the colours to offset the panel's own dimming");
+        Test.assertMessage(asleep < BUDGET,
+            "the lift pushed always-on past the burn-in budget");
+        return true;
+    }
+
+    //! The unfilled tier must stay visible while awake — the whole design
+    //! rests on every dot carrying its ring's colour, lit or not.
+    (:test)
+    function unfilledTierIsBrighterAwake(logger as Logger) as Boolean {
+        Config.reload();
+        Test.assertMessage(Palette.WEAK_ACTIVE > Palette.WEAK_ALWAYS_ON,
+            "awake should carry the brighter unfilled tier");
+        var empty = everySpan(0.0, 0.0);
+        var awake = frameLuminance(empty, Palette.active);
+        logger.debug("all-unfilled awake luminance: " + awake);
+        Test.assertMessage(awake > 0.0,
+            "an entirely unfilled face must still show its dots");
+        return true;
+    }
+
+    //! LIFT scales above 1.0, so a channel that overflowed would bleed into
+    //! the next one's bits and change the hue outright.
+    (:test)
+    function scaleClampsInsteadOfBleeding(logger as Logger) as Boolean {
+        Test.assertEqualMessage(Palette.scale(0xFFFFFF, 2.0), 0xFFFFFF,
+            "white scaled up must stay white");
+        Test.assertEqualMessage(Palette.scale(0x00FF00, 4.0), 0x00FF00,
+            "an overflowing channel must not bleed into its neighbours");
+        Test.assertEqualMessage(Palette.scale(0x804020, 0.0), 0x000000,
+            "scaling to nothing must give black");
         return true;
     }
 

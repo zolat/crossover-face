@@ -26,8 +26,20 @@ module Palette {
     //! pair within about 1.5x of each other.
     const THEME = [0x1D3F9E, 0x5C6A16] as Array<Number>;   //! navy, olive
 
-    const WEAK = 0.30;          //! Unfilled tier, relative to the colour.
-    const DIM = 0.45;           //! Always-on, applied on top of either tier.
+    //! Unfilled tier, relative to the colour. Awake gets the brighter of the
+    //! two: at full panel brightness a very dark tint reads as nothing at all,
+    //! and the point of the design is that every dot carries its ring's colour.
+    const WEAK_ACTIVE = 0.42;
+    const WEAK_ALWAYS_ON = 0.30;
+
+    //! Always-on *lifts* the colours rather than dimming them.
+    //!
+    //! This looks backwards until you account for the panel: the system already
+    //! drops screen brightness in always-on, so rendering darker values on top
+    //! of that compounds into near-invisibility. Raising the values compensates,
+    //! and the frame still lands around 3% against a 10% burn-in budget.
+    //! Awake needs no such correction, so it draws the colours as they are.
+    const LIFT = 1.5;
 
     //! Backing drawn under the analogue hands when that option is on.
     const BACKING_WHITE = 0xFFFFFF;
@@ -45,29 +57,29 @@ module Palette {
     var rampAlwaysOn as Array<Number> = [] as Array<Number>;
 
     function build() as Void {
-        var lit = [] as Array<Number>;
-        var dimmed = [] as Array<Number>;
+        var awake = [] as Array<Number>;
+        var asleep = [] as Array<Number>;
         for (var ring = 0; ring < StatMap.RINGS; ring++) {
             var colour = THEME[ring % THEME.size()];
-            var weak = scale(colour, WEAK);
-            lit.add(weak);
-            lit.add(colour);
-            dimmed.add(scale(weak, DIM));
-            dimmed.add(scale(colour, DIM));
+            var lifted = scale(colour, LIFT);
+            awake.add(scale(colour, WEAK_ACTIVE));
+            awake.add(colour);
+            asleep.add(scale(lifted, WEAK_ALWAYS_ON));
+            asleep.add(lifted);
         }
-        active = lit;
-        alwaysOn = dimmed;
+        active = awake;
+        alwaysOn = asleep;
 
         var ramp = [] as Array<Number>;
-        var rampDim = [] as Array<Number>;
+        var rampLifted = [] as Array<Number>;
         for (var step = 0; step < RAMP_STEPS; step++) {
             var colour = mix(THEME[0], THEME[1],
                              step.toFloat() / (RAMP_STEPS - 1));
             ramp.add(colour);
-            rampDim.add(scale(colour, DIM));
+            rampLifted.add(scale(colour, LIFT));
         }
         rampActive = ramp;
-        rampAlwaysOn = rampDim;
+        rampAlwaysOn = rampLifted;
     }
 
     //! Linear blend between two packed RGB colours.
@@ -82,11 +94,20 @@ module Palette {
         return (colour >> shift) & 0xFF;
     }
 
-    //! Multiply each channel of a packed RGB colour.
+    //! Multiply each channel of a packed RGB colour. Clamped, because LIFT
+    //! scales above 1.0 and an overflowing channel would bleed into the next
+    //! one's bits and change the hue outright.
     function scale(colour as Number, factor as Float) as Number {
-        var r = (((colour >> 16) & 0xFF) * factor).toNumber();
-        var g = (((colour >> 8) & 0xFF) * factor).toNumber();
-        var b = ((colour & 0xFF) * factor).toNumber();
-        return (r << 16) | (g << 8) | b;
+        return (channelScaled(colour, 16, factor) << 16) |
+               (channelScaled(colour, 8, factor) << 8) |
+                channelScaled(colour, 0, factor);
+    }
+
+    function channelScaled(colour as Number, shift as Number,
+                           factor as Float) as Number {
+        var value = (channel(colour, shift) * factor).toNumber();
+        if (value > 0xFF) { return 0xFF; }
+        if (value < 0) { return 0; }
+        return value;
     }
 }
