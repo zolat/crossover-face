@@ -4,4 +4,11 @@
     <property id="layout" type="number">0</property>
     <!-- 0 off, 1 white, 2 dark. Kept in sync with StatMap.Backing. -->
     <property id="handBacking" type="number">0</property>
+    <!-- Which Source each ring shows. See Source.Kind:
+         0 steps, 1 heart rate, 2 battery, 3 body battery,
+         4 temperature range, 5 rain chance, 6 off. -->
+    <property id="ring1" type="number">0</property>
+    <property id="ring2" type="number">1</property>
+    <property id="ring3" type="number">2</property>
+    <property id="ring4" type="number">3</property>
 </properties>

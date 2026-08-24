@@ -2,13 +2,20 @@ import Toybox.Application;
 import Toybox.Lang;
 import Toybox.Math;
 
-//! Decides which stat a dot belongs to and whether it reads as filled.
+//! Decides which ring a dot belongs to, and whether it falls inside that
+//! ring's span.
 //!
-//! This is the seam between layouts: they share one lattice and one palette,
-//! and differ only in how a dot's position maps to a stat and a fill test.
-//! Adding a layout means adding a branch here and a list entry in
-//! resources/settings/settings.xml — nothing else moves.
+//! Layout is the seam: every layout shares one lattice and one palette, and
+//! differs only in how a dot's position becomes a ring index and a position
+//! along that ring. Because a dot's position is a single 0.0-1.0 number in
+//! every layout, a source that reports a range works everywhere a level does.
 module StatMap {
+
+    enum Layout {
+        LAYOUT_BANDS_BOTTOM = 0,    //! Column picks the ring, fill rises from the rim.
+        LAYOUT_BANDS_CENTRE = 1,    //! As above, but position is measured out from the midline.
+        LAYOUT_RINGS = 2            //! Radius picks the ring, position runs clockwise.
+    }
 
     enum Backing {
         BACKING_OFF = 0,
@@ -16,44 +23,47 @@ module StatMap {
         BACKING_DARK = 2
     }
 
-    enum Layout {
-        LAYOUT_BANDS_BOTTOM = 0,    //! Column picks the stat, fill rises from the rim.
-        LAYOUT_BANDS_CENTRE = 1,    //! As above, but fill grows out from the midline.
-        LAYOUT_RINGS = 2            //! Radius picks the ring, fill sweeps clockwise.
-    }
-
     const PROPERTY_LAYOUT = "layout";
     const PROPERTY_BACKING = "handBacking";
-    const STATS = 4;
-    const RING_THICKNESS = (DotGrid.RADIUS - DotGrid.HUB) / STATS;
 
-    //! Current layout. Owned here, refreshed from app settings by load().
+    //! Four rings, each independently assigned to a Source.
+    const RINGS = 4;
+    const PROPERTY_RINGS = ["ring1", "ring2", "ring3", "ring4"] as Array<String>;
+
+    const RING_THICKNESS = (DotGrid.RADIUS - DotGrid.HUB) / RINGS;
+    const SPAN = 2 * DotGrid.RADIUS;
+
     var layout as Number = LAYOUT_BANDS_BOTTOM;
-
-    //! Whether to back the analogue hands, and with what. Active mode only.
     var backing as Number = BACKING_OFF;
 
-    //! Re-read the user's choice. Safe to call at any time; falls back to the
-    //! default rather than throwing if the property is missing or malformed.
+    //! Which source each ring shows. Index 0 is the leftmost band, or the
+    //! outermost ring.
+    var rings as Array<Number> = [
+        Source.SOURCE_STEPS,
+        Source.SOURCE_HEART_RATE,
+        Source.SOURCE_BATTERY,
+        Source.SOURCE_BODY_BATTERY
+    ] as Array<Number>;
+
+    //! Re-read every setting. Safe at any time; anything missing or out of
+    //! range falls back to its default rather than throwing.
     function load() as Void {
-        var chosen = LAYOUT_BANDS_BOTTOM;
-        try {
-            var stored = Properties.getValue(PROPERTY_LAYOUT);
-            if (stored != null) {
-                chosen = (stored as Number).toNumber();
-            }
-        } catch (ex) {
-            chosen = LAYOUT_BANDS_BOTTOM;
+        layout = readNumber(PROPERTY_LAYOUT, LAYOUT_BANDS_BOTTOM,
+                            LAYOUT_BANDS_BOTTOM, LAYOUT_RINGS);
+        backing = readNumber(PROPERTY_BACKING, BACKING_OFF,
+                             BACKING_OFF, BACKING_DARK);
+
+        var defaults = [Source.SOURCE_STEPS, Source.SOURCE_HEART_RATE,
+                        Source.SOURCE_BATTERY, Source.SOURCE_BODY_BATTERY]
+                       as Array<Number>;
+        var loaded = new [RINGS] as Array<Number>;
+        for (var i = 0; i < RINGS; i++) {
+            loaded[i] = readNumber(PROPERTY_RINGS[i], defaults[i],
+                                   0, Source.COUNT - 1);
         }
-        if (chosen < LAYOUT_BANDS_BOTTOM || chosen > LAYOUT_RINGS) {
-            chosen = LAYOUT_BANDS_BOTTOM;
-        }
-        layout = chosen;
-        backing = readNumber(PROPERTY_BACKING, BACKING_OFF, BACKING_OFF, BACKING_DARK);
+        rings = loaded;
     }
 
-    //! Read a numeric property, falling back to a default rather than throwing
-    //! when it is missing, the wrong type, or outside the expected range.
     function readNumber(key as String, fallback as Number,
                         low as Number, high as Number) as Number {
         var value = fallback;
@@ -71,47 +81,52 @@ module StatMap {
         return value;
     }
 
-    //! Classify one dot into a palette slot: stat * 2, plus 1 when filled.
-    //! Returning a packed index lets the renderer look the colour up directly
-    //! instead of branching per dot.
-    function classify(col as Number, dx as Number, dy as Number,
-                      values as Array<Float>) as Number {
+    //! Current span for every ring. Read once per frame.
+    function spans() as Array<Array<Float> > {
+        var out = new [RINGS] as Array<Array<Float> >;
+        for (var i = 0; i < RINGS; i++) {
+            out[i] = Source.span(rings[i]);
+        }
+        return out;
+    }
+
+    //! Which ring this dot belongs to.
+    function ringFor(col as Number, dx as Number, dy as Number) as Number {
+        var ring;
         if (layout == LAYOUT_RINGS) {
-            return classifyRing(dx, dy, values);
-        }
-        return classifyBand(col, dy, values);
-    }
-
-    //! Bands: the column decides the stat, the row decides the fill.
-    function classifyBand(col as Number, dy as Number,
-                          values as Array<Float>) as Number {
-        var stat = col * STATS / DotGrid.COLS;
-        if (stat >= STATS) { stat = STATS - 1; }
-        var value = values[stat];
-
-        var filled;
-        if (layout == LAYOUT_BANDS_CENTRE) {
-            // Grows symmetrically about the midline, so the face reads as a
-            // level meter opening outwards rather than a rising tide.
-            filled = dy.abs() <= value * DotGrid.RADIUS;
+            var distance = Math.sqrt(dx * dx + dy * dy);
+            ring = ((DotGrid.RADIUS - distance) / RING_THICKNESS).toNumber();
         } else {
-            // Waterline measured down from the top of the circle.
-            filled = dy >= DotGrid.RADIUS - (value * 2 * DotGrid.RADIUS);
+            ring = col * RINGS / DotGrid.COLS;
         }
-        return stat * 2 + (filled ? 1 : 0);
+        if (ring < 0) { return 0; }
+        if (ring >= RINGS) { return RINGS - 1; }
+        return ring;
     }
 
-    //! Rings: the radius decides the ring, the angle decides the fill.
-    function classifyRing(dx as Number, dy as Number,
-                          values as Array<Float>) as Number {
-        var distance = Math.sqrt(dx * dx + dy * dy);
-        var stat = ((DotGrid.RADIUS - distance) / RING_THICKNESS).toNumber();
-        if (stat < 0) { stat = 0; }
-        if (stat >= STATS) { stat = STATS - 1; }
+    //! Where this dot sits along its ring, 0.0 at the ring's origin to 1.0 at
+    //! its far end. A span lights every dot between its start and end.
+    function positionOf(dx as Number, dy as Number) as Float {
+        if (layout == LAYOUT_RINGS) {
+            var angle = Math.toDegrees(Math.atan2(dx, -dy));
+            if (angle < 0) { angle += 360; }
+            return (angle / 360.0).toFloat();
+        }
+        if (layout == LAYOUT_BANDS_CENTRE) {
+            // Out from the midline, so a level opens symmetrically.
+            return (dy.abs().toFloat() / DotGrid.RADIUS);
+        }
+        // Up from the rim, so a level rises like a tide.
+        return ((DotGrid.RADIUS - dy).toFloat() / SPAN);
+    }
 
-        // Degrees clockwise from twelve o'clock.
-        var angle = Math.toDegrees(Math.atan2(dx, -dy));
-        if (angle < 0) { angle += 360; }
-        return stat * 2 + (angle <= values[stat] * 360 ? 1 : 0);
+    //! Classify a dot into a palette slot: ring * 2, plus 1 when lit.
+    function classify(col as Number, dx as Number, dy as Number,
+                      spans as Array<Array<Float> >) as Number {
+        var ring = ringFor(col, dx, dy);
+        var span = spans[ring];
+        var position = positionOf(dx, dy);
+        var lit = (position >= span[0]) && (position <= span[1]);
+        return ring * 2 + (lit ? 1 : 0);
     }
 }

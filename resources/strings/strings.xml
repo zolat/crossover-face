@@ -14,4 +14,20 @@
     <string id="BackingOff">Off</string>
     <string id="BackingWhite">White</string>
     <string id="BackingDark">Dark</string>
+
+    <string id="RingsTitle">Ring data</string>
+    <string id="RingPrompt">Which reading this ring shows</string>
+    <string id="Ring1Title">Ring 1 — outer / left</string>
+    <string id="Ring2Title">Ring 2</string>
+    <string id="Ring3Title">Ring 3</string>
+    <string id="Ring4Title">Ring 4 — inner / right</string>
+
+    <string id="SourceSteps">Steps</string>
+    <string id="SourceHeartRate">Heart rate</string>
+    <string id="SourceBattery">Battery</string>
+    <string id="SourceBodyBattery">Body Battery</string>
+    <string id="SourceTemperature">Temperature range</string>
+    <string id="SourceRain">Chance of rain</string>
+    <string id="SourceOff">Off</string>
+
 </strings>

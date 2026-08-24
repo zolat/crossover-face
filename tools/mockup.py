@@ -41,12 +41,32 @@ HUB = 21
 # the field without reading as lit. WEAK_FACTOR and DIM_FACTOR are the two knobs
 # the mockups exist to settle.
 
-HUES = [
-    ("STEPS", (0xFF, 0x66, 0x00)),
-    ("HR", (0xFF, 0x33, 0x22)),
-    ("BATTERY", (0x33, 0xCC, 0x55)),
-    ("BODY BATT", (0x33, 0x88, 0xFF)),
+# Source.Kind order, matching source/data/Source.mc
+SOURCES = [
+    ("Steps", (0xFF, 0x66, 0x00)),
+    ("Heart rate", (0xFF, 0x33, 0x22)),
+    ("Battery", (0x33, 0xCC, 0x55)),
+    ("Body Battery", (0x33, 0x88, 0xFF)),
+    ("Temperature", (0xFF, 0xAA, 0x00)),
+    ("Rain", (0x00, 0xCC, 0xDD)),
+    ("Off", (0x44, 0x44, 0x44)),
 ]
+SOURCE_TEMPERATURE = 4
+
+TEMP_COLD = (0x33, 0x66, 0xFF)
+TEMP_MILD = (0xFF, 0xAA, 0x00)
+TEMP_HOT = (0xFF, 0x22, 0x00)
+
+
+def mix(a, b, t):
+    return tuple(round(x + (y - x) * t) for x, y in zip(a, b))
+
+
+def temperature_colour(fraction: float):
+    """Cold-to-hot ramp, mirroring Palette.temperature()."""
+    if fraction <= 0.5:
+        return mix(TEMP_COLD, TEMP_MILD, fraction * 2.0)
+    return mix(TEMP_MILD, TEMP_HOT, (fraction - 0.5) * 2.0)
 
 WEAK_FACTOR = 0.18   # unfilled portion, relative to the strong hue
 DIM_FACTOR = 0.45    # always-on, applied to both tiers
@@ -61,27 +81,25 @@ def scale(rgb: tuple[int, int, int], factor: float) -> tuple[int, int, int]:
 # is why switching layouts in Monkey C is one branch in StatMap.
 
 
-def band_map(col: int, row: int, x: float, y: float, values: list[float]):
-    """Bands, filling upward — column picks the stat, y picks the fill."""
-    stat = min(len(values) - 1, col * len(values) // COLS)
-    waterline = SIZE / 2 + RADIUS - values[stat] * 2 * RADIUS
-    return stat, y >= waterline
+RINGS = 4
 
 
-def band_centre_map(col: int, row: int, x: float, y: float, values: list[float]):
-    """Bands, filling out from the midline — reads as a level meter."""
-    stat = min(len(values) - 1, col * len(values) // COLS)
-    return stat, abs(y - SIZE / 2) <= values[stat] * RADIUS
+def band_map(col: int, dx: int, dy: int):
+    """Bands, filling upward — column picks the ring, y gives the position."""
+    return min(RINGS - 1, col * RINGS // COLS), (RADIUS - dy) / (2 * RADIUS)
 
 
-def ring_map(col: int, row: int, x: float, y: float, values: list[float]):
-    """Rings — radius picks the ring, angle picks the fill, clockwise from 12."""
-    dx, dy = x - SIZE / 2, y - SIZE / 2
+def band_centre_map(col: int, dx: int, dy: int):
+    """Bands, position measured out from the midline."""
+    return min(RINGS - 1, col * RINGS // COLS), abs(dy) / RADIUS
+
+
+def ring_map(col: int, dx: int, dy: int):
+    """Rings — radius picks the ring, position runs clockwise from 12."""
     dist = math.hypot(dx, dy)
-    thickness = (RADIUS - HUB) / len(values)
-    stat = min(len(values) - 1, int((RADIUS - dist) / thickness))
-    angle = (math.degrees(math.atan2(dx, -dy)) + 360) % 360
-    return stat, angle <= values[stat] * 360
+    thickness = (RADIUS - HUB) / RINGS
+    ring = min(RINGS - 1, max(0, int((RADIUS - dist) / thickness)))
+    return ring, ((math.degrees(math.atan2(dx, -dy)) + 360) % 360) / 360.0
 
 
 VARIANTS = {
@@ -123,7 +141,7 @@ def hand_covers(dx: float, dy: float, axes) -> bool:
 # --- rendering ---------------------------------------------------------------
 
 
-def render(variant: str, values: list[float], *, always_on: bool = False,
+def render(variant: str, spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
            backing: tuple[int, int, int] | None = None,
            at_time: tuple[int, int] = (10, 9),
            drift: tuple[int, int] = (0, 0)) -> Image.Image:
@@ -146,10 +164,16 @@ def render(variant: str, values: list[float], *, always_on: bool = False,
             if axes is not None and hand_covers(dx, dy, axes):
                 colour = backing
             else:
-                stat, filled = mapper(col, row, x, y, values)
-                colour = HUES[stat][1]
-                if not filled:
-                    colour = scale(colour, WEAK_FACTOR)
+                ring, position = mapper(col, dx, dy)
+                start, end = spans[ring]
+                lit = start <= position <= end
+                source = assign[ring]
+                if lit and source == SOURCE_TEMPERATURE:
+                    colour = temperature_colour(position)
+                else:
+                    colour = SOURCES[source][1]
+                    if not lit:
+                        colour = scale(colour, WEAK_FACTOR)
                 if always_on:
                     colour = scale(colour, DIM_FACTOR)
 
@@ -272,7 +296,8 @@ def sheet(panels: list[tuple[str, Image.Image]], title: str) -> Image.Image:
 
 def main(outdir: str = "build/mockups") -> int:
     os.makedirs(outdir, exist_ok=True)
-    values = [0.68, 0.55, 0.82, 0.40]   # steps, hr, battery, body battery
+    # steps, heart rate, battery, body battery — as levels
+    values = [(0.0, 0.68), (0.0, 0.55), (0.0, 0.82), (0.0, 0.40)]
     written = []
 
     # 1. Layout comparison, hands on, identical palette and values.
@@ -314,7 +339,7 @@ def main(outdir: str = "build/mockups") -> int:
     # 4. Worst case: every stat at 100%, the frame the luminance test guards.
     panels = []
     for variant in VARIANTS:
-        face = render(variant, [1.0] * 4, always_on=True)
+        face = render(variant, [(0.0, 1.0)] * 4, always_on=True)
         panels.append((f"{variant.upper()} always-on   lum {measure(face) * 100:.2f}%",
                        composite(face)))
     path = os.path.join(outdir, "04-worst-case.png")
@@ -333,11 +358,23 @@ def main(outdir: str = "build/mockups") -> int:
     sheet(panels, "Behind hands — awake only, hands held at system time").save(path)
     written.append(path)
 
-    # 6. Burn-in drift: how long any one pixel stays lit over a full cycle.
+    # 6. Rings assigned to weather — temperature is a range, not a level.
+    weather_assign = (4, 5, 2, 0)          # temperature, rain, battery, steps
+    weather_spans = [(0.24, 0.49), (0.0, 0.35), (0.0, 0.82), (0.0, 0.68)]
+    panels = []
+    for variant in ("bands", "rings"):
+        face = render(variant, weather_spans, assign=weather_assign)
+        panels.append((f"{variant.upper()}   lum {measure(face) * 100:.2f}%",
+                       composite(face)))
+    path = os.path.join(outdir, "07-weather-assignment.png")
+    sheet(panels, "Ring 1 = temperature 11-22C, ring 2 = rain 35%").save(path)
+    written.append(path)
+
+    # 7. Burn-in drift: how long any one pixel stays lit over a full cycle.
     phases = [(-3, -3), (3, 3), (3, -3), (-3, 3)]
     duty = {}
     for dx, dy in phases:
-        img = render("bands", [1.0] * 4, drift=(dx, dy))
+        img = render("bands", [(0.0, 1.0)] * 4, drift=(dx, dy))
         px = img.load()
         for y in range(SIZE):
             for x in range(SIZE):

@@ -15,7 +15,7 @@ class CrossoverView extends WatchUi.WatchFace {
     }
 
     function onLayout(dc as Dc) as Void {
-        Palette.build();
+        Config.reload();
         holdHandsAtSystemTime();
     }
 
@@ -24,8 +24,9 @@ class CrossoverView extends WatchUi.WatchFace {
         var palette = lowPower ? Palette.alwaysOn : Palette.active;
         // Backing is awake-only: in always-on it would cost luminance for a
         // detail nobody is looking at.
-        MatrixRenderer.draw(dc, WatchData.normalised(), palette,
-                            lowPower ? null : backingColour());
+        MatrixRenderer.draw(dc, StatMap.spans(), palette,
+                            lowPower ? null : backingColour(),
+                            lowPower ? Palette.DIM : 1.0);
     }
 
     //! The colour to place under the hands, or null when the option is off.

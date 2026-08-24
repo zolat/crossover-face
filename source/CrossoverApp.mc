@@ -11,7 +11,7 @@ class CrossoverApp extends Application.AppBase {
     }
 
     function onStart(state as Dictionary?) as Void {
-        StatMap.load();
+        Config.reload();
     }
 
     function onStop(state as Dictionary?) as Void {
@@ -19,7 +19,7 @@ class CrossoverApp extends Application.AppBase {
 
     //! Called when the user changes settings in Garmin Connect or Express.
     function onSettingsChanged() as Void {
-        StatMap.load();
+        Config.reload();
         WatchUi.requestUpdate();
     }
 

@@ -205,6 +205,141 @@ working for older Garmin devices.
 
 ## Settings
 
+All settings are changeable **on the watch itself** — hold **MENU → Watch Face → Crossover
+Face → Settings**. That matters because phone-side settings are unreliable for a sideloaded
+app. `AppBase.getSettingsView()` provides this (`source/settings/`); watch faces cannot
+normally accept input, and that hook is the sanctioned exception. The same settings appear
+in Garmin Connect or Garmin Express if the face is ever installed from the store.
+
+### Ring data
+
+The face has four rings, and **each one is independently assigned to a source**:
+
+| Source | Shape | Where it comes from |
+|---|---|---|
+| Steps | level | `ActivityMonitor` steps ÷ your step goal |
+| Heart rate | level | `Activity.currentHeartRate`, resting → 180bpm |
+| Battery | level | `System.getSystemStats()` |
+| Body Battery | level | `SensorHistory` |
+| Temperature range | **range** | `Weather` today's low → high, on a 0–45°C scale |
+| Chance of rain | level | `Weather.precipitationChance` |
+| Off | — | nothing |
+
+Every source reports a **span** — a start and an end, both 0.0–1.0 — rather than a single
+level. Levels are just spans that start at zero. That one shape is why temperature, which
+is a genuine range, works in every layout without the layouts knowing anything about it: a
+level fills from the origin, a range floats between its ends. In bands a range reads as a
+slab; in rings, as an arc.
+
+Temperature is the one source drawn on a cold-to-hot ramp rather than a flat hue, so the
+band reads as a temperature rather than just a length.
+
+### Layout
+
+| Layout | Ring index | Position runs |
+|---|---|---|
+| **Bands — fill upward** (default) | column, left to right | up from the rim |
+| **Bands — fill from centre** | column, left to right | out from the midline |
+| **Rings — fill clockwise** | radius, outer to inner | clockwise from twelve |
+
+### Behind hands
+
+Off (default), White, or Dark. Dots under the analogue hands are recoloured so the hands
+read against a plain corridor instead of a field of colour. **Awake only** — in always-on it
+would spend luminance on a detail nobody is looking at.
+
+Two things make it work:
+
+- `View.setClockHandPosition({:clockState => ANALOG_CLOCK_STATE_SYSTEM_TIME})` is called on
+  wake, so the hands are known to be showing the time rather than parked. That API exists
+  on exactly two devices, both Crossovers.
+- `HandBacking.MARGIN` widens the cleared area past the hands' own outline. The hands are
+  opaque, so a backing cut to their exact shape is invisible — it hides underneath them.
+
+Properties live in `resources/properties.xml`, are surfaced by
+`resources/settings/settings.xml`, and are read by `Config.reload()`. Anything missing or
+out of range falls back to its default rather than throwing — there are tests for that.
+
+## Burn-in drift
+
+The lattice walks a four-phase cycle, shifting ±3px and changing every two minutes
+(`source/matrix/Drift.mc`). The numbers are forced by the geometry rather than chosen:
+
+- Dots are 5px wide, so phases must differ by **at least 5px** or a pixel stays lit
+  across the change. Opposite phases differ by 6px.
+- The outermost dots sit 189px from centre on a screen 195px half-wide, leaving 4px of
+  headroom after the 2px half-dot. **±3 is the largest amplitude that does not clip the rim.**
+
+Drift is applied when drawing, never when deciding which dots exist, so the field
+translates rigidly instead of popping dots in and out at the edge.
+
+Measured over a full cycle by `tools/mockup.py`: **57,200 pixels touched, worst duty cycle
+1 phase in 4.** No pixel is lit in more than one phase, so each rests 75% of the time and
+is never lit for more than two minutes running. `make test` asserts the decorrelation and
+the on-screen bound directly.
+
+## AMOLED always-on rules
+
+Garmin turns the screen off if an always-on watch face burns too much of the panel. On this
+generation the rule is **under 10% of the screen's luminance** (older Venu-era devices also
+enforced "no pixel lit longer than 3 minutes"). Power mode is read at run time:
+
+```monkeyc
+System.getDisplayMode()   // DISPLAY_MODE_HIGH_POWER | LOW_POWER | OFF, API 5.0.0+
+```
+
+`CrossoverView` uses this to pick which palette `MatrixRenderer` draws with, falling back to
+`DeviceSettings.requiresBurnInProtection` plus sleep state on pre-5.0.0 devices. There is
+one renderer rather than two, because awake and always-on differ only by the colour table.
+
+Two ways to check a design against the budget:
+
+- **`python3 tools/luminance.py <face.png>`** — measures mean relative luminance over the
+  circular screen area and prints it against the 10% budget.
+- **Simulator → File → View Screen Heat Map** — Garmin's own burn-in simulation, which
+  compresses a 24-hour run into minutes. Only enabled for watch faces on devices with
+  screen protection, which this one has.
+
+Current design, measured on-device by `make test`: **~4.6% active, ~2.0% always-on**, and
+**~2.8% always-on at the worst case** of every stat reading 100%. `tools/mockup.py` agrees
+to within a tenth of a percent, and `make test` asserts the lattice matches it exactly, so
+the mockups stay an honest preview rather than drifting into wishful thinking.
+
+## Installing on the watch
+
+```sh
+make install
+```
+
+**This device generation is MTP-only.** Garmin moved away from USB mass storage, so the
+watch never appears in `/Volumes` and there is nothing to `cp` to. The USB Mode prompt on
+the watch offers two things, and neither is mass storage:
+
+| Answer | What you get | Mountable? |
+|---|---|---|
+| **Yes, use MTP** | MTP (`idProduct 0x5246`) — what you want | No, but MTP clients can reach it |
+| No | Garmin's proprietary protocol (`idProduct 0x0003`) | No, and it may not even charge |
+
+So answer **yes** to *Use MTP?*, then `make install` opens [OpenMTP](https://openmtp.ganeshrvel.com/)
+and reveals the `.prg` in Finder. Drag it into **GARMIN/Apps/** — that one file is all the watch needs. The
+`.prg.debug.xml` beside it stays on your Mac; it symbolicates crash logs pulled from
+`GARMIN/Apps/LOGS/`. Then on the watch hold **MENU → Watch Face → Crossover Face**.
+
+`libmtp`'s CLI (`mtp-sendfile`) does *detect* the watch, but cannot write to it: Garmin's
+MTP implementation does not support the bulk-metadata call libmtp uses to resolve a parent
+folder, so every send fails with `could not get storage id from parent id`. OpenMTP walks
+the tree itself and works. If you want to confirm the Mac sees the watch at all:
+
+```sh
+ioreg -p IOUSB -w0 -l | grep -E '"idVendor"|"idProduct"'   # Garmin is idVendor 2334 (0x091E)
+mtp-detect | grep -i "friendly name"                       # should say Instinct Crossover AMOLED
+```
+
+`make install` still copies directly if a mass-storage volume *is* present, so it keeps
+working for older Garmin devices.
+
+## Settings
+
 The face ships with one user-facing setting — the layout — and it can be changed **on the
 watch itself**, which matters because phone-side settings are unreliable for a sideloaded
 app. From the watch face, hold **MENU → Watch Face → Crossover Face → Settings**.
@@ -266,9 +401,12 @@ source/
   CrossoverView.mc    picks a renderer based on power mode — no drawing
   data/WatchData.mc   device state, formatted. Pure queries, no drawing
   matrix/DotGrid.mc   lattice geometry: pitch, circle clip, hub
-  matrix/StatMap.mc   dot -> stat mapping; the layout seam
+  matrix/StatMap.mc   dot -> ring mapping and span test; the layout seam
   matrix/Drift.mc     burn-in mitigation cycle
   matrix/HandBacking.mc  which dots sit under the analogue hands
+  data/Source.mc      what a ring can be assigned to; spans and hues
+  data/WeatherData.mc today's temperature range and rain chance
+  render/Config.mc    reloads settings and palette together
   settings/           on-device layout picker
   render/Palette.mc   four hues, two tiers, two power modes
   render/MatrixRenderer.mc  draws the field with a given palette

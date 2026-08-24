@@ -2,6 +2,17 @@ import Toybox.Application;
 import Toybox.Lang;
 import Toybox.WatchUi;
 
+//! Source names, in Source.Kind order.
+const SOURCE_LABELS = [
+    Rez.Strings.SourceSteps,
+    Rez.Strings.SourceHeartRate,
+    Rez.Strings.SourceBattery,
+    Rez.Strings.SourceBodyBattery,
+    Rez.Strings.SourceTemperature,
+    Rez.Strings.SourceRain,
+    Rez.Strings.SourceOff
+] as Array<ResourceId>;
+
 //! On-device settings, reached from the watch's own Watch Face menu.
 //!
 //! Watch faces cannot take input during normal operation; AppBase.getSettingsView()
@@ -15,6 +26,7 @@ class SettingsMenu extends WatchUi.Menu2 {
             Rez.Strings.LayoutTitle, layoutLabel(), :layout, null));
         addItem(new WatchUi.MenuItem(
             Rez.Strings.BackingTitle, backingLabel(), :backing, null));
+        addItem(new WatchUi.MenuItem(Rez.Strings.RingsTitle, null, :rings, null));
     }
 
     private function layoutLabel() as ResourceId {
@@ -47,6 +59,9 @@ class SettingsMenuDelegate extends WatchUi.Menu2InputDelegate {
                  Rez.Strings.LayoutBandsCentre,
                  Rez.Strings.LayoutRings] as Array<ResourceId>,
                 StatMap.layout));
+        } else if (id == :rings) {
+            WatchUi.pushView(new RingMenu(), new RingMenuDelegate(),
+                             WatchUi.SLIDE_LEFT);
         } else if (id == :backing) {
             push(new ChoiceMenu(Rez.Strings.BackingTitle, StatMap.PROPERTY_BACKING,
                 [Rez.Strings.BackingOff,
@@ -62,6 +77,45 @@ class SettingsMenuDelegate extends WatchUi.Menu2InputDelegate {
 
     function onBack() as Void {
         WatchUi.popView(WatchUi.SLIDE_IMMEDIATE);
+    }
+}
+
+//! Lists the four rings, each showing what it is currently assigned to.
+class RingMenu extends WatchUi.Menu2 {
+
+    function initialize() {
+        Menu2.initialize({:title => Rez.Strings.RingsTitle});
+        var titles = [Rez.Strings.Ring1Title, Rez.Strings.Ring2Title,
+                      Rez.Strings.Ring3Title, Rez.Strings.Ring4Title]
+                     as Array<ResourceId>;
+        for (var i = 0; i < StatMap.RINGS; i++) {
+            addItem(new WatchUi.MenuItem(
+                titles[i], SOURCE_LABELS[StatMap.rings[i]], i, null));
+        }
+    }
+}
+
+//! Opens a source picker for whichever ring was chosen.
+class RingMenuDelegate extends WatchUi.Menu2InputDelegate {
+
+    function initialize() {
+        Menu2InputDelegate.initialize();
+    }
+
+    function onSelect(item as WatchUi.MenuItem) as Void {
+        var ring = item.getId();
+        if (ring != null) {
+            var index = ring as Number;
+            WatchUi.pushView(
+                new ChoiceMenu(Rez.Strings.RingsTitle,
+                               StatMap.PROPERTY_RINGS[index],
+                               SOURCE_LABELS, StatMap.rings[index]),
+                new ChoiceMenuDelegate(), WatchUi.SLIDE_LEFT);
+        }
+    }
+
+    function onBack() as Void {
+        WatchUi.popView(WatchUi.SLIDE_RIGHT);
     }
 }
 
@@ -99,7 +153,7 @@ class ChoiceMenuDelegate extends WatchUi.Menu2InputDelegate {
         var chosen = item.getId();
         if (view instanceof ChoiceMenu && chosen != null) {
             Properties.setValue(view.property(), chosen as Number);
-            StatMap.load();
+            Config.reload();
             WatchUi.requestUpdate();
         }
         WatchUi.popView(WatchUi.SLIDE_RIGHT);
