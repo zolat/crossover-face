@@ -33,4 +33,52 @@ module DotGrid {
         var distanceSq = dx * dx + dy * dy;
         return distanceSq <= RADIUS_SQ && distanceSq >= HUB_SQ;
     }
+
+    // --- cached dot list -----------------------------------------------------
+    //
+    // Monkey C is interpreted, and a watch face gets a hard watchdog budget per
+    // frame. Working out each dot's ring and position during onUpdate blew it:
+    // ~1100 dots times a handful of calls each — with a square root and an
+    // arctangent per dot in the rings layout — trips "Code Executed Too Long".
+    //
+    // None of that work depends on the data, only on the geometry and the
+    // layout. So it is done once, here, and onUpdate becomes a flat walk of
+    // parallel arrays with no calls in the inner loop.
+
+    var count as Number = 0;
+    var xs as Array<Number> = [] as Array<Number>;      //! dx from centre
+    var ys as Array<Number> = [] as Array<Number>;      //! dy from centre
+    var ringOf as Array<Number> = [] as Array<Number>;  //! which ring
+    var positionOf as Array<Float> = [] as Array<Float>;//! 0.0-1.0 along it
+
+    //! Rebuild the cache. Must be called whenever the layout changes, since
+    //! ring and position both depend on it.
+    function build() as Void {
+        var dx = new [COLS * ROWS] as Array<Number>;
+        var dy = new [COLS * ROWS] as Array<Number>;
+        var ring = new [COLS * ROWS] as Array<Number>;
+        var position = new [COLS * ROWS] as Array<Float>;
+
+        var n = 0;
+        for (var row = 0; row < ROWS; row++) {
+            var y = offsetAt(row);
+            for (var col = 0; col < COLS; col++) {
+                var x = offsetAt(col);
+                if (!contains(x, y)) {
+                    continue;
+                }
+                dx[n] = x;
+                dy[n] = y;
+                ring[n] = StatMap.ringFor(col, x, y);
+                position[n] = StatMap.positionOf(x, y);
+                n++;
+            }
+        }
+
+        xs = dx.slice(0, n);
+        ys = dy.slice(0, n);
+        ringOf = ring.slice(0, n);
+        positionOf = position.slice(0, n);
+        count = n;
+    }
 }

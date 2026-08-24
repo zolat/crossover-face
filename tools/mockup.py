@@ -53,9 +53,9 @@ SOURCES = [
 ]
 SOURCE_TEMPERATURE = 4
 
-TEMP_COLD = (0x33, 0x66, 0xFF)
-TEMP_MILD = (0xFF, 0xAA, 0x00)
-TEMP_HOT = (0xFF, 0x22, 0x00)
+# Placeholder theme: rings alternate between navy and olive. Mirrors
+# Palette.THEME in Monkey C.
+THEME = [(0x3A, 0x63, 0xB8), (0x6F, 0x7C, 0x33)]
 
 
 def mix(a, b, t):
@@ -63,17 +63,15 @@ def mix(a, b, t):
 
 
 def temperature_colour(fraction: float):
-    """Cold-to-hot ramp, mirroring Palette.temperature()."""
-    if fraction <= 0.5:
-        return mix(TEMP_COLD, TEMP_MILD, fraction * 2.0)
-    return mix(TEMP_MILD, TEMP_HOT, (fraction - 0.5) * 2.0)
+    """Ramp between the theme's two colours, mirroring Palette.build()."""
+    return mix(THEME[0], THEME[1], fraction)
 
 # Dot shape. A square is the densest; a cross lights 9 of the 25 pixels a
 # square would, which reads as finer texture and costs proportionally less
 # luminance. Mirrors DotGrid.SHAPE in Monkey C.
 DOT_SHAPE = "cross"    # square | cross | cross-thick
 
-WEAK_FACTOR = 0.18   # unfilled portion, relative to the strong hue
+WEAK_FACTOR = 0.26   # unfilled portion, relative to the strong hue
 DIM_FACTOR = 0.45    # always-on, applied to both tiers
 
 
@@ -121,7 +119,7 @@ HAND_HALF_WIDTH = 14
 HAND_COUNTERWEIGHT = 46
 HOUR_REACH = 131
 MINUTE_REACH = 176
-HAND_MARGIN = 10
+HAND_MARGIN = 0
 
 
 def hand_axes(hour: int, minute: int):
@@ -176,7 +174,7 @@ def render(variant: str, spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
                 if lit and source == SOURCE_TEMPERATURE:
                     colour = temperature_colour(position)
                 else:
-                    colour = SOURCES[source][1]
+                    colour = THEME[ring % len(THEME)]
                     if not lit:
                         colour = scale(colour, WEAK_FACTOR)
                 if always_on:

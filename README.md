@@ -125,6 +125,30 @@ simulator draws them, so what you see in the simulator is what you get. From
 The grey minute hand is the one real constraint on the palette: mid-grey elements crossing
 mid-grey dots would disappear.
 
+## Frame budget
+
+A watch face gets a hard watchdog allowance per `onUpdate`, and this face draws ~1,100 dots
+every frame in interpreted bytecode. Working out each dot's ring and position inside that
+loop **tripped the watchdog outright** — `Code Executed Too Long`, thrown from
+`StatMap.classify()`. The face would not load at all.
+
+None of that work depends on the data, only on the geometry and the layout. So `DotGrid`
+computes it once and caches parallel arrays of dx, dy, ring and position; `Config.reload()`
+rebuilds them whenever the layout changes. `MatrixRenderer` is then a flat walk with no
+calls in the inner loop, and `setColor` is only issued when the colour actually differs.
+
+Measured in the simulator with `System.getTimer()` around `onUpdate`:
+
+| | Frame time |
+|---|---|
+| Before | watchdog trip — never completed |
+| After | **avg 36ms, peak 44ms** over 21 frames |
+
+Two rules keep it there: **nothing is computed in the loop that `DotGrid` could compute
+once, and nothing calls out of the loop that could be an array lookup.** If you raise the
+dot count, re-measure — instrument `onUpdate` and read `monkeydo`'s output, which streams
+`println` straight to the terminal.
+
 ## Dots
 
 Dots are **crosses, not squares** — a 5px cross lights 9 pixels where a filled square of
@@ -182,7 +206,7 @@ Two ways to check a design against the budget:
   compresses a 24-hour run into minutes. Only enabled for watch faces on devices with
   screen protection, which this one has.
 
-Current design: **~3.1% active, ~1.4% always-on**, and **~1.9% always-on at the worst case**
+Current design: **~2.5% active, ~1.1% always-on**, and **~3.5% / ~1.6% at the worst case**
 of every ring reading full. `tools/mockup.py` agrees
 to within a tenth of a percent, and `make test` asserts the lattice matches it exactly, so
 the mockups stay an honest preview rather than drifting into wishful thinking.
@@ -270,12 +294,39 @@ Two things make it work:
 - `View.setClockHandPosition({:clockState => ANALOG_CLOCK_STATE_SYSTEM_TIME})` is called on
   wake, so the hands are known to be showing the time rather than parked. That API exists
   on exactly two devices, both Crossovers.
-- `HandBacking.MARGIN` widens the cleared area past the hands' own outline. The hands are
-  opaque, so a backing cut to their exact shape is invisible — it hides underneath them.
+- The footprint is the hands' own outline **exactly**, no wider — matching how Garmin's own
+  faces do it. What is lit is what sits *behind* the hand, not a cleared corridor around it.
+  The hands stand above the glass, so what you see is the lit area emerging along their
+  edge. The mockups cannot show this: they draw the hands as flat opaque shapes with no
+  gap, so the backing looks invisible there. Only the watch shows it properly.
 
 Properties live in `resources/properties.xml`, are surfaced by
 `resources/settings/settings.xml`, and are read by `Config.reload()`. Anything missing or
 out of range falls back to its default rather than throwing — there are tests for that.
+
+## Frame budget
+
+A watch face gets a hard watchdog allowance per `onUpdate`, and this face draws ~1,100 dots
+every frame in interpreted bytecode. Working out each dot's ring and position inside that
+loop **tripped the watchdog outright** — `Code Executed Too Long`, thrown from
+`StatMap.classify()`. The face would not load at all.
+
+None of that work depends on the data, only on the geometry and the layout. So `DotGrid`
+computes it once and caches parallel arrays of dx, dy, ring and position; `Config.reload()`
+rebuilds them whenever the layout changes. `MatrixRenderer` is then a flat walk with no
+calls in the inner loop, and `setColor` is only issued when the colour actually differs.
+
+Measured in the simulator with `System.getTimer()` around `onUpdate`:
+
+| | Frame time |
+|---|---|
+| Before | watchdog trip — never completed |
+| After | **avg 36ms, peak 44ms** over 21 frames |
+
+Two rules keep it there: **nothing is computed in the loop that `DotGrid` could compute
+once, and nothing calls out of the loop that could be an array lookup.** If you raise the
+dot count, re-measure — instrument `onUpdate` and read `monkeydo`'s output, which streams
+`println` straight to the terminal.
 
 ## Dots
 
@@ -334,7 +385,7 @@ Two ways to check a design against the budget:
   compresses a 24-hour run into minutes. Only enabled for watch faces on devices with
   screen protection, which this one has.
 
-Current design: **~3.1% active, ~1.4% always-on**, and **~1.9% always-on at the worst case**
+Current design: **~2.5% active, ~1.1% always-on**, and **~3.5% / ~1.6% at the worst case**
 of every ring reading full. `tools/mockup.py` agrees
 to within a tenth of a percent, and `make test` asserts the lattice matches it exactly, so
 the mockups stay an honest preview rather than drifting into wishful thinking.
@@ -401,8 +452,11 @@ Two things make this work:
 - `View.setClockHandPosition({:clockState => ANALOG_CLOCK_STATE_SYSTEM_TIME})` is called on
   wake, so the hands are known to be showing the time rather than parked somewhere else.
   That API exists on exactly two devices, both Crossovers.
-- `HandBacking.MARGIN` widens the cleared area past the hands' own outline. The hands are
-  opaque, so a backing cut to their exact shape is invisible — it hides underneath them.
+- The footprint is the hands' own outline **exactly**, no wider — matching how Garmin's own
+  faces do it. What is lit is what sits *behind* the hand, not a cleared corridor around it.
+  The hands stand above the glass, so what you see is the lit area emerging along their
+  edge. The mockups cannot show this: they draw the hands as flat opaque shapes with no
+  gap, so the backing looks invisible there. Only the watch shows it properly.
 
 Properties live in `resources/properties.xml`, are surfaced by
 `resources/settings/settings.xml`, and are read by `StatMap.load()`. An out-of-range or

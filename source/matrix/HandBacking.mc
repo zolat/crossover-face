@@ -3,8 +3,12 @@ import Toybox.Math;
 import Toybox.System;
 
 //! Works out which dots sit underneath the physical analogue hands, so they
-//! can be given a contrasting colour and the hands read cleanly against a
-//! plain backing instead of a busy field of colour.
+//! can be given a contrasting colour.
+//!
+//! The footprint is the hands' own outline exactly — no wider. This matches
+//! how Garmin's own faces do it: what is lit is what sits *behind* the hand,
+//! not a cleared corridor around it. The hands stand above the glass, so what
+//! you actually see is the lit area emerging along their edge.
 //!
 //! Hand geometry is a property of the hardware, taken from the device's
 //! simulator.json (Devices/instinctcrossoveramoled/simulator.json):
@@ -19,12 +23,6 @@ module HandBacking {
     const COUNTERWEIGHT = 46;
     const HOUR_REACH = 131;
     const MINUTE_REACH = 176;
-
-    //! How far the backing extends past the hand's own outline. The hands are
-    //! opaque, so a backing cut exactly to their shape is invisible — it hides
-    //! underneath them. 10px clears a corridor you can actually see either
-    //! side; much more and it starts eating the design.
-    const MARGIN = 10;
 
     //! Unit vectors for both hands: [hourX, hourY, minuteX, minuteY].
     //! Computed once per frame — the per-dot test is then just dot products.
@@ -53,10 +51,10 @@ module HandBacking {
     function under(dx as Number, dy as Number, ux as Float, uy as Float,
                    reach as Number) as Boolean {
         var along = dx * ux + dy * uy;
-        if (along > reach + MARGIN || along < -(COUNTERWEIGHT + MARGIN)) {
+        if (along > reach || along < -COUNTERWEIGHT) {
             return false;
         }
         var across = (dx * -uy) + (dy * ux);
-        return across.abs() <= HALF_WIDTH + MARGIN;
+        return across.abs() <= HALF_WIDTH;
     }
 }

@@ -7,5 +7,7 @@ module Config {
     function reload() as Void {
         StatMap.load();
         Palette.build();
+        // Depends on the layout, so it must follow StatMap.load().
+        DotGrid.build();
     }
 }
