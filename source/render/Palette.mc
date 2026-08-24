@@ -13,14 +13,20 @@ import Toybox.Lang;
 //! Both tables are indexed by ring * 2, plus 1 when lit.
 module Palette {
 
-    //! Navy and olive. Both are lifted well above their paint-chip values:
-    //! true navy on a black AMOLED all but disappears, and it reads about half
-    //! as bright as olive, so the rings would not look like a pair. These sit
-    //! within 1.2x of each other. There is ~5x of luminance headroom against
-    //! the burn-in budget, so the brightness costs nothing.
-    const THEME = [0x3A63B8, 0x6F7C33] as Array<Number>;   //! navy, olive
+    //! Navy and olive, tuned for AMOLED rather than for a paint chart.
+    //!
+    //! The trick on a black panel is to spend the budget on *chroma* rather
+    //! than brightness: these sit at 25% and 38% luminance but 51% and 33%
+    //! chroma, so they read as deep saturated colour against true black
+    //! instead of as washed-out pastels. Lifting the brightness instead — an
+    //! earlier attempt — turned the navy into a medium blue.
+    //!
+    //! Olive is naturally the brighter of the two (yellow-green carries far
+    //! more luma than blue), so it is deliberately drabbed down to keep the
+    //! pair within about 1.5x of each other.
+    const THEME = [0x1D3F9E, 0x5C6A16] as Array<Number>;   //! navy, olive
 
-    const WEAK = 0.26;          //! Unfilled tier, relative to the colour.
+    const WEAK = 0.30;          //! Unfilled tier, relative to the colour.
     const DIM = 0.45;           //! Always-on, applied on top of either tier.
 
     //! Backing drawn under the analogue hands when that option is on.

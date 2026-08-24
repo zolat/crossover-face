@@ -55,7 +55,7 @@ SOURCE_TEMPERATURE = 4
 
 # Placeholder theme: rings alternate between navy and olive. Mirrors
 # Palette.THEME in Monkey C.
-THEME = [(0x3A, 0x63, 0xB8), (0x6F, 0x7C, 0x33)]
+THEME = [(0x1D, 0x3F, 0x9E), (0x5C, 0x6A, 0x16)]
 
 
 def mix(a, b, t):
@@ -71,7 +71,7 @@ def temperature_colour(fraction: float):
 # luminance. Mirrors DotGrid.SHAPE in Monkey C.
 DOT_SHAPE = "cross"    # square | cross | cross-thick
 
-WEAK_FACTOR = 0.26   # unfilled portion, relative to the strong hue
+WEAK_FACTOR = 0.30   # unfilled portion, relative to the strong hue
 DIM_FACTOR = 0.45    # always-on, applied to both tiers
 
 
