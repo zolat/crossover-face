@@ -30,6 +30,7 @@ module MatrixRenderer {
         // Hand axes cost two trig calls, so they are computed per frame rather
         // than per dot; the test itself is then only dot products.
         var axes = (backing != null) ? HandBacking.axes() : null;
+        var lastColour = -1;
 
         for (var row = 0; row < DotGrid.ROWS; row++) {
             var dy = DotGrid.offsetAt(row);
@@ -47,8 +48,16 @@ module MatrixRenderer {
                 } else {
                     colour = dotColour(col, dx, dy, spans, palette, dim);
                 }
-                dc.setColor(colour, Graphics.COLOR_TRANSPARENT);
-                dc.fillRectangle(shiftX + dx, y, size, size);
+                // Runs of dots share a colour, especially in the band layouts,
+                // so only change pen when it actually differs. With ~1100 dots
+                // a frame this saves far more calls than it costs.
+                if (colour != lastColour) {
+                    dc.setColor(colour, Graphics.COLOR_TRANSPARENT);
+                    lastColour = colour;
+                }
+                // A cross, not a square: two strokes through the dot's centre.
+                dc.fillRectangle(shiftX + dx, y + half, size, 1);
+                dc.fillRectangle(shiftX + dx + half, y, 1, size);
             }
         }
     }

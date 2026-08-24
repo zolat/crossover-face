@@ -30,9 +30,9 @@ DEVICE_DIR = os.path.expanduser(
 # --- lattice -----------------------------------------------------------------
 
 SIZE = 390
-PITCH = 14
+PITCH = 10
 DOT = 5
-COLS = ROWS = 28
+COLS = ROWS = 38
 RADIUS = 190
 HUB = 21
 
@@ -67,6 +67,11 @@ def temperature_colour(fraction: float):
     if fraction <= 0.5:
         return mix(TEMP_COLD, TEMP_MILD, fraction * 2.0)
     return mix(TEMP_MILD, TEMP_HOT, (fraction - 0.5) * 2.0)
+
+# Dot shape. A square is the densest; a cross lights 9 of the 25 pixels a
+# square would, which reads as finer texture and costs proportionally less
+# luminance. Mirrors DotGrid.SHAPE in Monkey C.
+DOT_SHAPE = "cross"    # square | cross | cross-thick
 
 WEAK_FACTOR = 0.18   # unfilled portion, relative to the strong hue
 DIM_FACTOR = 0.45    # always-on, applied to both tiers
@@ -181,10 +186,20 @@ def render(variant: str, spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
             # +DOT-1, not +DOT. Getting this wrong drew 6x6 dots against the
             # watch's 5x5 and inflated every luminance reading by ~44%.
             left, top = x - half + drift[0], y - half + drift[1]
-            draw.rectangle(
-                [left, top, left + DOT - 1, top + DOT - 1], fill=colour
-            )
+            draw_dot(draw, left, top, colour)
     return img
+
+
+def draw_dot(draw, left: int, top: int, colour) -> None:
+    """One dot, in whichever shape is selected."""
+    far = DOT - 1
+    mid = DOT // 2
+    if DOT_SHAPE == "square":
+        draw.rectangle([left, top, left + far, top + far], fill=colour)
+        return
+    arm = 0 if DOT_SHAPE == "cross" else 1
+    draw.rectangle([left, top + mid - arm, left + far, top + mid + arm], fill=colour)
+    draw.rectangle([left + mid - arm, top, left + mid + arm, top + far], fill=colour)
 
 
 # --- device compositing ------------------------------------------------------
@@ -371,7 +386,7 @@ def main(outdir: str = "build/mockups") -> int:
     written.append(path)
 
     # 7. Burn-in drift: how long any one pixel stays lit over a full cycle.
-    phases = [(-3, -3), (3, 3), (3, -3), (-3, 3)]
+    phases = [(-2, -2), (3, 3), (3, -2), (-2, 3)]
     duty = {}
     for dx, dy in phases:
         img = render("bands", [(0.0, 1.0)] * 4, drift=(dx, dy))

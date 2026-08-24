@@ -8,10 +8,13 @@ import Toybox.Lang;
 //! pitch, offset = (2 * index - 27) * 7.
 module DotGrid {
 
-    const PITCH = 14;
+    //! A cross lights 9 of the 25 pixels a filled square of the same extent
+    //! would, so the same luminance buys a much finer lattice: at this pitch
+    //! there are ~1100 dots against ~570 of squares, for less light.
+    const PITCH = 10;
     const DOT = 5;
-    const COLS = 28;
-    const ROWS = 28;
+    const COLS = 38;
+    const ROWS = 38;
 
     const RADIUS = 190;
     const HUB = 21;             //! Radius the physical hand pivot covers.

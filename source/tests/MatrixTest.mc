@@ -12,7 +12,7 @@ import Toybox.Test;
 //! cannot drift apart silently — the mockups stay an honest preview.
 module MatrixTest {
 
-    const EXPECTED_DOTS = 572;
+    const EXPECTED_DOTS = 1112;
 
     //! Garmin blanks an always-on face above this share of screen luminance.
     const BUDGET = 0.10;
@@ -83,15 +83,15 @@ module MatrixTest {
         Test.assertMessage(!DotGrid.contains(0, 0), "centre must be empty");
         Test.assertMessage(!DotGrid.contains(DotGrid.HUB - 1, 0),
             "inside the hub must be empty");
-        Test.assertMessage(DotGrid.contains(DotGrid.HUB + 7, 0),
+        Test.assertMessage(DotGrid.contains(DotGrid.HUB + 5, 0),
             "just outside the hub must have dots");
         return true;
     }
 
     (:test)
     function cornersAreClipped(logger as Logger) as Boolean {
-        Test.assertMessage(!DotGrid.contains(189, 189), "corner must be clipped");
-        Test.assertMessage(DotGrid.contains(0, 189), "rim must have dots");
+        Test.assertMessage(!DotGrid.contains(185, 185), "corner must be clipped");
+        Test.assertMessage(DotGrid.contains(0, 185), "rim must have dots");
         return true;
     }
 
@@ -249,13 +249,11 @@ module MatrixTest {
         return true;
     }
 
-    //! The drift must never push a dot past the edge of the screen. This is
-    //! the constraint that pins Drift.AMPLITUDE — the outermost dots sit 189px
-    //! out on a screen whose half-width is 195.
+    //! The drift must never push a dot past the edge of the screen.
     (:test)
     function driftKeepsDotsOnScreen(logger as Logger) as Boolean {
         var furthest = DotGrid.offsetAt(DotGrid.COLS - 1);
-        var reach = furthest + Drift.AMPLITUDE + (DotGrid.DOT / 2);
+        var reach = furthest + Drift.MAX_OFFSET + (DotGrid.DOT / 2);
         logger.debug("furthest lit pixel from centre: " + reach);
         Test.assertMessage(reach <= 194, "drift pushes dots off the 390px screen");
         return true;
@@ -288,6 +286,55 @@ module MatrixTest {
         Test.assertEqualMessage(seen, (1 << Drift.PHASES.size()) - 1,
             "drift does not visit every phase within an hour");
         return true;
+    }
+
+    //! The claim drift makes is that no pixel is lit in more than one phase.
+    //! Checking it needs neighbours in frame, not one dot in isolation: at
+    //! this pitch a dot's own decorrelation is easy, and it is collisions with
+    //! the *next dot along* that break the guarantee.
+    (:test)
+    function driftDutyCycleIsOnePhaseInFour(logger as Logger) as Boolean {
+        var pitch = DotGrid.PITCH;
+        var size = 3 * pitch;                  // a 3x3 block of dots
+        var counts = new [size * size] as Array<Number>;
+        for (var i = 0; i < counts.size(); i++) { counts[i] = 0; }
+
+        var half = DotGrid.DOT / 2;
+        for (var p = 0; p < Drift.PHASES.size(); p++) {
+            var offset = Drift.offsetFor(p * Drift.PERIOD_MINUTES);
+            for (var gy = 0; gy < 3; gy++) {
+                for (var gx = 0; gx < 3; gx++) {
+                    var cx = (gx * pitch) + (pitch / 2) + offset[0];
+                    var cy = (gy * pitch) + (pitch / 2) + offset[1];
+                    // A cross: one horizontal stroke, one vertical. The two
+                    // meet at the centre, so the vertical skips k = 0 or the
+                    // centre pixel would be counted twice within one phase.
+                    for (var k = -half; k <= half; k++) {
+                        mark(counts, size, cx + k, cy);
+                        if (k != 0) {
+                            mark(counts, size, cx, cy + k);
+                        }
+                    }
+                }
+            }
+        }
+
+        var worst = 0;
+        for (var i = 0; i < counts.size(); i++) {
+            if (counts[i] > worst) { worst = counts[i]; }
+        }
+        logger.debug("worst duty cycle: " + worst + " of " + Drift.PHASES.size());
+        Test.assertEqualMessage(worst, 1,
+            "a pixel is lit in more than one drift phase, so drift buys less than it claims");
+        return true;
+    }
+
+    function mark(counts as Array<Number>, size as Number,
+                  x as Number, y as Number) as Void {
+        if (x < 0 || y < 0 || x >= size || y >= size) {
+            return;     // outside the window; neighbours beyond it are mirrored
+        }
+        counts[y * size + x] += 1;
     }
 
     //! The backing must land on the hands, and only on the hands.

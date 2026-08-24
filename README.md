@@ -125,23 +125,40 @@ simulator draws them, so what you see in the simulator is what you get. From
 The grey minute hand is the one real constraint on the palette: mid-grey elements crossing
 mid-grey dots would disappear.
 
+## Dots
+
+Dots are **crosses, not squares** — a 5px cross lights 9 pixels where a filled square of
+the same extent lights 25. That buys density: at a 10px pitch the face carries ~1,100 dots
+against ~570 of squares, *and* costs less light. The finer grain reads as instrument
+texture rather than a chunky LED panel.
+
+The renderer only calls `setColor` when the colour actually changes. Runs of dots share a
+colour, especially in the band layouts, so with ~1,100 dots a frame this saves far more
+calls than it costs.
+
 ## Burn-in drift
 
-The lattice walks a four-phase cycle, shifting ±3px and changing every two minutes
-(`source/matrix/Drift.mc`). The numbers are forced by the geometry rather than chosen:
+The lattice walks a four-phase cycle, changing every two minutes
+(`source/matrix/Drift.mc`). The offsets are **-2 and +3 on each axis**, and that asymmetry
+is not arbitrary. At a 10px pitch with 5px dots there is exactly 5px of slack between one
+dot and its neighbour, and two competing demands on it:
 
-- Dots are 5px wide, so phases must differ by **at least 5px** or a pixel stays lit
-  across the change. Opposite phases differ by 6px.
-- The outermost dots sit 189px from centre on a screen 195px half-wide, leaving 4px of
-  headroom after the 2px half-dot. **±3 is the largest amplitude that does not clip the rim.**
+- a dot must move **at least DOT (5px)** or it keeps sharing pixels with *itself*;
+- it must move **no more than the slack** or it starts landing on its *neighbour*.
+
+Offsets of -2 and +3 are exactly 5px apart and consume exactly the slack, satisfying both.
+A symmetric ±3 spans 6px and collides with the next dot along — which is precisely what
+happened when the pitch tightened from 14 to 10, and what
+`driftDutyCycleIsOnePhaseInFour` now catches. That test lays out a 3×3 block of dots and
+counts how many phases light each pixel, because a single dot in isolation always looks
+fine; it is the neighbours that break the guarantee.
 
 Drift is applied when drawing, never when deciding which dots exist, so the field
 translates rigidly instead of popping dots in and out at the edge.
 
-Measured over a full cycle by `tools/mockup.py`: **57,200 pixels touched, worst duty cycle
-1 phase in 4.** No pixel is lit in more than one phase, so each rests 75% of the time and
-is never lit for more than two minutes running. `make test` asserts the decorrelation and
-the on-screen bound directly.
+Measured over a full cycle by `tools/mockup.py`: **worst duty cycle 1 phase in 4.** No
+pixel is lit in more than one phase, so each rests 75% of the time and is never lit for
+more than two minutes running.
 
 ## AMOLED always-on rules
 
@@ -165,8 +182,8 @@ Two ways to check a design against the budget:
   compresses a 24-hour run into minutes. Only enabled for watch faces on devices with
   screen protection, which this one has.
 
-Current design, measured on-device by `make test`: **~4.6% active, ~2.0% always-on**, and
-**~2.8% always-on at the worst case** of every stat reading 100%. `tools/mockup.py` agrees
+Current design: **~3.1% active, ~1.4% always-on**, and **~1.9% always-on at the worst case**
+of every ring reading full. `tools/mockup.py` agrees
 to within a tenth of a percent, and `make test` asserts the lattice matches it exactly, so
 the mockups stay an honest preview rather than drifting into wishful thinking.
 
@@ -260,23 +277,40 @@ Properties live in `resources/properties.xml`, are surfaced by
 `resources/settings/settings.xml`, and are read by `Config.reload()`. Anything missing or
 out of range falls back to its default rather than throwing — there are tests for that.
 
+## Dots
+
+Dots are **crosses, not squares** — a 5px cross lights 9 pixels where a filled square of
+the same extent lights 25. That buys density: at a 10px pitch the face carries ~1,100 dots
+against ~570 of squares, *and* costs less light. The finer grain reads as instrument
+texture rather than a chunky LED panel.
+
+The renderer only calls `setColor` when the colour actually changes. Runs of dots share a
+colour, especially in the band layouts, so with ~1,100 dots a frame this saves far more
+calls than it costs.
+
 ## Burn-in drift
 
-The lattice walks a four-phase cycle, shifting ±3px and changing every two minutes
-(`source/matrix/Drift.mc`). The numbers are forced by the geometry rather than chosen:
+The lattice walks a four-phase cycle, changing every two minutes
+(`source/matrix/Drift.mc`). The offsets are **-2 and +3 on each axis**, and that asymmetry
+is not arbitrary. At a 10px pitch with 5px dots there is exactly 5px of slack between one
+dot and its neighbour, and two competing demands on it:
 
-- Dots are 5px wide, so phases must differ by **at least 5px** or a pixel stays lit
-  across the change. Opposite phases differ by 6px.
-- The outermost dots sit 189px from centre on a screen 195px half-wide, leaving 4px of
-  headroom after the 2px half-dot. **±3 is the largest amplitude that does not clip the rim.**
+- a dot must move **at least DOT (5px)** or it keeps sharing pixels with *itself*;
+- it must move **no more than the slack** or it starts landing on its *neighbour*.
+
+Offsets of -2 and +3 are exactly 5px apart and consume exactly the slack, satisfying both.
+A symmetric ±3 spans 6px and collides with the next dot along — which is precisely what
+happened when the pitch tightened from 14 to 10, and what
+`driftDutyCycleIsOnePhaseInFour` now catches. That test lays out a 3×3 block of dots and
+counts how many phases light each pixel, because a single dot in isolation always looks
+fine; it is the neighbours that break the guarantee.
 
 Drift is applied when drawing, never when deciding which dots exist, so the field
 translates rigidly instead of popping dots in and out at the edge.
 
-Measured over a full cycle by `tools/mockup.py`: **57,200 pixels touched, worst duty cycle
-1 phase in 4.** No pixel is lit in more than one phase, so each rests 75% of the time and
-is never lit for more than two minutes running. `make test` asserts the decorrelation and
-the on-screen bound directly.
+Measured over a full cycle by `tools/mockup.py`: **worst duty cycle 1 phase in 4.** No
+pixel is lit in more than one phase, so each rests 75% of the time and is never lit for
+more than two minutes running.
 
 ## AMOLED always-on rules
 
@@ -300,8 +334,8 @@ Two ways to check a design against the budget:
   compresses a 24-hour run into minutes. Only enabled for watch faces on devices with
   screen protection, which this one has.
 
-Current design, measured on-device by `make test`: **~4.6% active, ~2.0% always-on**, and
-**~2.8% always-on at the worst case** of every stat reading 100%. `tools/mockup.py` agrees
+Current design: **~3.1% active, ~1.4% always-on**, and **~1.9% always-on at the worst case**
+of every ring reading full. `tools/mockup.py` agrees
 to within a tenth of a percent, and `make test` asserts the lattice matches it exactly, so
 the mockups stay an honest preview rather than drifting into wishful thinking.
 
