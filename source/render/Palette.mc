@@ -1,15 +1,45 @@
-import Toybox.Graphics;
 import Toybox.Lang;
 
-//! Colours shared by both renderers. AMOLED rule of thumb: black is free,
-//! everything else costs battery and counts against the burn-in budget.
+//! Colour for every dot state, in both power modes.
+//!
+//! One hue per stat. The filled portion carries the hue at full read; the
+//! unfilled portion is the same hue dark enough to tint the field without
+//! reading as lit. Always-on dims both tiers by a constant, which is what keeps
+//! the two modes looking like the same image rather than two designs.
+//!
+//! Both tables are indexed by StatMap.classify(): stat * 2, plus 1 when filled.
 module Palette {
-    const BACKGROUND = Graphics.COLOR_BLACK;
-    const PRIMARY = 0xFFFFFF;
-    const ACCENT = 0xFF6600;
-    const MUTED = 0x777777;
 
-    //! Deliberately dim: always-on frames must stay under 10% of the
-    //! screen's luminance or the system blanks the display.
-    const ALWAYS_ON = 0x555555;
+    //! Steps, heart rate, battery, body battery.
+    const HUES = [0xFF6600, 0xFF3322, 0x33CC55, 0x3388FF] as Array<Number>;
+
+    const WEAK = 0.18;          //! Unfilled tier, relative to the hue.
+    const DIM = 0.45;           //! Always-on, applied on top of either tier.
+
+    //! Every colour the face can draw. Built once — see build().
+    var active as Array<Number> = [] as Array<Number>;
+    var alwaysOn as Array<Number> = [] as Array<Number>;
+
+    function build() as Void {
+        var lit = [] as Array<Number>;
+        var dimmed = [] as Array<Number>;
+        for (var stat = 0; stat < HUES.size(); stat++) {
+            var hue = HUES[stat];
+            var weak = scale(hue, WEAK);
+            lit.add(weak);
+            lit.add(hue);
+            dimmed.add(scale(weak, DIM));
+            dimmed.add(scale(hue, DIM));
+        }
+        active = lit;
+        alwaysOn = dimmed;
+    }
+
+    //! Multiply each channel of a packed RGB colour.
+    function scale(colour as Number, factor as Float) as Number {
+        var r = (((colour >> 16) & 0xFF) * factor).toNumber();
+        var g = (((colour >> 8) & 0xFF) * factor).toNumber();
+        var b = ((colour & 0xFF) * factor).toNumber();
+        return (r << 16) | (g << 8) | b;
+    }
 }

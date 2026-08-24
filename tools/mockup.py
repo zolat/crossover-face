@@ -88,17 +88,18 @@ def render(variant: str, values: list[float], *, always_on: bool = False) -> Ima
     img = Image.new("RGB", (SIZE, SIZE), (0, 0, 0))
     draw = ImageDraw.Draw(img)
     mapper = VARIANTS[variant]
-    centre = SIZE / 2
-    offset = DOT / 2
+    centre = SIZE // 2
+    half = DOT // 2
 
     for row in range(ROWS):
-        y = centre + (row - (ROWS - 1) / 2) * PITCH
+        dy = (2 * row - (ROWS - 1)) * (PITCH // 2)
         for col in range(COLS):
-            x = centre + (col - (COLS - 1) / 2) * PITCH
-            dist = math.hypot(x - centre, y - centre)
-            if dist > RADIUS or dist < HUB:
+            dx = (2 * col - (COLS - 1)) * (PITCH // 2)
+            dist_sq = dx * dx + dy * dy
+            if dist_sq > RADIUS * RADIUS or dist_sq < HUB * HUB:
                 continue
 
+            x, y = centre + dx, centre + dy
             stat, filled = mapper(col, row, x, y, values)
             colour = HUES[stat][1]
             if not filled:
@@ -106,8 +107,12 @@ def render(variant: str, values: list[float], *, always_on: bool = False) -> Ima
             if always_on:
                 colour = scale(colour, DIM_FACTOR)
 
+            # PIL's rectangle() includes both endpoints, so the far corner is
+            # +DOT-1, not +DOT. Getting this wrong drew 6x6 dots against the
+            # watch's 5x5 and inflated every luminance reading by ~44%.
+            left, top = x - half, y - half
             draw.rectangle(
-                [x - offset, y - offset, x + offset, y + offset], fill=colour
+                [left, top, left + DOT - 1, top + DOT - 1], fill=colour
             )
     return img
 

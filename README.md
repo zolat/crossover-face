@@ -11,6 +11,7 @@ physical analogue hands sweep over it without ever obscuring anything.
 ```sh
 make build      # compile for the simulator
 make sim        # launch the simulator and sideload
+make install    # sideload onto a USB-connected watch
 make test       # run the unit tests
 make package    # signed .iq for the Connect IQ Store
 make sdk-info   # show resolved SDK path, device and key
@@ -134,8 +135,9 @@ enforced "no pixel lit longer than 3 minutes"). Power mode is read at run time:
 System.getDisplayMode()   // DISPLAY_MODE_HIGH_POWER | LOW_POWER | OFF, API 5.0.0+
 ```
 
-`CrossoverView` dispatches on this to `ActiveRenderer` or `AlwaysOnRenderer`, falling back
-to `DeviceSettings.requiresBurnInProtection` plus sleep state on pre-5.0.0 devices.
+`CrossoverView` uses this to pick which palette `MatrixRenderer` draws with, falling back to
+`DeviceSettings.requiresBurnInProtection` plus sleep state on pre-5.0.0 devices. There is
+one renderer rather than two, because awake and always-on differ only by the colour table.
 
 Two ways to check a design against the budget:
 
@@ -145,8 +147,37 @@ Two ways to check a design against the budget:
   compresses a 24-hour run into minutes. Only enabled for watch faces on devices with
   screen protection, which this one has.
 
-Current design: **~6.3% active, ~2.8% always-on**, and **~3.9% always-on at the worst case**
-of every stat reading 100%.
+Current design, measured on-device by `make test`: **~4.6% active, ~2.0% always-on**, and
+**~2.8% always-on at the worst case** of every stat reading 100%. `tools/mockup.py` agrees
+to within a tenth of a percent, and `make test` asserts the lattice matches it exactly, so
+the mockups stay an honest preview rather than drifting into wishful thinking.
+
+## Installing on the watch
+
+```sh
+make install     # copies the .prg into GARMIN/APPS on a mounted watch
+```
+
+**The watch must be in `Garmin` USB mode, not `MTP`.** Garmin devices default to MTP, which
+macOS cannot mount — no volume appears in `/Volumes`, so there is nothing to copy to. On
+the watch:
+
+> **Settings → System → USB Mode → Garmin** (sometimes shown as *Mass Storage*)
+
+Then replug and it mounts as `GARMIN`. To confirm the Mac sees the watch at all:
+
+```sh
+ioreg -p IOUSB -w0 -l | grep -E '"idVendor"|"idProduct"'   # Garmin is idVendor 2334 (0x091E)
+diskutil list                                              # mass storage shows up as a disk
+```
+
+A watch that shows in `ioreg` but not in `diskutil` is connected and in MTP mode.
+
+If you would rather leave it in MTP, `brew install libmtp` provides `mtp-detect` and
+`mtp-sendfile`, or `brew install --cask openmtp` gives a Finder-like GUI.
+
+After copying, eject the volume, then hold **MENU** on the watch face and pick
+*Watch Face → Crossover Face*.
 
 ## Design tooling
 
@@ -171,8 +202,11 @@ source/
   CrossoverApp.mc     app lifecycle
   CrossoverView.mc    picks a renderer based on power mode — no drawing
   data/WatchData.mc   device state, formatted. Pure queries, no drawing
-  matrix/             lattice geometry and dot -> stat mapping
-  render/             Palette, ActiveRenderer, AlwaysOnRenderer
+  matrix/DotGrid.mc   lattice geometry: pitch, circle clip, hub
+  matrix/StatMap.mc   dot -> stat mapping; the bands/rings seam
+  render/Palette.mc   four hues, two tiers, two power modes
+  render/MatrixRenderer.mc  draws the field with a given palette
+  tests/              geometry, mapping and luminance-budget tests
 resources/
   drawables/          launcher icon
   strings/            app name

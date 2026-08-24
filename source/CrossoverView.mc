@@ -3,8 +3,8 @@ import Toybox.Lang;
 import Toybox.System;
 import Toybox.WatchUi;
 
-//! The watch face view. Its only job is deciding *which* renderer runs;
-//! all drawing lives in ActiveRenderer / AlwaysOnRenderer.
+//! The watch face view. Its only job is choosing the palette for the current
+//! power mode; the lattice, the mapping and the colours all live elsewhere.
 class CrossoverView extends WatchUi.WatchFace {
 
     //! Tracks sleep state for devices that predate System.getDisplayMode().
@@ -14,13 +14,13 @@ class CrossoverView extends WatchUi.WatchFace {
         WatchFace.initialize();
     }
 
+    function onLayout(dc as Dc) as Void {
+        Palette.build();
+    }
+
     function onUpdate(dc as Dc) as Void {
-        dc.setClip(0, 0, dc.getWidth(), dc.getHeight());
-        if (isLowPower()) {
-            AlwaysOnRenderer.draw(dc);
-        } else {
-            ActiveRenderer.draw(dc);
-        }
+        var palette = isLowPower() ? Palette.alwaysOn : Palette.active;
+        MatrixRenderer.draw(dc, WatchData.normalised(), palette);
     }
 
     function onEnterSleep() as Void {
@@ -33,14 +33,13 @@ class CrossoverView extends WatchUi.WatchFace {
         WatchUi.requestUpdate();
     }
 
-    //! True when the frame we are about to draw is subject to AMOLED
-    //! burn-in protection (always-on mode).
+    //! True when the frame about to be drawn is subject to AMOLED burn-in
+    //! protection, i.e. always-on mode.
     private function isLowPower() as Boolean {
         if (System has :getDisplayMode) {
             return System.getDisplayMode() == System.DISPLAY_MODE_LOW_POWER;
         }
-        // Pre-5.0.0 devices: burn-in rules apply whenever a protected
-        // screen is asleep.
+        // Pre-5.0.0 devices: the rules apply whenever a protected screen sleeps.
         return System.getDeviceSettings().requiresBurnInProtection && _asleep;
     }
 }

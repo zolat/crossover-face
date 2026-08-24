@@ -1,51 +1,77 @@
 import Toybox.Activity;
 import Toybox.ActivityMonitor;
 import Toybox.Lang;
+import Toybox.SensorHistory;
 import Toybox.System;
-import Toybox.Time;
-import Toybox.Time.Gregorian;
+import Toybox.UserProfile;
 
-//! Reads device state and formats it for display. Pure queries — no drawing,
-//! so the always-on renderer can pull only what it is allowed to show.
+//! Reads device state and normalises it to 0.0-1.0, which is all the face
+//! needs: the design shows no numbers, only fill levels. Pure queries — nothing
+//! here draws, so the renderer stays ignorant of where data comes from.
 module WatchData {
 
-    //! "9:41" or "21:41" depending on the user's 24-hour setting.
-    function timeText() as String {
-        var clock = System.getClockTime();
-        var hour = clock.hour;
-        if (!System.getDeviceSettings().is24Hour) {
-            hour = hour % 12;
-            if (hour == 0) {
-                hour = 12;
-            }
+    //! Heart rate is mapped between the user's resting rate and this ceiling.
+    //! A fixed ceiling beats a 220-minus-age estimate here: the face wants a
+    //! stable visual range, not a training-zone calculation.
+    const HR_FLOOR = 50;
+    const HR_CEILING = 180;
+
+    //! Steps, heart rate, battery, body battery — the order StatMap expects.
+    function normalised() as Array<Float> {
+        return [steps(), heartRate(), battery(), bodyBattery()] as Array<Float>;
+    }
+
+    function steps() as Float {
+        var info = ActivityMonitor.getInfo();
+        var count = info.steps;
+        var goal = info.stepGoal;
+        if (count == null || goal == null || goal <= 0) {
+            return 0.0;
         }
-        return Lang.format("$1$:$2$", [hour.format("%d"), clock.min.format("%02d")]);
+        return clamp(count.toFloat() / goal);
     }
 
-    //! "MON 24 AUG"
-    function dateText() as String {
-        var now = Gregorian.info(Time.now(), Time.FORMAT_MEDIUM);
-        var weekday = now.day_of_week;
-        var month = now.month;
-        return Lang.format("$1$ $2$ $3$", [
-            weekday == null ? "" : weekday.toString().toUpper(),
-            now.day.format("%02d"),
-            month == null ? "" : month.toString().toUpper()
-        ]);
+    function heartRate() as Float {
+        var rate = Activity.getActivityInfo().currentHeartRate;
+        if (rate == null) {
+            return 0.0;
+        }
+        var floor = HR_FLOOR;
+        var resting = UserProfile.getProfile().restingHeartRate;
+        if (resting != null && resting > 0) {
+            floor = resting;
+        }
+        if (floor >= HR_CEILING) {
+            return 0.0;
+        }
+        return clamp((rate - floor).toFloat() / (HR_CEILING - floor));
     }
 
-    //! Battery charge, 0-100.
-    function batteryPercent() as Number {
-        return System.getSystemStats().battery.toNumber();
+    function battery() as Float {
+        return clamp(System.getSystemStats().battery / 100.0);
     }
 
-    //! Steps so far today, or null if unavailable.
-    function steps() as Number? {
-        return ActivityMonitor.getInfo().steps;
+    function bodyBattery() as Float {
+        if (!(Toybox has :SensorHistory) ||
+            !(SensorHistory has :getBodyBatteryHistory)) {
+            return 0.0;
+        }
+        var history = SensorHistory.getBodyBatteryHistory(
+            {:period => 1, :order => SensorHistory.ORDER_NEWEST_FIRST});
+        var sample = history.next();
+        if (sample == null) {
+            return 0.0;
+        }
+        var level = sample.data;
+        if (level == null) {
+            return 0.0;
+        }
+        return clamp(level / 100.0);
     }
 
-    //! Current heart rate in bpm, or null when there is no reading.
-    function heartRate() as Number? {
-        return Activity.getActivityInfo().currentHeartRate;
+    function clamp(value as Float) as Float {
+        if (value < 0.0) { return 0.0; }
+        if (value > 1.0) { return 1.0; }
+        return value;
     }
 }

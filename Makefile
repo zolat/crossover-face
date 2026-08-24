@@ -15,7 +15,7 @@ MONKEYC  := $(SDK)bin/monkeyc
 MONKEYDO := $(SDK)bin/monkeydo
 SIMULATOR := $(SDK)bin/connectiq
 
-.PHONY: all build test sim package clean sdk-info
+.PHONY: all build test sim install package clean sdk-info
 
 all: build
 
@@ -31,14 +31,37 @@ test:
 	"$(MONKEYDO)" bin/$(NAME)-test.prg $(DEVICE) -t
 
 ## Launch the simulator (if not already up) and sideload the face.
+## Stays attached to stream println output — Ctrl-C to detach.
 sim: build
-	@pgrep -qx ConnectIQ || "$(SIMULATOR)"
-	@printf 'waiting for simulator'
-	@n=0; until "$(MONKEYDO)" $(PRG) $(DEVICE) 2>/dev/null; do \
-		n=$$((n+1)); \
-		if [ $$n -ge 40 ]; then echo " — simulator never accepted the app"; exit 1; fi; \
-		printf '.'; /bin/sleep 0.5; \
-	done
+	@pgrep -f 'ConnectIQ.app/Contents/MacOS/simulator' >/dev/null || { \
+		echo "starting simulator..."; "$(SIMULATOR)"; \
+		n=0; until pgrep -f 'ConnectIQ.app/Contents/MacOS/simulator' >/dev/null; do \
+			n=$$((n+1)); [ $$n -ge 60 ] && { echo "simulator did not start"; exit 1; }; \
+			/bin/sleep 0.5; \
+		done; /bin/sleep 2; }
+	"$(MONKEYDO)" $(PRG) $(DEVICE)
+
+## Sideload onto a USB-connected watch (USB mass-storage mode).
+install: build
+	@apps=$$(ls -d /Volumes/*/GARMIN/APPS 2>/dev/null | head -1); \
+	if [ -z "$$apps" ]; then \
+		echo "No Garmin watch found under /Volumes."; \
+		echo; \
+		echo "  1. Connect the watch by USB (data cable, not a charge-only one)"; \
+		echo "  2. Unlock the watch if prompted"; \
+		echo "  3. It should mount as a volume named GARMIN"; \
+		echo; \
+		echo "If it never mounts, the watch is in MTP mode rather than mass"; \
+		echo "storage — copy $(PRG) into GARMIN/APPS/ by hand instead."; \
+		exit 1; \
+	fi; \
+	echo "installing to $$apps"; \
+	cp $(PRG) "$$apps/" && sync; \
+	echo; \
+	echo "Copied. Now:"; \
+	echo "  1. Eject the volume before unplugging"; \
+	echo "  2. On the watch, hold MENU on the current face"; \
+	echo "  3. Watch Face -> Crossover Face"
 
 ## Signed store package.
 package:
