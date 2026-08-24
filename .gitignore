@@ -1,0 +1,20 @@
+# Connect IQ build output
+bin/
+*.prg
+*.prg.debug.xml
+*.iq
+
+# Developer signing key — never commit
+*.der
+*.pem
+developer_key*
+
+# Editor / OS
+.DS_Store
+.vscode/settings.json.bak
+
+# Mockup + build output
+build/
+
+# Python
+__pycache__/

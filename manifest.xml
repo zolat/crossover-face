@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<iq:manifest version="3" xmlns:iq="http://www.garmin.com/xml/connectiq">
+    <!--
+        Use "Monkey C: Edit Application" from the VS Code command palette
+        to update the application attributes.
+    -->
+    <iq:application id="d711a1ab-b218-4e0e-903d-3c13cfa466fe" type="watchface" name="@Strings.AppName" entry="CrossoverApp" launcherIcon="@Drawables.LauncherIcon" minApiLevel="5.0.0">
+        <iq:products>
+            <iq:product id="instinctcrossoveramoled"/>
+        </iq:products>
+        <iq:permissions/>
+        <iq:languages>
+            <iq:language>eng</iq:language>
+        </iq:languages>
+        <iq:barrels/>
+    </iq:application>
+</iq:manifest>
