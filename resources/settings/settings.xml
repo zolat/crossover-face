@@ -1,0 +1,9 @@
+<settings xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://developer.garmin.com/downloads/connect-iq/resources.xsd">
+    <setting propertyKey="@Properties.layout" title="@Strings.LayoutTitle" prompt="@Strings.LayoutPrompt">
+        <settingConfig type="list">
+            <listEntry value="0">@Strings.LayoutBandsBottom</listEntry>
+            <listEntry value="1">@Strings.LayoutBandsCentre</listEntry>
+            <listEntry value="2">@Strings.LayoutRings</listEntry>
+        </settingConfig>
+    </setting>
+</settings>

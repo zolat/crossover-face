@@ -1,0 +1,5 @@
+<properties xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://developer.garmin.com/downloads/connect-iq/resources.xsd">
+    <!-- 0 bands from the bottom, 1 bands from the centre, 2 rings.
+         Kept in sync with StatMap.Layout. -->
+    <property id="layout" type="number">0</property>
+</properties>

@@ -2,7 +2,8 @@ import Toybox.Application;
 import Toybox.Lang;
 import Toybox.WatchUi;
 
-//! Application entry point. Owns nothing but the view's lifecycle.
+//! Application entry point. Owns the view's lifecycle and keeps the layout
+//! choice in step with the user's settings.
 class CrossoverApp extends Application.AppBase {
 
     function initialize() {
@@ -10,13 +11,19 @@ class CrossoverApp extends Application.AppBase {
     }
 
     function onStart(state as Dictionary?) as Void {
+        StatMap.load();
     }
 
     function onStop(state as Dictionary?) as Void {
     }
 
-    //! @return the watch face view
+    //! Called when the user changes settings in Garmin Connect or Express.
+    function onSettingsChanged() as Void {
+        StatMap.load();
+        WatchUi.requestUpdate();
+    }
+
     function getInitialView() as [Views] or [Views, InputDelegates] {
-        return [ new CrossoverView() ];
+        return [new CrossoverView()];
     }
 }

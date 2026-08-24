@@ -57,19 +57,25 @@ def scale(rgb: tuple[int, int, int], factor: float) -> tuple[int, int, int]:
 
 
 # --- dot -> stat mapping -----------------------------------------------------
-# The seam. Both variants share the lattice; only this differs, which is why
-# swapping them in Monkey C is one module.
+# The seam. Every layout shares the lattice; only this mapping differs, which
+# is why switching layouts in Monkey C is one branch in StatMap.
 
 
 def band_map(col: int, row: int, x: float, y: float, values: list[float]):
-    """Variant A — column picks the stat, y picks the fill."""
+    """Bands, filling upward — column picks the stat, y picks the fill."""
     stat = min(len(values) - 1, col * len(values) // COLS)
     waterline = SIZE / 2 + RADIUS - values[stat] * 2 * RADIUS
     return stat, y >= waterline
 
 
+def band_centre_map(col: int, row: int, x: float, y: float, values: list[float]):
+    """Bands, filling out from the midline — reads as a level meter."""
+    stat = min(len(values) - 1, col * len(values) // COLS)
+    return stat, abs(y - SIZE / 2) <= values[stat] * RADIUS
+
+
 def ring_map(col: int, row: int, x: float, y: float, values: list[float]):
-    """Variant B — radius picks the ring, angle picks the fill."""
+    """Rings — radius picks the ring, angle picks the fill, clockwise from 12."""
     dx, dy = x - SIZE / 2, y - SIZE / 2
     dist = math.hypot(dx, dy)
     thickness = (RADIUS - HUB) / len(values)
@@ -78,7 +84,11 @@ def ring_map(col: int, row: int, x: float, y: float, values: list[float]):
     return stat, angle <= values[stat] * 360
 
 
-VARIANTS = {"bands": band_map, "rings": ring_map}
+VARIANTS = {
+    "bands": band_map,
+    "bands-centre": band_centre_map,
+    "rings": ring_map,
+}
 
 
 # --- rendering ---------------------------------------------------------------
@@ -223,18 +233,18 @@ def main(outdir: str = "build/mockups") -> int:
 
     # 1. Layout comparison, hands on, identical palette and values.
     panels = []
-    for variant in ("bands", "rings"):
+    for variant in VARIANTS:
         face = render(variant, values)
         lum = measure(face) * 100
         panels.append((f"{variant.upper()}   luminance {lum:.2f}%", composite(face)))
-    path = os.path.join(outdir, "01-layout-bands-vs-rings.png")
-    sheet(panels, "Variant A vs B — same palette, same values, hands overlaid").save(path)
+    path = os.path.join(outdir, "01-layouts.png")
+    sheet(panels, "Layout options — same palette, same values, hands overlaid").save(path)
     written.append(path)
 
     # 2. Weak-tier sweep on each layout: how dark before the hues stop reading.
     global WEAK_FACTOR
     original = WEAK_FACTOR
-    for variant in ("bands", "rings"):
+    for variant in VARIANTS:
         panels = []
         for factor in (0.10, 0.18, 0.30):
             WEAK_FACTOR = factor
@@ -247,7 +257,7 @@ def main(outdir: str = "build/mockups") -> int:
         written.append(path)
 
     # 3. Active vs always-on: proof the modes read as the same image.
-    for variant in ("bands", "rings"):
+    for variant in VARIANTS:
         panels = []
         for label, always_on in (("ACTIVE", False), ("ALWAYS-ON", True)):
             face = render(variant, values, always_on=always_on)
@@ -259,7 +269,7 @@ def main(outdir: str = "build/mockups") -> int:
 
     # 4. Worst case: every stat at 100%, the frame the luminance test guards.
     panels = []
-    for variant in ("bands", "rings"):
+    for variant in VARIANTS:
         face = render(variant, [1.0] * 4, always_on=True)
         panels.append((f"{variant.upper()} always-on   lum {measure(face) * 100:.2f}%",
                        composite(face)))

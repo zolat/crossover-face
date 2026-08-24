@@ -15,7 +15,7 @@ MONKEYC  := $(SDK)bin/monkeyc
 MONKEYDO := $(SDK)bin/monkeydo
 SIMULATOR := $(SDK)bin/connectiq
 
-.PHONY: all build test sim install package clean sdk-info
+.PHONY: all build test sim simulator-up install package clean sdk-info
 
 all: build
 
@@ -25,43 +25,55 @@ build:
 	"$(MONKEYC)" -f monkey.jungle -o $(PRG) -y "$(KEY)" -d $(DEVICE) -w
 
 ## Unit tests (source annotated with :test).
+## monkeydo exits non-zero even when every test passes, so the summary line is
+## what decides the result.
 test:
 	@mkdir -p bin
 	"$(MONKEYC)" -f monkey.jungle -o bin/$(NAME)-test.prg -y "$(KEY)" -d $(DEVICE) -w -t
-	"$(MONKEYDO)" bin/$(NAME)-test.prg $(DEVICE) -t
+	@$(MAKE) -s simulator-up
+	@out=$$("$(MONKEYDO)" bin/$(NAME)-test.prg $(DEVICE) -t 2>&1); \
+	echo "$$out"; \
+	echo "$$out" | grep -q "^PASSED" || { echo; echo "TESTS FAILED"; exit 1; }
+
+## Start the simulator unless it is already running.
+simulator-up:
+	@pgrep -f 'ConnectIQ.app/Contents/MacOS/simulator' >/dev/null && exit 0; \
+	echo "starting simulator..."; "$(SIMULATOR)"; \
+	n=0; until pgrep -f 'ConnectIQ.app/Contents/MacOS/simulator' >/dev/null; do \
+		n=$$((n+1)); [ $$n -ge 60 ] && { echo "simulator did not start"; exit 1; }; \
+		/bin/sleep 0.5; \
+	done; /bin/sleep 3
 
 ## Launch the simulator (if not already up) and sideload the face.
 ## Stays attached to stream println output — Ctrl-C to detach.
 sim: build
-	@pgrep -f 'ConnectIQ.app/Contents/MacOS/simulator' >/dev/null || { \
-		echo "starting simulator..."; "$(SIMULATOR)"; \
-		n=0; until pgrep -f 'ConnectIQ.app/Contents/MacOS/simulator' >/dev/null; do \
-			n=$$((n+1)); [ $$n -ge 60 ] && { echo "simulator did not start"; exit 1; }; \
-			/bin/sleep 0.5; \
-		done; /bin/sleep 2; }
+	@$(MAKE) -s simulator-up
 	"$(MONKEYDO)" $(PRG) $(DEVICE)
 
-## Sideload onto a USB-connected watch (USB mass-storage mode).
+## Get the built face onto the watch.
+## Modern Garmin devices are MTP-only — macOS cannot mount them, so there is
+## nothing to cp to. Older mass-storage devices still work directly.
 install: build
 	@apps=$$(ls -d /Volumes/*/GARMIN/APPS 2>/dev/null | head -1); \
-	if [ -z "$$apps" ]; then \
-		echo "No Garmin watch found under /Volumes."; \
-		echo; \
-		echo "  1. Connect the watch by USB (data cable, not a charge-only one)"; \
-		echo "  2. Unlock the watch if prompted"; \
-		echo "  3. It should mount as a volume named GARMIN"; \
-		echo; \
-		echo "If it never mounts, the watch is in MTP mode rather than mass"; \
-		echo "storage — copy $(PRG) into GARMIN/APPS/ by hand instead."; \
+	if [ -n "$$apps" ]; then \
+		echo "mass storage detected: $$apps"; \
+		cp $(PRG) "$$apps/" && sync; \
+		echo "Copied. Eject the volume, then on the watch hold MENU ->"; \
+		echo "Watch Face -> Crossover Face"; \
+		exit 0; \
+	fi; \
+	if ! ioreg -p IOUSB -w0 -l 2>/dev/null | grep -q '"idVendor" = 2334'; then \
+		echo "No Garmin device on USB. Connect the watch with a data cable."; \
 		exit 1; \
 	fi; \
-	echo "installing to $$apps"; \
-	cp $(PRG) "$$apps/" && sync; \
+	echo "Watch is connected over MTP, which macOS cannot mount."; \
+	echo "Opening OpenMTP — drag the revealed file into GARMIN/Apps/"; \
 	echo; \
-	echo "Copied. Now:"; \
-	echo "  1. Eject the volume before unplugging"; \
-	echo "  2. On the watch, hold MENU on the current face"; \
-	echo "  3. Watch Face -> Crossover Face"
+	echo "  $(PRG)"; \
+	echo; \
+	echo "Then on the watch: hold MENU -> Watch Face -> Crossover Face"; \
+	open -a OpenMTP 2>/dev/null || echo "(brew install --cask openmtp)"; \
+	open -R $(PRG)
 
 ## Signed store package.
 package:

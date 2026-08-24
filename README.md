@@ -155,29 +155,52 @@ the mockups stay an honest preview rather than drifting into wishful thinking.
 ## Installing on the watch
 
 ```sh
-make install     # copies the .prg into GARMIN/APPS on a mounted watch
+make install
 ```
 
-**The watch must be in `Garmin` USB mode, not `MTP`.** Garmin devices default to MTP, which
-macOS cannot mount — no volume appears in `/Volumes`, so there is nothing to copy to. On
-the watch:
+**This device generation is MTP-only.** Garmin moved away from USB mass storage, so the
+watch never appears in `/Volumes` and there is nothing to `cp` to. The USB Mode prompt on
+the watch offers two things, and neither is mass storage:
 
-> **Settings → System → USB Mode → Garmin** (sometimes shown as *Mass Storage*)
+| Answer | What you get | Mountable? |
+|---|---|---|
+| **Yes, use MTP** | MTP (`idProduct 0x5246`) — what you want | No, but MTP clients can reach it |
+| No | Garmin's proprietary protocol (`idProduct 0x0003`) | No, and it may not even charge |
 
-Then replug and it mounts as `GARMIN`. To confirm the Mac sees the watch at all:
+So answer **yes** to *Use MTP?*, then `make install` opens [OpenMTP](https://openmtp.ganeshrvel.com/)
+and reveals the `.prg` in Finder. Drag it into **GARMIN/Apps/**, then on the watch hold
+**MENU → Watch Face → Crossover Face**.
+
+`libmtp`'s CLI (`mtp-sendfile`) does *detect* the watch, but cannot write to it: Garmin's
+MTP implementation does not support the bulk-metadata call libmtp uses to resolve a parent
+folder, so every send fails with `could not get storage id from parent id`. OpenMTP walks
+the tree itself and works. If you want to confirm the Mac sees the watch at all:
 
 ```sh
 ioreg -p IOUSB -w0 -l | grep -E '"idVendor"|"idProduct"'   # Garmin is idVendor 2334 (0x091E)
-diskutil list                                              # mass storage shows up as a disk
+mtp-detect | grep -i "friendly name"                       # should say Instinct Crossover AMOLED
 ```
 
-A watch that shows in `ioreg` but not in `diskutil` is connected and in MTP mode.
+`make install` still copies directly if a mass-storage volume *is* present, so it keeps
+working for older Garmin devices.
 
-If you would rather leave it in MTP, `brew install libmtp` provides `mtp-detect` and
-`mtp-sendfile`, or `brew install --cask openmtp` gives a Finder-like GUI.
+## Settings
 
-After copying, eject the volume, then hold **MENU** on the watch face and pick
-*Watch Face → Crossover Face*.
+The face ships with one user-facing setting, editable in the Garmin Connect app or Garmin
+Express under the app's settings:
+
+| Layout | Behaviour |
+|---|---|
+| **Bands — fill upward** (default) | Column picks the stat, fill rises from the rim |
+| **Bands — fill from centre** | As above, but fill grows out from the midline |
+| **Rings — fill clockwise** | Radius picks the ring, fill sweeps clockwise from 12 |
+
+The property is `layout` (`resources/properties.xml`), surfaced by
+`resources/settings/settings.xml` and read by `StatMap.load()`. An out-of-range or missing
+value falls back to the default rather than throwing — there is a test for that.
+
+To try the layouts in the simulator without touching settings on a phone:
+**File → Edit Persistent Storage → Edit Application.Properties data**.
 
 ## Design tooling
 
@@ -203,13 +226,15 @@ source/
   CrossoverView.mc    picks a renderer based on power mode — no drawing
   data/WatchData.mc   device state, formatted. Pure queries, no drawing
   matrix/DotGrid.mc   lattice geometry: pitch, circle clip, hub
-  matrix/StatMap.mc   dot -> stat mapping; the bands/rings seam
+  matrix/StatMap.mc   dot -> stat mapping; the layout seam
   render/Palette.mc   four hues, two tiers, two power modes
   render/MatrixRenderer.mc  draws the field with a given palette
   tests/              geometry, mapping and luminance-budget tests
 resources/
   drawables/          launcher icon
-  strings/            app name
+  properties.xml      the layout setting's stored value
+  settings/           how that setting is presented in Garmin Connect
+  strings/            app name and setting labels
 tools/                mockup + luminance measurement
 ```
 

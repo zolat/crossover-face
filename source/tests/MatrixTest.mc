@@ -1,3 +1,4 @@
+import Toybox.Application;
 import Toybox.Lang;
 import Toybox.Math;
 import Toybox.Test;
@@ -79,9 +80,26 @@ module MatrixTest {
         return true;
     }
 
-    //! Empty and full are the two states a gauge must get exactly right.
+    const ALL_LAYOUTS = [
+        StatMap.LAYOUT_BANDS_BOTTOM,
+        StatMap.LAYOUT_BANDS_CENTRE,
+        StatMap.LAYOUT_RINGS
+    ] as Array<Number>;
+
+    //! Empty and full are the two states every layout must get exactly right,
+    //! and they are the states a gauge is most likely to get wrong.
     (:test)
     function fillEndpoints(logger as Logger) as Boolean {
+        for (var i = 0; i < ALL_LAYOUTS.size(); i++) {
+            StatMap.layout = ALL_LAYOUTS[i];
+            logger.debug("layout " + StatMap.layout);
+            checkEndpoints();
+        }
+        StatMap.layout = StatMap.LAYOUT_BANDS_BOTTOM;
+        return true;
+    }
+
+    function checkEndpoints() as Void {
         var empty = [0.0, 0.0, 0.0, 0.0] as Array<Float>;
         var full = [1.0, 1.0, 1.0, 1.0] as Array<Float>;
 
@@ -98,7 +116,6 @@ module MatrixTest {
                     "everything must read as filled at 100%");
             }
         }
-        return true;
     }
 
     //! Every stat at 100% is the brightest frame the face can ever draw. If
@@ -106,11 +123,33 @@ module MatrixTest {
     (:test)
     function alwaysOnWorstCaseFitsBudget(logger as Logger) as Boolean {
         Palette.build();
-        var worst = frameLuminance([1.0, 1.0, 1.0, 1.0] as Array<Float>,
-                                   Palette.alwaysOn);
-        logger.debug("worst-case always-on luminance: " + worst);
-        Test.assertMessage(worst < BUDGET,
-            "always-on worst case exceeds the AMOLED burn-in budget");
+        var full = [1.0, 1.0, 1.0, 1.0] as Array<Float>;
+        for (var i = 0; i < ALL_LAYOUTS.size(); i++) {
+            StatMap.layout = ALL_LAYOUTS[i];
+            var worst = frameLuminance(full, Palette.alwaysOn);
+            logger.debug("layout " + StatMap.layout + " worst-case always-on: " + worst);
+            Test.assertMessage(worst < BUDGET,
+                "always-on worst case exceeds the AMOLED burn-in budget");
+        }
+        StatMap.layout = StatMap.LAYOUT_BANDS_BOTTOM;
+        return true;
+    }
+
+    //! A missing or out-of-range setting must fall back, never crash the face.
+    (:test)
+    function layoutSettingIsClamped(logger as Logger) as Boolean {
+        Properties.setValue(StatMap.PROPERTY_LAYOUT, 99);
+        StatMap.load();
+        Test.assertEqualMessage(StatMap.layout, StatMap.LAYOUT_BANDS_BOTTOM,
+            "out-of-range layout must fall back to the default");
+
+        Properties.setValue(StatMap.PROPERTY_LAYOUT, StatMap.LAYOUT_RINGS);
+        StatMap.load();
+        Test.assertEqualMessage(StatMap.layout, StatMap.LAYOUT_RINGS,
+            "a valid layout must be honoured");
+
+        Properties.setValue(StatMap.PROPERTY_LAYOUT, StatMap.LAYOUT_BANDS_BOTTOM);
+        StatMap.load();
         return true;
     }
 
