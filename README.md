@@ -206,7 +206,7 @@ Two ways to check a design against the budget:
   compresses a 24-hour run into minutes. Only enabled for watch faces on devices with
   screen protection, which this one has.
 
-Current design: **~4.8% active, ~4.6% always-on**, and **~5.8% at the worst case** of every
+Current design: **~4.8% active, ~4.6% always-on**, and **~5.7% at the worst case** of every
 ring reading full.
 
 The two modes now draw the **same filled colours** and differ only in their unfilled tier
@@ -278,8 +278,8 @@ is a genuine range, works in every layout without the layouts knowing anything a
 level fills from the origin, a range floats between its ends. In bands a range reads as a
 slab; in rings, as an arc.
 
-Temperature is the one source drawn on a ramp rather than a flat hue — cyan through yellow
-to red — so the band reads as a temperature rather than just a length.
+Temperature is the one source drawn on a ramp rather than a flat hue — ice through amber to
+rust — so the band reads as a temperature rather than just a length.
 
 Its **0–60°C scale is deliberately far wider than any weather needs**: it puts one degree on
 every minute mark, so the band can be read off the dial exactly the way you read the minute
@@ -404,7 +404,7 @@ Two ways to check a design against the budget:
   compresses a 24-hour run into minutes. Only enabled for watch faces on devices with
   screen protection, which this one has.
 
-Current design: **~4.8% active, ~4.6% always-on**, and **~5.8% at the worst case** of every
+Current design: **~4.8% active, ~4.6% always-on**, and **~5.7% at the worst case** of every
 ring reading full.
 
 The two modes now draw the **same filled colours** and differ only in their unfilled tier

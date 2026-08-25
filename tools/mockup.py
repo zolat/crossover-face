@@ -55,7 +55,7 @@ SOURCE_TEMPERATURE = 4
 
 # Placeholder theme: rings alternate between navy and olive. Mirrors
 # Palette.THEME in Monkey C.
-THEME = [(0xFF, 0x2D, 0x55), (0x92, 0xE8, 0x2A), (0x1E, 0xEA, 0xEF), (0xFF, 0xD6, 0x0A)]
+THEME = [(0xFF, 0xA9, 0x4D), (0x7F, 0xD4, 0xFF), (0xFF, 0x6B, 0x5B), (0xB8, 0xD6, 0x4B)]
 
 
 def mix(a, b, t):
@@ -63,10 +63,10 @@ def mix(a, b, t):
 
 
 def temperature_colour(fraction: float):
-    """Cyan -> yellow -> red, mirroring Palette.build()."""
+    """Ice -> amber -> rust, mirroring Palette.build()."""
     if fraction <= 0.5:
-        return mix(THEME[2], THEME[3], fraction * 2.0)
-    return mix(THEME[3], THEME[0], (fraction - 0.5) * 2.0)
+        return mix(THEME[1], THEME[0], fraction * 2.0)
+    return mix(THEME[0], THEME[2], (fraction - 0.5) * 2.0)
 
 # Dot shape. A square is the densest; a cross lights 9 of the 25 pixels a
 # square would, which reads as finer texture and costs proportionally less

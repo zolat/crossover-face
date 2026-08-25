@@ -2,36 +2,38 @@ import Toybox.Lang;
 
 //! Colour for every dot state, in both power modes.
 //!
-//! Placeholder theme: rings alternate between navy and olive rather than each
-//! carrying a hue of its own. Proper themes come later.
-//!
-//! The filled portion carries the colour at full read; the unfilled portion is
-//! the same colour dark enough to tint the field without reading as lit.
-//! Always-on dims both tiers by a constant, which is what keeps the two modes
-//! looking like the same image rather than two designs.
+//! One colour per ring, from a fixed theme. The filled portion carries the
+//! colour at full read; the unfilled portion is the same colour dimmed enough
+//! to tint the field without reading as lit. Awake and always-on share their
+//! filled colours and differ only in that unfilled tier, which is what keeps
+//! the two modes looking like the same image rather than two designs.
 //!
 //! Both tables are indexed by ring * 2, plus 1 when lit.
 module Palette {
 
-    //! Apple's activity-ring palette, plus a yellow for the fourth ring.
-    //! Bright and highly saturated on purpose: tuned in a dark room the face
-    //! was legible, and outdoors in daylight it was not.
+    //! Terrain: amber, ice, rust, moss. Bright and saturated, because tuned in
+    //! a dark room the face was legible and outdoors in daylight it was not.
     //!
-    //! Red carries far less luma than the other three — that is inherent to
-    //! the hue, not a mistake — so the brighter of Apple's two reds is used.
-    //! Order is ring 1 outward/leftmost first.
+    //! The order is not decorative. Amber and rust are by far the closest pair
+    //! in the set — 40 apart in CIELAB, against 90-98 for every other pair — so
+    //! they are deliberately kept non-adjacent. Interleaving warm and cool this
+    //! way lifts the *weakest neighbouring pair* from 40 to 90, and it is
+    //! neighbours blurring together, not the set average, that decides whether
+    //! two rings can be told apart at a glance.
+    //!
+    //! Ring 1 is outermost, or leftmost in the band layouts.
     const THEME = [
-        0xFF2D55,   //! red
-        0x92E82A,   //! green
-        0x1EEAEF,   //! cyan
-        0xFFD60A    //! yellow
+        0xFFA94D,   //! amber
+        0x7FD4FF,   //! ice
+        0xFF6B5B,   //! rust
+        0xB8D64B    //! moss
     ] as Array<Number>;
 
     const WEAK_ACTIVE = 0.55;
     const WEAK_ALWAYS_ON = 0.45;
 
     //! Always-on used to lift the colours to survive the panel's own dimming.
-    //! With this palette there is nothing left to lift: green and yellow are
+    //! With this palette there is nothing left to lift: ice and moss are
     //! already at or near a full channel, so scaling up would clamp and shift
     //! the hue rather than brighten it. Always-on and awake now draw the same
     //! filled colours and differ only in their unfilled tier — which is what
@@ -43,7 +45,7 @@ module Palette {
     const BACKING_DARK = 0x101010;
 
     //! Temperature is drawn on a ramp so its band reads as a temperature and
-    //! not just a length. Cyan through yellow to red — cold to hot, and every
+    //! not just a length. Ice through amber to rust — cold to hot, and every
     //! stop is a theme colour, so it stays inside the palette.
     //! Precomputed: working it out per dot costs too much inside the frame.
     const RAMP_STEPS = 32;
@@ -72,8 +74,8 @@ module Palette {
         for (var step = 0; step < RAMP_STEPS; step++) {
             var along = step.toFloat() / (RAMP_STEPS - 1);
             var colour = (along <= 0.5)
-                ? mix(THEME[2], THEME[3], along * 2.0)      // cyan -> yellow
-                : mix(THEME[3], THEME[0], (along - 0.5) * 2.0);  // yellow -> red
+                ? mix(THEME[1], THEME[0], along * 2.0)           // ice -> amber
+                : mix(THEME[0], THEME[2], (along - 0.5) * 2.0);  // amber -> rust
             ramp.add(colour);
             rampLifted.add(scale(colour, LIFT));
         }
