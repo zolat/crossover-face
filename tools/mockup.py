@@ -191,20 +191,25 @@ def render(variant: str, spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
             # +DOT-1, not +DOT. Getting this wrong drew 6x6 dots against the
             # watch's 5x5 and inflated every luminance reading by ~44%.
             left, top = x - half + drift[0], y - half + drift[1]
-            draw_dot(draw, left, top, colour)
+            arm = ARMS[orientation_at(dx, dy)] if variant == "rings" else ARMS[0]
+            draw_dot(draw, left, top, colour, arm)
     return img
 
 
-def draw_dot(draw, left: int, top: int, colour) -> None:
-    """One dot, in whichever shape is selected."""
-    far = DOT - 1
-    mid = DOT // 2
-    if DOT_SHAPE == "square":
-        draw.rectangle([left, top, left + far, top + far], fill=colour)
-        return
-    arm = 0 if DOT_SHAPE == "cross" else 1
-    draw.rectangle([left, top + mid - arm, left + far, top + mid + arm], fill=colour)
-    draw.rectangle([left + mid - arm, top, left + mid + arm, top + far], fill=colour)
+# Mirrors DotGrid.ARMS: half-arm offsets for each cross orientation.
+ARMS = [(2, 0, 0, 2), (2, 1, -1, 2), (2, 2, -2, 2), (1, 2, -2, 1)]
+
+
+def orientation_at(dx: int, dy: int) -> int:
+    """Which ARMS entry aligns a cross with the circle it sits on."""
+    return int(math.degrees(math.atan2(dy, dx)) / 22.5 + 0.5) % len(ARMS)
+
+
+def draw_dot(draw, left: int, top: int, colour, arm=ARMS[0]) -> None:
+    """One dot: two strokes through its centre, at the given orientation."""
+    x, y = left + DOT // 2, top + DOT // 2
+    draw.line([x - arm[0], y - arm[1], x + arm[0], y + arm[1]], fill=colour)
+    draw.line([x - arm[2], y - arm[3], x + arm[2], y + arm[3]], fill=colour)
 
 
 # --- device compositing ------------------------------------------------------

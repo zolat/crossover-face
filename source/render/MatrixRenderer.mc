@@ -27,18 +27,18 @@ module MatrixRenderer {
         dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_BLACK);
         dc.clear();
 
-        var size = DotGrid.DOT;
-        var half = size / 2;
 
         // Drift shifts where dots are drawn, never which dots exist, so the
         // field translates rigidly instead of popping dots in and out.
         var drift = Drift.current();
-        var originX = (dc.getWidth() / 2) - half + drift[0];
-        var originY = (dc.getHeight() / 2) - half + drift[1];
+        var centreX = dc.getWidth() / 2;
+        var centreY = dc.getHeight() / 2;
 
         var xs = DotGrid.xs;
         var ys = DotGrid.ys;
         var ringOf = DotGrid.ringOf;
+        var armOf = DotGrid.armOf;
+        var arms = DotGrid.ARMS;
         var positionOf = DotGrid.positionOf;
         var count = DotGrid.count;
         var rings = StatMap.rings;
@@ -74,11 +74,15 @@ module MatrixRenderer {
                 dc.setColor(colour, Graphics.COLOR_TRANSPARENT);
                 lastColour = colour;
             }
-            // A cross: one horizontal stroke, one vertical.
-            var x = originX + dx;
-            var y = originY + dy;
-            dc.fillRectangle(x, y + half, size, 1);
-            dc.fillRectangle(x + half, y, 1, size);
+            // A cross of two strokes through the dot's centre. In the rings
+            // layout each dot's pair is turned to follow the circle it sits
+            // on; elsewhere they stay upright. drawLine measured *faster*
+            // than the two fillRectangle calls this replaced.
+            var x = centreX + dx + drift[0];
+            var y = centreY + dy + drift[1];
+            var arm = arms[armOf[i]];
+            dc.drawLine(x - arm[0], y - arm[1], x + arm[0], y + arm[1]);
+            dc.drawLine(x - arm[2], y - arm[3], x + arm[2], y + arm[3]);
         }
     }
 }

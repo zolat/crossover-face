@@ -1,4 +1,5 @@
 import Toybox.Lang;
+import Toybox.Math;
 
 //! The dot lattice: a square grid clipped to the round display, with the
 //! hand-pivot hub punched out. Pure geometry — nothing here draws.
@@ -45,11 +46,37 @@ module DotGrid {
     // layout. So it is done once, here, and onUpdate becomes a flat walk of
     // parallel arrays with no calls in the inner loop.
 
+    //! Arm offsets for each orientation a cross can take, as
+    //! [armA x, armA y, armB x, armB y] half-lengths.
+    //!
+    //! A cross has 90-degree rotational symmetry, so four steps of 22.5 cover
+    //! every distinct orientation. At this dot size that is also about all the
+    //! resolution there is — a 5px cross rotated less than ~22 degrees looks
+    //! identical. Offsets are scaled so the larger component is always half a
+    //! dot, which keeps every orientation the same visual weight; scaling by
+    //! true length instead would make the diagonal ones visibly shorter.
+    const ARMS = [
+        [2, 0, 0, 2],   //!  0    +
+        [2, 1, -1, 2],  //! 22.5
+        [2, 2, -2, 2],  //! 45    x
+        [1, 2, -2, 1]   //! 67.5
+    ] as Array<Array<Number> >;
+
     var count as Number = 0;
     var xs as Array<Number> = [] as Array<Number>;      //! dx from centre
     var ys as Array<Number> = [] as Array<Number>;      //! dy from centre
     var ringOf as Array<Number> = [] as Array<Number>;  //! which ring
     var positionOf as Array<Float> = [] as Array<Float>;//! 0.0-1.0 along it
+    var armOf as Array<Number> = [] as Array<Number>;   //! index into ARMS
+
+    //! Which ARMS entry aligns a dot's cross with the circle it sits on: one
+    //! arm pointing out from the centre, the other across it.
+    function orientationAt(dx as Number, dy as Number) as Number {
+        var degrees = Math.toDegrees(Math.atan2(dy, dx));
+        var step = (degrees / 22.5 + 0.5).toNumber();
+        step = step % ARMS.size();
+        return (step < 0) ? step + ARMS.size() : step;
+    }
 
     //! Rebuild the cache. Must be called whenever the layout changes, since
     //! ring and position both depend on it.
@@ -58,6 +85,10 @@ module DotGrid {
         var dy = new [COLS * ROWS] as Array<Number>;
         var ring = new [COLS * ROWS] as Array<Number>;
         var position = new [COLS * ROWS] as Array<Float>;
+        var arm = new [COLS * ROWS] as Array<Number>;
+        // Only the rings layout has a circular structure for the crosses to
+        // follow; in the band layouts they all stay upright.
+        var radial = (StatMap.layout == StatMap.LAYOUT_RINGS);
 
         var n = 0;
         for (var row = 0; row < ROWS; row++) {
@@ -71,6 +102,7 @@ module DotGrid {
                 dy[n] = y;
                 ring[n] = StatMap.ringFor(col, x, y);
                 position[n] = StatMap.positionOf(x, y);
+                arm[n] = radial ? orientationAt(x, y) : 0;
                 n++;
             }
         }
@@ -79,6 +111,7 @@ module DotGrid {
         ys = dy.slice(0, n);
         ringOf = ring.slice(0, n);
         positionOf = position.slice(0, n);
+        armOf = arm.slice(0, n);
         count = n;
     }
 }

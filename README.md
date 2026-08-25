@@ -156,6 +156,22 @@ the same extent lights 25. That buys density: at a 10px pitch the face carries ~
 against ~570 of squares, *and* costs less light. The finer grain reads as instrument
 texture rather than a chunky LED panel.
 
+In the **rings layout each cross is turned to follow the circle it sits on** — one stroke
+pointing out from the centre, the other across it. Crosses read as `+` on the axes and `×`
+on the diagonals, which gives the field a radial structure matching what the layout is
+actually showing. The band layouts have no circular structure to follow, so their crosses
+stay upright.
+
+A cross has 90° rotational symmetry, so four orientations at 22.5° apart cover every
+distinct one — and at 5px that is about all the resolution there is anyway. Each dot's
+orientation is precomputed in `DotGrid` alongside its ring and position, so the loop just
+indexes a table (`DotGrid.ARMS`). Arms are scaled so the larger component is always half a
+dot, keeping every orientation the same visual weight; scaling by true length would make
+the diagonals visibly shorter.
+
+Strokes are drawn with `drawLine`, which **measured faster than the two `fillRectangle`
+calls it replaced** — 33.5ms against 39.7ms a frame. Rotation cost nothing; it saved time.
+
 The renderer only calls `setColor` when the colour actually changes. Runs of dots share a
 colour, especially in the band layouts, so with ~1,100 dots a frame this saves far more
 calls than it costs.
@@ -353,6 +369,22 @@ Dots are **crosses, not squares** — a 5px cross lights 9 pixels where a filled
 the same extent lights 25. That buys density: at a 10px pitch the face carries ~1,100 dots
 against ~570 of squares, *and* costs less light. The finer grain reads as instrument
 texture rather than a chunky LED panel.
+
+In the **rings layout each cross is turned to follow the circle it sits on** — one stroke
+pointing out from the centre, the other across it. Crosses read as `+` on the axes and `×`
+on the diagonals, which gives the field a radial structure matching what the layout is
+actually showing. The band layouts have no circular structure to follow, so their crosses
+stay upright.
+
+A cross has 90° rotational symmetry, so four orientations at 22.5° apart cover every
+distinct one — and at 5px that is about all the resolution there is anyway. Each dot's
+orientation is precomputed in `DotGrid` alongside its ring and position, so the loop just
+indexes a table (`DotGrid.ARMS`). Arms are scaled so the larger component is always half a
+dot, keeping every orientation the same visual weight; scaling by true length would make
+the diagonals visibly shorter.
+
+Strokes are drawn with `drawLine`, which **measured faster than the two `fillRectangle`
+calls it replaced** — 33.5ms against 39.7ms a frame. Rotation cost nothing; it saved time.
 
 The renderer only calls `setColor` when the colour actually changes. Runs of dots share a
 colour, especially in the band layouts, so with ~1,100 dots a frame this saves far more
