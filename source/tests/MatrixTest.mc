@@ -192,19 +192,24 @@ module MatrixTest {
         return true;
     }
 
-    //! The temperature scale: 0C at the ring's origin, 45C at its end.
+    //! The temperature scale runs 0C to 60C, which puts one degree on every
+    //! minute mark: 18C sits exactly where :18 does. That correspondence is
+    //! the whole reason for the range, so it is worth asserting directly.
     (:test)
-    function temperatureScaleSpansZeroToFortyFive(logger as Logger) as Boolean {
+    function oneDegreeSitsOnEachMinuteMark(logger as Logger) as Boolean {
         Test.assertEqualMessage(WeatherData.fraction(0.0), 0.0,
-            "0C must sit at the start of the scale");
-        Test.assertEqualMessage(WeatherData.fraction(45.0), 1.0,
-            "45C must sit at the end of the scale");
-        var middle = WeatherData.fraction(22.5);
-        Test.assertMessage(middle > 0.49 && middle < 0.51,
-            "22.5C must sit halfway");
+            "0C must sit at twelve o'clock");
+        Test.assertEqualMessage(WeatherData.fraction(60.0), 1.0,
+            "60C must land back at twelve o'clock");
+        for (var degrees = 0; degrees <= 60; degrees += 15) {
+            var expected = degrees / 60.0;
+            var actual = WeatherData.fraction(degrees.toFloat());
+            Test.assertMessage((actual - expected).abs() < 0.001,
+                "each degree must land on its own minute mark");
+        }
         Test.assertEqualMessage(WeatherData.fraction(-10.0), 0.0,
             "below the scale must clamp, not wrap");
-        Test.assertEqualMessage(WeatherData.fraction(60.0), 1.0,
+        Test.assertEqualMessage(WeatherData.fraction(90.0), 1.0,
             "above the scale must clamp, not wrap");
         return true;
     }
@@ -243,20 +248,26 @@ module MatrixTest {
         return true;
     }
 
-    //! Always-on renders *brighter* values than awake, on purpose: the system
-    //! already dims the panel there, so darker values compound into nothing.
-    //! The budget test above is what keeps that honest.
+    //! The two modes draw the same filled colours and differ only in their
+    //! unfilled tier. That is what "minimal change between modes" means here,
+    //! and the budget test above is what keeps it affordable.
     (:test)
-    function alwaysOnIsLiftedNotDimmed(logger as Logger) as Boolean {
+    function modesDifferOnlyInTheUnfilledTier(logger as Logger) as Boolean {
         Config.reload();
+        for (var ring = 0; ring < StatMap.RINGS; ring++) {
+            Test.assertEqualMessage(
+                Palette.alwaysOn[ring * 2 + 1], Palette.active[ring * 2 + 1],
+                "filled colours must match between modes");
+            Test.assertMessage(
+                Palette.alwaysOn[ring * 2] != Palette.active[ring * 2],
+                "the unfilled tier must differ between modes");
+        }
         var spans = everySpan(0.0, 0.7);
         var awake = frameLuminance(spans, Palette.active);
         var asleep = frameLuminance(spans, Palette.alwaysOn);
         logger.debug("active " + awake + " / always-on " + asleep);
-        Test.assertMessage(asleep > awake,
-            "always-on should lift the colours to offset the panel's own dimming");
         Test.assertMessage(asleep < BUDGET,
-            "the lift pushed always-on past the burn-in budget");
+            "always-on exceeds the burn-in budget");
         return true;
     }
 

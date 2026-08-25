@@ -13,41 +13,38 @@ import Toybox.Lang;
 //! Both tables are indexed by ring * 2, plus 1 when lit.
 module Palette {
 
-    //! Navy and olive, tuned for AMOLED rather than for a paint chart.
+    //! Apple's activity-ring palette, plus a yellow for the fourth ring.
+    //! Bright and highly saturated on purpose: tuned in a dark room the face
+    //! was legible, and outdoors in daylight it was not.
     //!
-    //! The trick on a black panel is to spend the budget on *chroma* rather
-    //! than brightness: these sit at 25% and 38% luminance but 51% and 33%
-    //! chroma, so they read as deep saturated colour against true black
-    //! instead of as washed-out pastels. Lifting the brightness instead — an
-    //! earlier attempt — turned the navy into a medium blue.
-    //!
-    //! Olive is naturally the brighter of the two (yellow-green carries far
-    //! more luma than blue), so it is deliberately drabbed down to keep the
-    //! pair within about 1.5x of each other.
-    const THEME = [0x1D3F9E, 0x5C6A16] as Array<Number>;   //! navy, olive
+    //! Red carries far less luma than the other three — that is inherent to
+    //! the hue, not a mistake — so the brighter of Apple's two reds is used.
+    //! Order is ring 1 outward/leftmost first.
+    const THEME = [
+        0xFF2D55,   //! red
+        0x92E82A,   //! green
+        0x1EEAEF,   //! cyan
+        0xFFD60A    //! yellow
+    ] as Array<Number>;
 
-    //! Unfilled tier, relative to the colour. Awake gets the brighter of the
-    //! two: at full panel brightness a very dark tint reads as nothing at all,
-    //! and the point of the design is that every dot carries its ring's colour.
-    const WEAK_ACTIVE = 0.42;
-    const WEAK_ALWAYS_ON = 0.30;
+    const WEAK_ACTIVE = 0.55;
+    const WEAK_ALWAYS_ON = 0.45;
 
-    //! Always-on *lifts* the colours rather than dimming them.
-    //!
-    //! This looks backwards until you account for the panel: the system already
-    //! drops screen brightness in always-on, so rendering darker values on top
-    //! of that compounds into near-invisibility. Raising the values compensates,
-    //! and the frame still lands around 3% against a 10% burn-in budget.
-    //! Awake needs no such correction, so it draws the colours as they are.
-    const LIFT = 1.5;
+    //! Always-on used to lift the colours to survive the panel's own dimming.
+    //! With this palette there is nothing left to lift: green and yellow are
+    //! already at or near a full channel, so scaling up would clamp and shift
+    //! the hue rather than brighten it. Always-on and awake now draw the same
+    //! filled colours and differ only in their unfilled tier — which is what
+    //! "minimal change between modes" wanted in the first place.
+    const LIFT = 1.0;
 
     //! Backing drawn under the analogue hands when that option is on.
     const BACKING_WHITE = 0xFFFFFF;
     const BACKING_DARK = 0x101010;
 
     //! Temperature is drawn on a ramp so its band reads as a temperature and
-    //! not just a length. The ramp runs between the theme's two colours, so it
-    //! stays inside the palette instead of importing a rainbow.
+    //! not just a length. Cyan through yellow to red — cold to hot, and every
+    //! stop is a theme colour, so it stays inside the palette.
     //! Precomputed: working it out per dot costs too much inside the frame.
     const RAMP_STEPS = 32;
 
@@ -73,8 +70,10 @@ module Palette {
         var ramp = [] as Array<Number>;
         var rampLifted = [] as Array<Number>;
         for (var step = 0; step < RAMP_STEPS; step++) {
-            var colour = mix(THEME[0], THEME[1],
-                             step.toFloat() / (RAMP_STEPS - 1));
+            var along = step.toFloat() / (RAMP_STEPS - 1);
+            var colour = (along <= 0.5)
+                ? mix(THEME[2], THEME[3], along * 2.0)      // cyan -> yellow
+                : mix(THEME[3], THEME[0], (along - 0.5) * 2.0);  // yellow -> red
             ramp.add(colour);
             rampLifted.add(scale(colour, LIFT));
         }

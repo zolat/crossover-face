@@ -206,16 +206,14 @@ Two ways to check a design against the budget:
   compresses a 24-hour run into minutes. Only enabled for watch faces on devices with
   screen protection, which this one has.
 
-Current design: **~2.0% active, ~2.8% always-on**, and **~2.6% / ~3.9% at the worst case**
-of every ring reading full.
+Current design: **~4.8% active, ~4.6% always-on**, and **~5.8% at the worst case** of every
+ring reading full.
 
-Always-on renders *brighter* values than awake, which looks backwards until you account
-for the panel: the system already drops screen brightness in always-on, so rendering darker
-values on top of that compounds into near-invisibility. `Palette.LIFT` raises them to
-compensate; awake needs no such correction and draws the colours as they are. Awake also
-carries the brighter unfilled tier (`WEAK_ACTIVE` 0.42 against `WEAK_ALWAYS_ON` 0.30) —
-at full panel brightness a very dark tint reads as nothing, and the design rests on every
-dot carrying its ring's colour whether lit or not. `tools/mockup.py` agrees
+The two modes now draw the **same filled colours** and differ only in their unfilled tier
+(`WEAK_ACTIVE` 0.55 against `WEAK_ALWAYS_ON` 0.45). `Palette.LIFT` is 1.0: an earlier
+palette was dark enough that always-on needed lifting to survive the panel's own dimming,
+but green and yellow now sit at or near a full channel, so scaling up would clamp and shift
+the hue rather than brighten it. `tools/mockup.py` agrees
 to within a tenth of a percent, and `make test` asserts the lattice matches it exactly, so
 the mockups stay an honest preview rather than drifting into wishful thinking.
 
@@ -270,7 +268,7 @@ The face has four rings, and **each one is independently assigned to a source**:
 | Heart rate | level | `Activity.currentHeartRate`, resting → 180bpm |
 | Battery | level | `System.getSystemStats()` |
 | Body Battery | level | `SensorHistory` |
-| Temperature range | **range** | `Weather` today's low → high, on a 0–45°C scale |
+| Temperature range | **range** | `Weather` today's low → high, on a 0–60°C scale |
 | Chance of rain | level | `Weather.precipitationChance` |
 | Off | — | nothing |
 
@@ -280,8 +278,13 @@ is a genuine range, works in every layout without the layouts knowing anything a
 level fills from the origin, a range floats between its ends. In bands a range reads as a
 slab; in rings, as an arc.
 
-Temperature is the one source drawn on a cold-to-hot ramp rather than a flat hue, so the
-band reads as a temperature rather than just a length.
+Temperature is the one source drawn on a ramp rather than a flat hue — cyan through yellow
+to red — so the band reads as a temperature rather than just a length.
+
+Its **0–60°C scale is deliberately far wider than any weather needs**: it puts one degree on
+every minute mark, so the band can be read off the dial exactly the way you read the minute
+hand. 18°C sits where :18 does. A tighter scale would use the ring better and be harder to
+read.
 
 ### Layout
 
@@ -393,16 +396,14 @@ Two ways to check a design against the budget:
   compresses a 24-hour run into minutes. Only enabled for watch faces on devices with
   screen protection, which this one has.
 
-Current design: **~2.0% active, ~2.8% always-on**, and **~2.6% / ~3.9% at the worst case**
-of every ring reading full.
+Current design: **~4.8% active, ~4.6% always-on**, and **~5.8% at the worst case** of every
+ring reading full.
 
-Always-on renders *brighter* values than awake, which looks backwards until you account
-for the panel: the system already drops screen brightness in always-on, so rendering darker
-values on top of that compounds into near-invisibility. `Palette.LIFT` raises them to
-compensate; awake needs no such correction and draws the colours as they are. Awake also
-carries the brighter unfilled tier (`WEAK_ACTIVE` 0.42 against `WEAK_ALWAYS_ON` 0.30) —
-at full panel brightness a very dark tint reads as nothing, and the design rests on every
-dot carrying its ring's colour whether lit or not. `tools/mockup.py` agrees
+The two modes now draw the **same filled colours** and differ only in their unfilled tier
+(`WEAK_ACTIVE` 0.55 against `WEAK_ALWAYS_ON` 0.45). `Palette.LIFT` is 1.0: an earlier
+palette was dark enough that always-on needed lifting to survive the panel's own dimming,
+but green and yellow now sit at or near a full channel, so scaling up would clamp and shift
+the hue rather than brighten it. `tools/mockup.py` agrees
 to within a tenth of a percent, and `make test` asserts the lattice matches it exactly, so
 the mockups stay an honest preview rather than drifting into wishful thinking.
 

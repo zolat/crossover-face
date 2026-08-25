@@ -55,7 +55,7 @@ SOURCE_TEMPERATURE = 4
 
 # Placeholder theme: rings alternate between navy and olive. Mirrors
 # Palette.THEME in Monkey C.
-THEME = [(0x1D, 0x3F, 0x9E), (0x5C, 0x6A, 0x16)]
+THEME = [(0xFF, 0x2D, 0x55), (0x92, 0xE8, 0x2A), (0x1E, 0xEA, 0xEF), (0xFF, 0xD6, 0x0A)]
 
 
 def mix(a, b, t):
@@ -63,8 +63,10 @@ def mix(a, b, t):
 
 
 def temperature_colour(fraction: float):
-    """Ramp between the theme's two colours, mirroring Palette.build()."""
-    return mix(THEME[0], THEME[1], fraction)
+    """Cyan -> yellow -> red, mirroring Palette.build()."""
+    if fraction <= 0.5:
+        return mix(THEME[2], THEME[3], fraction * 2.0)
+    return mix(THEME[3], THEME[0], (fraction - 0.5) * 2.0)
 
 # Dot shape. A square is the densest; a cross lights 9 of the 25 pixels a
 # square would, which reads as finer texture and costs proportionally less
@@ -74,9 +76,9 @@ DOT_SHAPE = "cross"    # square | cross | cross-thick
 # Mirrors Palette.mc: awake carries the brighter unfilled tier, and always-on
 # lifts the colours rather than dimming them, because the panel is already
 # dimmed by the system in that mode.
-WEAK_ACTIVE = 0.42
-WEAK_ALWAYS_ON = 0.30
-LIFT = 1.5
+WEAK_ACTIVE = 0.55
+WEAK_ALWAYS_ON = 0.45
+LIFT = 1.0
 
 
 def scale(rgb: tuple[int, int, int], factor: float) -> tuple[int, int, int]:
@@ -378,14 +380,14 @@ def main(outdir: str = "build/mockups") -> int:
 
     # 6. Rings assigned to weather — temperature is a range, not a level.
     weather_assign = (4, 5, 2, 0)          # temperature, rain, battery, steps
-    weather_spans = [(0.24, 0.49), (0.0, 0.35), (0.0, 0.82), (0.0, 0.68)]
+    weather_spans = [(11 / 60, 22 / 60), (0.0, 0.35), (0.0, 0.82), (0.0, 0.68)]
     panels = []
     for variant in ("bands", "rings"):
         face = render(variant, weather_spans, assign=weather_assign)
         panels.append((f"{variant.upper()}   lum {measure(face) * 100:.2f}%",
                        composite(face)))
     path = os.path.join(outdir, "07-weather-assignment.png")
-    sheet(panels, "Ring 1 = temperature 11-22C, ring 2 = rain 35%").save(path)
+    sheet(panels, "Ring 1 = temperature 11-22C on a 0-60 scale, ring 2 = rain 35%").save(path)
     written.append(path)
 
     # 7. Burn-in drift: how long any one pixel stays lit over a full cycle.
