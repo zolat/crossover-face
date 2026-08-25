@@ -5,11 +5,17 @@ import Toybox.Lang;
 //! are handed, so there is one renderer rather than two.
 //!
 //! This loop runs against a hard watchdog budget: roughly 1100 dots, every
-//! frame, in interpreted bytecode. Two rules keep it inside that budget —
-//! nothing is computed here that DotGrid could compute once, and nothing calls
-//! out of the loop that could be an array lookup instead. An earlier version
-//! that worked out each dot's ring and position inline tripped the watchdog
-//! outright.
+//! frame, in interpreted bytecode. The rule that keeps it inside that budget
+//! is that nothing is computed here which DotGrid could compute once — an
+//! earlier version that worked out each dot's ring and position inline
+//! tripped the watchdog outright.
+//!
+//! The one deliberate exception is StatMap.isLit(), called per dot rather than
+//! inlined. Measured, that call costs about 6ms a frame. It buys a single
+//! definition of what "inside the span" means, shared with the tests; the
+//! inline copy it replaced had already drifted out of test coverage entirely.
+//! At 0.06% CPU in always-on — where the face spends nearly all its life —
+//! that is a trade worth making.
 //!
 //! The lattice also cannot be cached to a BufferedBitmap: a full-screen
 //! 390x390 buffer at 16bpp is ~304KB against a 128KB watch-face budget.
@@ -53,7 +59,7 @@ module MatrixRenderer {
                 var ring = ringOf[i];
                 var span = spans[ring];
                 var position = positionOf[i];
-                if (position >= span[0] && position <= span[1]) {
+                if (StatMap.isLit(position, span)) {
                     colour = (rings[ring] == Source.SOURCE_TEMPERATURE)
                         ? ramp[(position * rampTop).toNumber()]
                         : palette[ring * 2 + 1];

@@ -120,13 +120,23 @@ module StatMap {
         return ((DotGrid.RADIUS - dy).toFloat() / SPAN);
     }
 
+    //! Is a dot at this position inside the span?
+    //!
+    //! A span whose end is before its start wraps past the ring's origin —
+    //! a sub-zero temperature range crossing twelve o'clock does exactly this,
+    //! running from, say, :55 round to :03. The renderer calls this per dot
+    //! rather than keeping its own copy, so the two cannot drift apart.
+    function isLit(position as Float, span as Array<Float>) as Boolean {
+        if (span[0] <= span[1]) {
+            return (position >= span[0]) && (position <= span[1]);
+        }
+        return (position >= span[0]) || (position <= span[1]);
+    }
+
     //! Classify a dot into a palette slot: ring * 2, plus 1 when lit.
     function classify(col as Number, dx as Number, dy as Number,
                       spans as Array<Array<Float> >) as Number {
         var ring = ringFor(col, dx, dy);
-        var span = spans[ring];
-        var position = positionOf(dx, dy);
-        var lit = (position >= span[0]) && (position <= span[1]);
-        return ring * 2 + (lit ? 1 : 0);
+        return ring * 2 + (isLit(positionOf(dx, dy), spans[ring]) ? 1 : 0);
     }
 }

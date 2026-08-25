@@ -286,6 +286,14 @@ every minute mark, so the band can be read off the dial exactly the way you read
 hand. 18°C sits where :18 does. A tighter scale would use the ring better and be harder to
 read.
 
+The scale **wraps rather than clamps**, which the minute-mark mapping implies: −5°C belongs
+at :55, five degrees anticlockwise of twelve, exactly where minute 55 sits. Clamping instead
+would fold every sub-zero reading onto twelve and quietly show a −5→3° day as 0→3° — a wrong
+reading rather than a missing one. A frosty range therefore has its start *after* its end,
+and `StatMap.isLit()` handles that case: a span whose end precedes its start wraps past the
+origin. (−5°C and 55°C share a position; nothing confuses them in practice, and the scale
+already wraps 60 onto 0 the same way.)
+
 ### Layout
 
 | Layout | Ring index | Position runs |

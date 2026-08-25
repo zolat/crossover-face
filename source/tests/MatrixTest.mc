@@ -200,18 +200,55 @@ module MatrixTest {
     function oneDegreeSitsOnEachMinuteMark(logger as Logger) as Boolean {
         Test.assertEqualMessage(WeatherData.fraction(0.0), 0.0,
             "0C must sit at twelve o'clock");
-        Test.assertEqualMessage(WeatherData.fraction(60.0), 1.0,
+        // 60C wraps onto twelve exactly as minute 60 is minute 0.
+        Test.assertMessage(WeatherData.fraction(60.0) < 0.001,
             "60C must land back at twelve o'clock");
-        for (var degrees = 0; degrees <= 60; degrees += 15) {
+        for (var degrees = 0; degrees < 60; degrees += 15) {
             var expected = degrees / 60.0;
             var actual = WeatherData.fraction(degrees.toFloat());
             Test.assertMessage((actual - expected).abs() < 0.001,
                 "each degree must land on its own minute mark");
         }
-        Test.assertEqualMessage(WeatherData.fraction(-10.0), 0.0,
-            "below the scale must clamp, not wrap");
-        Test.assertEqualMessage(WeatherData.fraction(90.0), 1.0,
-            "above the scale must clamp, not wrap");
+        return true;
+    }
+
+    //! Sub-zero temperatures run anticlockwise past twelve, the same way
+    //! minute 55 does. Clamping them to zero would fold every frost onto
+    //! twelve o'clock and show a wrong reading rather than a missing one.
+    (:test)
+    function subZeroWrapsBackPastTwelve(logger as Logger) as Boolean {
+        var minusFive = WeatherData.fraction(-5.0);
+        logger.debug("-5C sits at " + minusFive);
+        Test.assertMessage((minusFive - (55.0 / 60.0)).abs() < 0.001,
+            "-5C must sit where :55 does");
+        Test.assertMessage((WeatherData.fraction(-1.0) - (59.0 / 60.0)).abs() < 0.001,
+            "-1C must sit where :59 does");
+        Test.assertMessage(WeatherData.fraction(-60.0) < 0.001,
+            "a whole turn below zero must land back at twelve");
+        Test.assertMessage(WeatherData.fraction(65.0) - (5.0 / 60.0) < 0.001,
+            "above the scale must wrap too");
+        return true;
+    }
+
+    //! A frosty day spans twelve o'clock: its start is *after* its end.
+    (:test)
+    function spanWrappingPastTheOriginStaysLit(logger as Logger) as Boolean {
+        // -5C to 3C — from :55 round through twelve to :03.
+        var frosty = [WeatherData.fraction(-5.0), WeatherData.fraction(3.0)]
+                     as Array<Float>;
+        Test.assertMessage(frosty[0] > frosty[1],
+            "this range must actually wrap, or the test proves nothing");
+
+        Test.assertMessage(StatMap.isLit(56.0 / 60.0, frosty),
+            "-4C is inside the range");
+        Test.assertMessage(StatMap.isLit(0.0, frosty),
+            "0C is inside the range");
+        Test.assertMessage(StatMap.isLit(2.0 / 60.0, frosty),
+            "2C is inside the range");
+        Test.assertMessage(!StatMap.isLit(30.0 / 60.0, frosty),
+            "30C is nowhere near a frosty day");
+        Test.assertMessage(!StatMap.isLit(50.0 / 60.0, frosty),
+            "50C is outside, just before the range starts");
         return true;
     }
 

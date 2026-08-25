@@ -52,8 +52,22 @@ module WeatherData {
     }
 
     //! Where a Celsius temperature sits on the ring's scale, 0.0-1.0.
+    //!
+    //! Wraps rather than clamps, which is what the minute-mark scale implies:
+    //! -5C belongs at :55, exactly where minute 55 sits, and reads as five
+    //! degrees anticlockwise of twelve. Clamping instead would fold every
+    //! sub-zero reading onto twelve o'clock and quietly show a -5 to 3 day as
+    //! 0 to 3 — a wrong reading rather than a missing one.
+    //!
+    //! -5C and 55C therefore share a position. In practice nothing confuses
+    //! them, and the scale already wraps 60 onto 0 the same way.
     function fraction(celsius as Float) as Float {
-        return clamp((celsius - SCALE_MIN_C) / (SCALE_MAX_C - SCALE_MIN_C));
+        var turns = (celsius - SCALE_MIN_C) / (SCALE_MAX_C - SCALE_MIN_C);
+        turns = turns - turns.toNumber();   // truncates toward zero
+        if (turns < 0.0) {
+            turns += 1.0;
+        }
+        return turns.toFloat();
     }
 
     function clamp(value as Float) as Float {
