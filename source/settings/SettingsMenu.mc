@@ -29,6 +29,23 @@ class SettingsMenu extends WatchUi.Menu2 {
         addItem(new WatchUi.MenuItem(Rez.Strings.RingsTitle, null, :rings, null));
     }
 
+    //! Sub-labels are built from the current settings, so they go stale the
+    //! moment a sub-menu changes one. onShow() runs when this menu returns to
+    //! the foreground after that sub-menu is popped, which is the only point
+    //! the values can be refreshed — the menu itself is not rebuilt.
+    function onShow() as Void {
+        Menu2.onShow();
+        setSubLabelOf(0, layoutLabel());
+        setSubLabelOf(1, backingLabel());
+    }
+
+    private function setSubLabelOf(index as Number, label as ResourceId) as Void {
+        var item = getItem(index);
+        if (item != null) {
+            item.setSubLabel(label);
+        }
+    }
+
     private function layoutLabel() as ResourceId {
         var labels = [Rez.Strings.LayoutBandsBottom,
                       Rez.Strings.LayoutBandsCentre,
@@ -91,6 +108,17 @@ class RingMenu extends WatchUi.Menu2 {
         for (var i = 0; i < StatMap.RINGS; i++) {
             addItem(new WatchUi.MenuItem(
                 titles[i], SOURCE_LABELS[StatMap.rings[i]], i, null));
+        }
+    }
+
+    //! See SettingsMenu.onShow() — same staleness, same fix.
+    function onShow() as Void {
+        Menu2.onShow();
+        for (var i = 0; i < StatMap.RINGS; i++) {
+            var item = getItem(i);
+            if (item != null) {
+                item.setSubLabel(SOURCE_LABELS[StatMap.rings[i]]);
+            }
         }
     }
 }

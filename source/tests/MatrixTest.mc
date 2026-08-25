@@ -2,6 +2,7 @@ import Toybox.Application;
 import Toybox.Lang;
 import Toybox.Math;
 import Toybox.Test;
+import Toybox.WatchUi;
 
 //! Tests for the parts of the face that can be checked without a screen: the
 //! lattice, the dot -> ring mapping, the burn-in drift and the always-on
@@ -385,6 +386,64 @@ module MatrixTest {
             return;     // outside the window; neighbours beyond it are mirrored
         }
         counts[y * size + x] += 1;
+    }
+
+    //! A menu's sub-labels are built from the settings at construction time,
+    //! so they go stale the moment a sub-menu changes one. onShow() is where
+    //! they get refreshed — without it the menu shows the previous value until
+    //! you leave settings entirely and come back.
+    //! getItem() is nullable and getSubLabel() returns a union, so reading a
+    //! sub-label needs unwrapping before it can be compared.
+    function subLabelOf(menu as WatchUi.Menu2, index as Number) as String {
+        var item = menu.getItem(index);
+        if (item == null) {
+            return "";
+        }
+        var label = item.getSubLabel();
+        return (label == null) ? "" : label.toString();
+    }
+
+    (:test)
+    function settingsMenuRefreshesItsSubLabels(logger as Logger) as Boolean {
+        Properties.setValue(StatMap.PROPERTY_LAYOUT, StatMap.LAYOUT_BANDS_BOTTOM);
+        Config.reload();
+        var menu = new SettingsMenu();
+        var before = subLabelOf(menu, 0);
+
+        // What a sub-menu does when the user picks a different layout.
+        Properties.setValue(StatMap.PROPERTY_LAYOUT, StatMap.LAYOUT_RINGS);
+        Config.reload();
+        Test.assertEqualMessage(subLabelOf(menu, 0), before,
+            "sub-label should still be stale before the menu is shown again");
+
+        menu.onShow();
+        logger.debug("was '" + before + "', now '" + subLabelOf(menu, 0) + "'");
+        Test.assertMessage(!subLabelOf(menu, 0).equals(before),
+            "onShow must refresh the sub-label to the new setting");
+
+        Properties.setValue(StatMap.PROPERTY_LAYOUT, StatMap.LAYOUT_BANDS_BOTTOM);
+        Config.reload();
+        return true;
+    }
+
+    //! Same staleness, same fix, for the ring assignment menu.
+    (:test)
+    function ringMenuRefreshesItsSubLabels(logger as Logger) as Boolean {
+        Properties.setValue(StatMap.PROPERTY_RINGS[0], Source.SOURCE_STEPS);
+        Config.reload();
+        var menu = new RingMenu();
+        var before = subLabelOf(menu, 0);
+
+        Properties.setValue(StatMap.PROPERTY_RINGS[0], Source.SOURCE_RAIN);
+        Config.reload();
+        menu.onShow();
+        logger.debug("was '" + before + "', now '" + subLabelOf(menu, 0) + "'");
+        Test.assertMessage(!subLabelOf(menu, 0).equals(before),
+            "onShow must refresh the ring's sub-label");
+
+        Properties.setValue(StatMap.PROPERTY_RINGS[0], Source.SOURCE_STEPS);
+        Config.reload();
+        return true;
     }
 
     //! The backing must land on the hands, and only on the hands.
