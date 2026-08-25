@@ -1,0 +1,29 @@
+
+---
+Error: 'Watchdog Tripped Error - Code Executed Too Long'
+Details: 'Failed invoking <symbol>'
+Time: 2026-08-25T13:14:25Z
+Part-Number: 006-B4678-00
+Firmware-Version: '15.18'
+Language-Code: eng
+ConnectIQ-API-Version: 6.0.2
+ConnectIQ-Version: 6.0.2
+Filename: CrossoverFace
+Appname: Crossover Face
+Stack: 
+  - pc: 0x10000fc3
+    File: /Users/zolat/projects/garmin/source/matrix/StatMap.mc
+    Line: 94
+    Function: ringFor
+  - pc: 0x100017db
+    File: /Users/zolat/projects/garmin/source/matrix/DotGrid.mc
+    Line: 112
+    Function: build
+  - pc: 0x10000b5c
+    File: /Users/zolat/projects/garmin/source/render/Config.mc
+    Line: 11
+    Function: reload
+  - pc: 0x10000d47
+    File: /Users/zolat/projects/garmin/source/CrossoverApp.mc
+    Line: 14
+    Function: onStart

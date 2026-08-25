@@ -108,9 +108,7 @@ module StatMap {
     //! its far end. A span lights every dot between its start and end.
     function positionOf(dx as Number, dy as Number) as Float {
         if (layout == LAYOUT_RINGS) {
-            var angle = Math.toDegrees(Math.atan2(dx, -dy));
-            if (angle < 0) { angle += 360; }
-            return (angle / 360.0).toFloat();
+            return Angle.turnOf(dx, dy);
         }
         if (layout == LAYOUT_BANDS_CENTRE) {
             // Out from the midline, so a level opens symmetrically.

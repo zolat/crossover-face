@@ -24,6 +24,8 @@ module MatrixRenderer {
     function draw(dc as Dc, spans as Array<Array<Float> >,
                   palette as Array<Number>, ramp as Array<Number>,
                   backing as Number?) as Void {
+        DotGrid.ensureBuilt();
+
         dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_BLACK);
         dc.clear();
 
@@ -40,7 +42,7 @@ module MatrixRenderer {
         var armOf = DotGrid.armOf;
         var arms = DotGrid.ARMS;
         var positionOf = DotGrid.positionOf;
-        var count = DotGrid.count;
+        var count = DotGrid.ready;
         var rings = StatMap.rings;
         var rampTop = Palette.RAMP_STEPS - 1;
 

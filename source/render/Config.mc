@@ -7,7 +7,9 @@ module Config {
     function reload() as Void {
         StatMap.load();
         Palette.build();
-        // Depends on the layout, so it must follow StatMap.load().
-        DotGrid.build();
+        // The dot cache depends on the layout, but building it here would run
+        // inside onStart, whose watchdog is far tighter than a frame's. Mark
+        // it stale and let the renderer rebuild it on the next draw.
+        DotGrid.invalidate();
     }
 }

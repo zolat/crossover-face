@@ -68,6 +68,25 @@ module MatrixTest {
         return total / (Math.PI * DotGrid.RADIUS * DotGrid.RADIUS);
     }
 
+    //! The cache is built in chunks across frames on the watch; tests drive
+    //! it to completion first so they see the finished lattice.
+    (:test)
+    function cacheBuildsCompletelyInChunks(logger as Logger) as Boolean {
+        Config.reload();
+        var frames = 0;
+        while (DotGrid.ready < DotGrid.count || frames == 0) {
+            DotGrid.ensureBuilt();
+            frames++;
+            Test.assertMessage(frames < 100, "the chunked build never finished");
+        }
+        logger.debug("built " + DotGrid.count + " dots over " + frames + " frames");
+        Test.assertEqualMessage(DotGrid.ready, DotGrid.count,
+            "every dot must be built once the chunks are done");
+        Test.assertMessage(frames > 1,
+            "a chunked build should take more than one frame, or CHUNK is too big");
+        return true;
+    }
+
     (:test)
     function latticeMatchesMockup(logger as Logger) as Boolean {
         var count = 0;
@@ -522,6 +541,7 @@ module MatrixTest {
         for (var l = 0; l < layouts.size(); l++) {
             Properties.setValue(StatMap.PROPERTY_LAYOUT, layouts[l]);
             Config.reload();
+            DotGrid.buildAll();
             Test.assertEqualMessage(DotGrid.armOf.size(), DotGrid.count,
                 "every dot needs an orientation");
 
@@ -548,6 +568,46 @@ module MatrixTest {
         Properties.setValue(StatMap.PROPERTY_LAYOUT, StatMap.LAYOUT_BANDS_BOTTOM);
         Config.reload();
         return true;
+    }
+
+    //! DotGrid.build() inlines the ring and position maths for speed, because
+    //! calling out to StatMap per dot tripped the watchdog on the watch. That
+    //! leaves two copies of the same maths, so this asserts they agree for
+    //! every dot in every layout — the inlined one is fast, StatMap's is the
+    //! readable definition, and neither is allowed to drift.
+    (:test)
+    function cacheAgreesWithTheReferenceMaths(logger as Logger) as Boolean {
+        for (var l = 0; l < ALL_LAYOUTS.size(); l++) {
+            Properties.setValue(StatMap.PROPERTY_LAYOUT, ALL_LAYOUTS[l]);
+            Config.reload();
+            DotGrid.buildAll();
+
+            var checked = 0;
+            for (var i = 0; i < DotGrid.count; i++) {
+                var dx = DotGrid.xs[i];
+                var dy = DotGrid.ys[i];
+
+                Test.assertEqualMessage(DotGrid.ringOf[i],
+                    StatMap.ringFor(columnOf(dx), dx, dy),
+                    "cached ring disagrees with StatMap.ringFor");
+
+                var expected = StatMap.positionOf(dx, dy);
+                Test.assertMessage((DotGrid.positionOf[i] - expected).abs() < 0.0001,
+                    "cached position disagrees with StatMap.positionOf");
+                checked++;
+            }
+            logger.debug("layout " + StatMap.layout + ": " + checked + " dots agree");
+            Test.assertMessage(checked > 1000, "hardly any dots were checked");
+        }
+        Properties.setValue(StatMap.PROPERTY_LAYOUT, StatMap.LAYOUT_BANDS_BOTTOM);
+        Config.reload();
+        return true;
+    }
+
+    //! Recover a dot's column from its x offset — build() knows it, the cache
+    //! does not store it, and ringFor needs it for the band layouts.
+    function columnOf(dx as Number) as Number {
+        return ((dx / (DotGrid.PITCH / 2)) + (DotGrid.COLS - 1)) / 2;
     }
 
     //! The backing must land on the hands, and only on the hands.

@@ -125,6 +125,28 @@ simulator draws them, so what you see in the simulator is what you get. From
 The grey minute hand is the one real constraint on the palette: mid-grey elements crossing
 mid-grey dots would disappear.
 
+## The startup watchdog
+
+`onStart` runs against a **far tighter watchdog than a frame does**. The draw loop happily
+walks ~1,100 dots and issues ~2,200 native calls in ~40ms; the *precompute* for those same
+dots would not finish in `onStart` at all — it died with `Code Executed Too Long` inside
+`DotGrid.build()`, and the face rendered two dots.
+
+Tightening the arithmetic was not enough. In order, and each still tripping:
+
+- inlining the per-dot maths so it stopped calling `StatMap` ~3,300 times;
+- comparing squared distances so the ring index needs no square root;
+- one angle per dot instead of two, in radians so `Math.toDegrees` went too;
+- replacing `Math.atan2` entirely with a polynomial approximation (`Angle.turnOf`);
+- deferring the whole build out of `onStart` into the first frame.
+
+The work is simply too much for one synchronous pass on this hardware. So the cache is
+**built in chunks across frames** (`DotGrid.CHUNK`): the face draws the dots it has and
+fills in the rest over the next few updates, taking about eight frames from cold. The
+layout rarely changes, so it is paid once.
+
+`DotGrid.buildAll()` exists for tests and tooling. The face must never call it.
+
 ## Frame budget
 
 A watch face gets a hard watchdog allowance per `onUpdate`, and this face draws ~1,100 dots
@@ -338,6 +360,28 @@ Two things make it work:
 Properties live in `resources/properties.xml`, are surfaced by
 `resources/settings/settings.xml`, and are read by `Config.reload()`. Anything missing or
 out of range falls back to its default rather than throwing — there are tests for that.
+
+## The startup watchdog
+
+`onStart` runs against a **far tighter watchdog than a frame does**. The draw loop happily
+walks ~1,100 dots and issues ~2,200 native calls in ~40ms; the *precompute* for those same
+dots would not finish in `onStart` at all — it died with `Code Executed Too Long` inside
+`DotGrid.build()`, and the face rendered two dots.
+
+Tightening the arithmetic was not enough. In order, and each still tripping:
+
+- inlining the per-dot maths so it stopped calling `StatMap` ~3,300 times;
+- comparing squared distances so the ring index needs no square root;
+- one angle per dot instead of two, in radians so `Math.toDegrees` went too;
+- replacing `Math.atan2` entirely with a polynomial approximation (`Angle.turnOf`);
+- deferring the whole build out of `onStart` into the first frame.
+
+The work is simply too much for one synchronous pass on this hardware. So the cache is
+**built in chunks across frames** (`DotGrid.CHUNK`): the face draws the dots it has and
+fills in the rest over the next few updates, taking about eight frames from cold. The
+layout rarely changes, so it is paid once.
+
+`DotGrid.buildAll()` exists for tests and tooling. The face must never call it.
 
 ## Frame budget
 
