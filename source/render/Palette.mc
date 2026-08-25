@@ -11,29 +11,34 @@ import Toybox.Lang;
 //! Both tables are indexed by ring * 2, plus 1 when lit.
 module Palette {
 
-    //! Terrain: amber, ice, rust, moss. Bright and saturated, because tuned in
+    //! Terrain: orchid, moss, ice, rust. Bright and saturated, because tuned in
     //! a dark room the face was legible and outdoors in daylight it was not.
     //!
-    //! The order is not decorative. Amber and rust are by far the closest pair
-    //! in the set — 40 apart in CIELAB, against 90-98 for every other pair — so
-    //! they are deliberately kept non-adjacent. Interleaving warm and cool this
-    //! way lifts the *weakest neighbouring pair* from 40 to 90, and it is
-    //! neighbours blurring together, not the set average, that decides whether
-    //! two rings can be told apart at a glance.
+    //! Orchid replaces an amber that looked right at full strength and turned
+    //! brown the moment it was dimmed for the unfilled tier. That tier covers
+    //! most of a ring most of the time, so how a colour *dims* matters as much
+    //! as how it looks lit — and warm oranges dim to mud while violets stay
+    //! chromatic. Orchid holds a CIELAB chroma of 47 when dimmed, against
+    //! amber's 39 of brown.
+    //!
+    //! The order is not decorative: it is the arrangement that maximises the
+    //! distance between rings which sit *next to* each other, 93 here against
+    //! 78 for the worst arrangement. Neighbours blurring together, not the set
+    //! average, is what decides whether two rings can be told apart.
     //!
     //! Ring 1 is outermost, or leftmost in the band layouts.
     const THEME = [
-        0xFFA94D,   //! amber
+        0xE879F9,   //! orchid
+        0xB8D64B,   //! moss
         0x7FD4FF,   //! ice
-        0xFF6B5B,   //! rust
-        0xB8D64B    //! moss
+        0xFF6B5B    //! rust
     ] as Array<Number>;
 
     const WEAK_ACTIVE = 0.55;
     const WEAK_ALWAYS_ON = 0.45;
 
     //! Always-on used to lift the colours to survive the panel's own dimming.
-    //! With this palette there is nothing left to lift: ice and moss are
+    //! With this palette there is nothing left to lift: ice and orchid are
     //! already at or near a full channel, so scaling up would clamp and shift
     //! the hue rather than brighten it. Always-on and awake now draw the same
     //! filled colours and differ only in their unfilled tier — which is what
@@ -45,7 +50,7 @@ module Palette {
     const BACKING_DARK = 0x101010;
 
     //! Temperature is drawn on a ramp so its band reads as a temperature and
-    //! not just a length. Ice through amber to rust — cold to hot, and every
+    //! not just a length. Ice through orchid to rust — cold to hot, and every
     //! stop is a theme colour, so it stays inside the palette.
     //! Precomputed: working it out per dot costs too much inside the frame.
     const RAMP_STEPS = 32;
@@ -74,8 +79,8 @@ module Palette {
         for (var step = 0; step < RAMP_STEPS; step++) {
             var along = step.toFloat() / (RAMP_STEPS - 1);
             var colour = (along <= 0.5)
-                ? mix(THEME[1], THEME[0], along * 2.0)           // ice -> amber
-                : mix(THEME[0], THEME[2], (along - 0.5) * 2.0);  // amber -> rust
+                ? mix(THEME[2], THEME[0], along * 2.0)            // ice -> orchid
+                : mix(THEME[0], THEME[3], (along - 0.5) * 2.0);   // orchid -> rust
             ramp.add(colour);
             rampLifted.add(scale(colour, LIFT));
         }

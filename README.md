@@ -278,7 +278,7 @@ is a genuine range, works in every layout without the layouts knowing anything a
 level fills from the origin, a range floats between its ends. In bands a range reads as a
 slab; in rings, as an arc.
 
-Temperature is the one source drawn on a ramp rather than a flat hue — ice through amber to
+Temperature is the one source drawn on a ramp rather than a flat hue — ice through orchid to
 rust — so the band reads as a temperature rather than just a length.
 
 Its **0–60°C scale is deliberately far wider than any weather needs**: it puts one degree on
