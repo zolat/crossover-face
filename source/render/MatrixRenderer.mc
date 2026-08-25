@@ -31,8 +31,8 @@ module MatrixRenderer {
         // Drift shifts where dots are drawn, never which dots exist, so the
         // field translates rigidly instead of popping dots in and out.
         var drift = Drift.current();
-        var centreX = dc.getWidth() / 2;
-        var centreY = dc.getHeight() / 2;
+        var centreX = (dc.getWidth() / 2) + drift[0];
+        var centreY = (dc.getHeight() / 2) + drift[1];
 
         var xs = DotGrid.xs;
         var ys = DotGrid.ys;
@@ -78,11 +78,15 @@ module MatrixRenderer {
             // layout each dot's pair is turned to follow the circle it sits
             // on; elsewhere they stay upright. drawLine measured *faster*
             // than the two fillRectangle calls this replaced.
-            var x = centreX + dx + drift[0];
-            var y = centreY + dy + drift[1];
-            var arm = arms[armOf[i]];
-            dc.drawLine(x - arm[0], y - arm[1], x + arm[0], y + arm[1]);
-            dc.drawLine(x - arm[2], y - arm[3], x + arm[2], y + arm[3]);
+            var x = centreX + dx;
+            var y = centreY + dy;
+            var a = armOf[i];
+            var ax = arms[a];
+            var ay = arms[a + 1];
+            var bx = arms[a + 2];
+            var by = arms[a + 3];
+            dc.drawLine(x - ax, y - ay, x + ax, y + ay);
+            dc.drawLine(x - bx, y - by, x + bx, y + by);
         }
     }
 }

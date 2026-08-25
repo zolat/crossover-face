@@ -55,27 +55,36 @@ module DotGrid {
     //! identical. Offsets are scaled so the larger component is always half a
     //! dot, which keeps every orientation the same visual weight; scaling by
     //! true length instead would make the diagonal ones visibly shorter.
+    //! Flat, four values per orientation, rather than an array of arrays.
+    //! A const array of arrays is a step further than Monkey C's const is
+    //! meant to cover, and nesting it is the kind of thing that resolves in
+    //! the simulator and comes back empty on the watch. Flat also saves an
+    //! array dereference per dot.
+    const ARM_VALUES = 4;
     const ARMS = [
-        [2, 0, 0, 2],   //!  0    +
-        [2, 1, -1, 2],  //! 22.5
-        [2, 2, -2, 2],  //! 45    x
-        [1, 2, -2, 1]   //! 67.5
-    ] as Array<Array<Number> >;
+        2, 0, 0, 2,     //!  0     +
+        2, 1, -1, 2,    //! 22.5
+        2, 2, -2, 2,    //! 45     x
+        1, 2, -2, 1     //! 67.5
+    ] as Array<Number>;
+    const ORIENTATIONS = 4;
 
     var count as Number = 0;
     var xs as Array<Number> = [] as Array<Number>;      //! dx from centre
     var ys as Array<Number> = [] as Array<Number>;      //! dy from centre
     var ringOf as Array<Number> = [] as Array<Number>;  //! which ring
     var positionOf as Array<Float> = [] as Array<Float>;//! 0.0-1.0 along it
-    var armOf as Array<Number> = [] as Array<Number>;   //! index into ARMS
+    var armOf as Array<Number> = [] as Array<Number>;   //! offset into ARMS
 
     //! Which ARMS entry aligns a dot's cross with the circle it sits on: one
     //! arm pointing out from the centre, the other across it.
     function orientationAt(dx as Number, dy as Number) as Number {
         var degrees = Math.toDegrees(Math.atan2(dy, dx));
-        var step = (degrees / 22.5 + 0.5).toNumber();
-        step = step % ARMS.size();
-        return (step < 0) ? step + ARMS.size() : step;
+        var step = (degrees / 22.5 + 0.5).toNumber() % ORIENTATIONS;
+        if (step < 0) {
+            step += ORIENTATIONS;
+        }
+        return step * ARM_VALUES;   //! offset straight into ARMS
     }
 
     //! Rebuild the cache. Must be called whenever the layout changes, since

@@ -483,6 +483,73 @@ module MatrixTest {
         return true;
     }
 
+    //! Guards the shape of the arm table itself. Nothing previously asserted
+    //! that ARMS was even populated, so a table that came back empty on the
+    //! watch would draw a blank face with no test failing anywhere.
+    (:test)
+    function armTableIsWellFormed(logger as Logger) as Boolean {
+        Test.assertEqualMessage(DotGrid.ARMS.size(),
+            DotGrid.ORIENTATIONS * DotGrid.ARM_VALUES,
+            "the arm table is not the size its constants claim");
+
+        var half = DotGrid.DOT / 2;
+        for (var o = 0; o < DotGrid.ORIENTATIONS; o++) {
+            var i = o * DotGrid.ARM_VALUES;
+            var ax = DotGrid.ARMS[i];
+            var ay = DotGrid.ARMS[i + 1];
+            var bx = DotGrid.ARMS[i + 2];
+            var by = DotGrid.ARMS[i + 3];
+
+            Test.assertEqualMessage(ax * bx + ay * by, 0,
+                "a cross's two strokes must be at right angles");
+
+            var extentA = (ax.abs() > ay.abs()) ? ax.abs() : ay.abs();
+            var extentB = (bx.abs() > by.abs()) ? bx.abs() : by.abs();
+            Test.assertEqualMessage(extentA, half,
+                "every orientation must span the same width");
+            Test.assertEqualMessage(extentB, half,
+                "every orientation must span the same height");
+        }
+        return true;
+    }
+
+    //! Every dot must point at a real entry in that table. An out-of-range
+    //! offset would read past the end of ARMS and take the face down.
+    (:test)
+    function everyDotHasAValidArmOffset(logger as Logger) as Boolean {
+        var layouts = [StatMap.LAYOUT_BANDS_BOTTOM, StatMap.LAYOUT_RINGS]
+                      as Array<Number>;
+        for (var l = 0; l < layouts.size(); l++) {
+            Properties.setValue(StatMap.PROPERTY_LAYOUT, layouts[l]);
+            Config.reload();
+            Test.assertEqualMessage(DotGrid.armOf.size(), DotGrid.count,
+                "every dot needs an orientation");
+
+            var distinct = 0;
+            for (var i = 0; i < DotGrid.count; i++) {
+                var offset = DotGrid.armOf[i];
+                Test.assertMessage(offset >= 0 &&
+                        offset + DotGrid.ARM_VALUES <= DotGrid.ARMS.size(),
+                    "arm offset points outside the table");
+                Test.assertEqualMessage(offset % DotGrid.ARM_VALUES, 0,
+                    "arm offset must land on an entry boundary");
+                distinct |= 1 << (offset / DotGrid.ARM_VALUES);
+            }
+            logger.debug("layout " + StatMap.layout + " orientations used: " + distinct);
+            if (StatMap.layout == StatMap.LAYOUT_RINGS) {
+                Test.assertEqualMessage(distinct,
+                    (1 << DotGrid.ORIENTATIONS) - 1,
+                    "the rings layout should use every orientation");
+            } else {
+                Test.assertEqualMessage(distinct, 1,
+                    "the band layouts should leave every cross upright");
+            }
+        }
+        Properties.setValue(StatMap.PROPERTY_LAYOUT, StatMap.LAYOUT_BANDS_BOTTOM);
+        Config.reload();
+        return true;
+    }
+
     //! The backing must land on the hands, and only on the hands.
     (:test)
     function handBackingFollowsTheHands(logger as Logger) as Boolean {
