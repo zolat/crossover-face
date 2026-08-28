@@ -14,8 +14,12 @@ class CrossoverView extends WatchUi.WatchFace {
         WatchFace.initialize();
     }
 
+    //! The dot cache is built here rather than in the app's onStart, which
+    //! has a far tighter watchdog budget and tripped on it. onLayout runs once,
+    //! before the first frame, so the face is complete the first time it draws.
     function onLayout(dc as Dc) as Void {
         Config.reload();
+        DotGrid.ensureBuilt();
         holdHandsAtSystemTime();
     }
 

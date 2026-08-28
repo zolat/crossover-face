@@ -68,22 +68,88 @@ module MatrixTest {
         return total / (Math.PI * DotGrid.RADIUS * DotGrid.RADIUS);
     }
 
-    //! The cache is built in chunks across frames on the watch; tests drive
-    //! it to completion first so they see the finished lattice.
+    //! build() fills three dots out of every four by mirroring a fourth across
+    //! the axes, which means it writes to computed indices rather than to a
+    //! running cursor. Get that arithmetic wrong and a slot is written twice
+    //! while another is never written at all — and every consistency check
+    //! still passes, because a mis-aimed write puts x, y, ring and position in
+    //! the *same* wrong slot. Only counting the slots catches it.
     (:test)
-    function cacheBuildsCompletelyInChunks(logger as Logger) as Boolean {
-        Config.reload();
-        var frames = 0;
-        while (DotGrid.ready < DotGrid.count || frames == 0) {
-            DotGrid.ensureBuilt();
-            frames++;
-            Test.assertMessage(frames < 100, "the chunked build never finished");
+    function cacheCoversEveryLatticeDotExactlyOnce(logger as Logger) as Boolean {
+        for (var l = 0; l < ALL_LAYOUTS.size(); l++) {
+            Properties.setValue(StatMap.PROPERTY_LAYOUT, ALL_LAYOUTS[l]);
+            Config.reload();
+            DotGrid.build();
+
+            Test.assertEqualMessage(DotGrid.count, EXPECTED_DOTS,
+                "the build counted a different lattice than the mockup");
+            Test.assertEqualMessage(DotGrid.xs.size(), DotGrid.count,
+                "the cache is not the size it claims");
+
+            // One slot per grid cell, so a double write is visible as a 2.
+            var seen = new [DotGrid.ROWS * DotGrid.COLS] as Array<Number>;
+            for (var i = 0; i < seen.size(); i++) {
+                seen[i] = 0;
+            }
+            for (var i = 0; i < DotGrid.count; i++) {
+                var col = columnOf(DotGrid.xs[i]);
+                var row = columnOf(DotGrid.ys[i]);
+                Test.assertMessage(col >= 0 && col < DotGrid.COLS &&
+                                   row >= 0 && row < DotGrid.ROWS,
+                    "a cached dot sits outside the grid");
+                seen[row * DotGrid.COLS + col] += 1;
+            }
+
+            var filled = 0;
+            for (var row = 0; row < DotGrid.ROWS; row++) {
+                for (var col = 0; col < DotGrid.COLS; col++) {
+                    var times = seen[row * DotGrid.COLS + col];
+                    var wanted = DotGrid.contains(DotGrid.offsetAt(col),
+                                                  DotGrid.offsetAt(row)) ? 1 : 0;
+                    Test.assertEqualMessage(times, wanted,
+                        "grid cell " + col + "," + row + " was built " +
+                        times + " times, wanted " + wanted);
+                    filled += times;
+                }
+            }
+            logger.debug("layout " + StatMap.layout + ": " + filled +
+                         " dots, each built exactly once");
         }
-        logger.debug("built " + DotGrid.count + " dots over " + frames + " frames");
-        Test.assertEqualMessage(DotGrid.ready, DotGrid.count,
-            "every dot must be built once the chunks are done");
-        Test.assertMessage(frames > 1,
-            "a chunked build should take more than one frame, or CHUNK is too big");
+        Properties.setValue(StatMap.PROPERTY_LAYOUT, StatMap.LAYOUT_BANDS_BOTTOM);
+        Config.reload();
+        return true;
+    }
+
+    //! The face must never draw a half-built field. That was the bug the
+    //! chunked build shipped: it filled 150 dots per frame, and in always-on
+    //! a frame is a *minute*, so the face crawled into existence over eight of
+    //! them. One build, complete before the first draw, is the contract — and
+    //! a reload must mark the cache stale so a layout change is picked up.
+    (:test)
+    function theCacheIsWholeBeforeAnythingDrawsIt(logger as Logger) as Boolean {
+        Config.reload();
+        Test.assertMessage(DotGrid.stale,
+            "reloading settings must mark the cache stale");
+
+        DotGrid.ensureBuilt();          // what onLayout does, once
+        Test.assertMessage(!DotGrid.stale, "one build must finish the cache");
+        Test.assertEqualMessage(DotGrid.count, EXPECTED_DOTS,
+            "the first build must produce the whole lattice");
+        Test.assertEqualMessage(DotGrid.positionOf.size(), EXPECTED_DOTS,
+            "every dot must have a position after a single build");
+
+        // Every later frame finds it built and does no work. A rebuild would
+        // recompute the same values, so comparing them proves nothing —
+        // scribble on the cache and check the scribble survives.
+        DotGrid.positionOf[EXPECTED_DOTS - 1] = -1.0;
+        DotGrid.ensureBuilt();
+        Test.assertEqualMessage(DotGrid.positionOf[EXPECTED_DOTS - 1], -1.0,
+            "a built cache must not be rebuilt on the next frame");
+        DotGrid.invalidate();
+        DotGrid.ensureBuilt();
+        Test.assertMessage(DotGrid.positionOf[EXPECTED_DOTS - 1] >= 0.0,
+            "invalidating must make the next frame rebuild");
+        logger.debug("cache complete in one build: " + DotGrid.count + " dots");
         return true;
     }
 
@@ -541,7 +607,7 @@ module MatrixTest {
         for (var l = 0; l < layouts.size(); l++) {
             Properties.setValue(StatMap.PROPERTY_LAYOUT, layouts[l]);
             Config.reload();
-            DotGrid.buildAll();
+            DotGrid.build();
             Test.assertEqualMessage(DotGrid.armOf.size(), DotGrid.count,
                 "every dot needs an orientation");
 
@@ -570,17 +636,17 @@ module MatrixTest {
         return true;
     }
 
-    //! DotGrid.build() inlines the ring and position maths for speed, because
-    //! calling out to StatMap per dot tripped the watchdog on the watch. That
-    //! leaves two copies of the same maths, so this asserts they agree for
-    //! every dot in every layout — the inlined one is fast, StatMap's is the
-    //! readable definition, and neither is allowed to drift.
+    //! DotGrid.build() inlines the ring, position and orientation maths for
+    //! speed, because calling out per dot tripped the watchdog on the watch.
+    //! That leaves two copies of the same maths, so this asserts they agree
+    //! for every dot in every layout — the inlined one is fast, StatMap's and
+    //! orientationFor's are the readable definitions, and neither may drift.
     (:test)
     function cacheAgreesWithTheReferenceMaths(logger as Logger) as Boolean {
         for (var l = 0; l < ALL_LAYOUTS.size(); l++) {
             Properties.setValue(StatMap.PROPERTY_LAYOUT, ALL_LAYOUTS[l]);
             Config.reload();
-            DotGrid.buildAll();
+            DotGrid.build();
 
             var checked = 0;
             for (var i = 0; i < DotGrid.count; i++) {
@@ -594,6 +660,13 @@ module MatrixTest {
                 var expected = StatMap.positionOf(dx, dy);
                 Test.assertMessage((DotGrid.positionOf[i] - expected).abs() < 0.0001,
                     "cached position disagrees with StatMap.positionOf");
+
+                // Three dots in four take their orientation by mirroring a
+                // fourth, so the reflection rule needs checking per dot.
+                var wantedArm = (StatMap.layout == StatMap.LAYOUT_RINGS)
+                    ? DotGrid.orientationFor(dx, dy) : 0;
+                Test.assertEqualMessage(DotGrid.armOf[i], wantedArm,
+                    "cached orientation disagrees with orientationFor");
                 checked++;
             }
             logger.debug("layout " + StatMap.layout + ": " + checked + " dots agree");

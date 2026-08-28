@@ -24,6 +24,8 @@ module MatrixRenderer {
     function draw(dc as Dc, spans as Array<Array<Float> >,
                   palette as Array<Number>, ramp as Array<Number>,
                   backing as Number?) as Void {
+        // Normally a no-op: onLayout has already built the cache. This is the
+        // safety net for a settings change, which comes back through onShow.
         DotGrid.ensureBuilt();
 
         dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_BLACK);
@@ -42,7 +44,7 @@ module MatrixRenderer {
         var armOf = DotGrid.armOf;
         var arms = DotGrid.ARMS;
         var positionOf = DotGrid.positionOf;
-        var count = DotGrid.ready;
+        var count = DotGrid.count;
         var rings = StatMap.rings;
         var rampTop = Palette.RAMP_STEPS - 1;
 

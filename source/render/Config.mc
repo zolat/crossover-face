@@ -8,8 +8,9 @@ module Config {
         StatMap.load();
         Palette.build();
         // The dot cache depends on the layout, but building it here would run
-        // inside onStart, whose watchdog is far tighter than a frame's. Mark
-        // it stale and let the renderer rebuild it on the next draw.
+        // inside onStart, whose watchdog is far tighter than a view's and which
+        // tripped it outright. Mark the cache stale; onLayout builds it, and the
+        // renderer catches any path that skipped onLayout.
         DotGrid.invalidate();
     }
 }
