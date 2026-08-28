@@ -31,6 +31,19 @@ module WatchData {
         return clamp(count.toFloat() / goal);
     }
 
+    //! Weekly intensity minutes against the weekly goal. Garmin counts a
+    //! vigorous minute twice, which `ActiveMinutes.total` already does, so this
+    //! is the same figure the watch's own widget shows.
+    function intensityMinutes() as Float {
+        var info = ActivityMonitor.getInfo();
+        var minutes = info.activeMinutesWeek;
+        var goal = info.activeMinutesWeekGoal;
+        if (minutes == null || goal == null || goal <= 0) {
+            return 0.0;
+        }
+        return clamp(minutes.total.toFloat() / goal);
+    }
+
     function heartRate() as Float {
         var rate = Activity.getActivityInfo().currentHeartRate;
         if (rate == null) {

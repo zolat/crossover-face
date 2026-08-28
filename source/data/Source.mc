@@ -16,10 +16,11 @@ module Source {
         SOURCE_BODY_BATTERY = 3,
         SOURCE_TEMPERATURE = 4,
         SOURCE_RAIN = 5,
-        SOURCE_OFF = 6
+        SOURCE_INTENSITY_MINUTES = 6,
+        SOURCE_OFF = 7
     }
 
-    const COUNT = 7;
+    const COUNT = 8;
 
     const EMPTY = [0.0, 0.0] as Array<Float>;
 
@@ -32,6 +33,7 @@ module Source {
         0x3388FF,   // body battery
         0xFFAA00,   // temperature
         0x00CCDD,   // rain
+        0xCC44FF,   // intensity minutes
         0x444444    // off
     ] as Array<Number>;
 
@@ -60,6 +62,8 @@ module Source {
             case SOURCE_RAIN:
                 var rain = WeatherData.rainChance();
                 return (rain != null) ? level(rain) : EMPTY;
+            case SOURCE_INTENSITY_MINUTES:
+                return level(WatchData.intensityMinutes());
             default:
                 return EMPTY;
         }
