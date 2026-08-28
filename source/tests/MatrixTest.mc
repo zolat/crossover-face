@@ -771,6 +771,61 @@ module MatrixTest {
         return ((dx / (DotGrid.PITCH / 2)) + (DotGrid.COLS - 1)) / 2;
     }
 
+    //! Awake, the system asks for a frame every second and almost all of them
+    //! are the frame before it. Skipping those is the largest saving the face
+    //! has left — but a skip shows whatever is already on screen, so the rules
+    //! that bound it matter more than the saving.
+    (:test)
+    function unchangedFramesAreSkippedButNeverIndefinitely(logger as Logger) as Boolean {
+        FrameGate.forget();
+        FrameGate.drawn = 0;
+        FrameGate.suppressed = 0;
+
+        var still = [1.0, 2.0, 3.0] as Array<Float>;
+        Test.assertMessage(FrameGate.shouldDraw(still),
+            "the first frame after forgetting must always be drawn");
+        Test.assertMessage(!FrameGate.shouldDraw([1.0, 2.0, 3.0] as Array<Float>),
+            "an identical frame must be skipped");
+
+        // A change of any kind must draw, including one only in the last slot.
+        Test.assertMessage(FrameGate.shouldDraw([1.0, 2.0, 4.0] as Array<Float>),
+            "a changed fingerprint must be drawn");
+        Test.assertMessage(!FrameGate.shouldDraw([1.0, 2.0, 4.0] as Array<Float>),
+            "and then settle back to skipping");
+
+        // The cap: something drawn over the face from outside is only repaired
+        // by a draw, so skips must not run on forever.
+        var run = 0;
+        for (var i = 0; i < 40; i++) {
+            if (FrameGate.shouldDraw([1.0, 2.0, 4.0] as Array<Float>)) {
+                Test.assertMessage(run <= FrameGate.MAX_SKIPS,
+                    "went " + run + " frames without drawing, cap is " +
+                    FrameGate.MAX_SKIPS);
+                run = 0;
+            } else {
+                run++;
+            }
+        }
+        Test.assertMessage(run <= FrameGate.MAX_SKIPS,
+            "the gate must never skip more than the cap in a row");
+
+        // forget() is what onShow and waking use; it must always draw next.
+        FrameGate.forget();
+        Test.assertMessage(FrameGate.shouldDraw([1.0, 2.0, 4.0] as Array<Float>),
+            "forget() must force the next frame to be drawn");
+
+        logger.debug("skipped " + FrameGate.skipPercent() + "% of frames");
+        Test.assertMessage(FrameGate.skipPercent() > 50,
+            "a still face should skip most of its frames, or this buys nothing");
+        Test.assertMessage(FrameGate.skipPercent() < 100,
+            "it must never skip all of them");
+
+        FrameGate.forget();
+        FrameGate.drawn = 0;
+        FrameGate.suppressed = 0;
+        return true;
+    }
+
     //! The frame-cost readout is the only way to see what a frame costs on the
     //! watch, so it has to survive a long session without its average drifting
     //! into meaninglessness or its counters overflowing.
@@ -813,17 +868,37 @@ module MatrixTest {
     //! The backing must land on the hands, and only on the hands.
     (:test)
     function handBackingFollowsTheHands(logger as Logger) as Boolean {
-        var up = [0.0, -1.0, 0.0, -1.0] as Array<Float>;
-        Test.assertMessage(HandBacking.covers(0, -100, up),
+        // Both hands straight up.
+        Test.assertMessage(HandBacking.covers(0, -100, 0.0, -1.0, 0.0, -1.0),
             "a dot on the hand axis must be covered");
-        Test.assertMessage(!HandBacking.covers(100, 0, up),
+        Test.assertMessage(!HandBacking.covers(100, 0, 0.0, -1.0, 0.0, -1.0),
             "a dot at right angles to the hand must not be covered");
-        Test.assertMessage(!HandBacking.covers(0, -HandBacking.MINUTE_REACH - 40, up),
+        Test.assertMessage(!HandBacking.covers(0, -HandBacking.MINUTE_REACH - 40,
+                0.0, -1.0, 0.0, -1.0),
             "a dot beyond the hand tip must not be covered");
-        Test.assertMessage(HandBacking.covers(HandBacking.HALF_WIDTH - 1, -100, up),
+        Test.assertMessage(HandBacking.covers(HandBacking.HALF_WIDTH - 1, -100,
+                0.0, -1.0, 0.0, -1.0),
             "a dot within the hand's width must be covered");
-        Test.assertMessage(!HandBacking.covers(HandBacking.HALF_WIDTH * 3, -100, up),
+        Test.assertMessage(!HandBacking.covers(HandBacking.HALF_WIDTH * 3, -100,
+                0.0, -1.0, 0.0, -1.0),
             "a dot well outside the hand's width must not be covered");
+
+        // The two hands are tested independently: a dot under the minute hand
+        // alone must still be covered, and the hour hand's shorter reach must
+        // not be lent to it. Collapsing three calls into one is exactly the
+        // kind of change that could drop one hand's test silently.
+        Test.assertMessage(HandBacking.covers(0, -100, 1.0, 0.0, 0.0, -1.0),
+            "a dot under the minute hand alone must be covered");
+        Test.assertMessage(HandBacking.covers(100, 0, 1.0, 0.0, 0.0, -1.0),
+            "a dot under the hour hand alone must be covered");
+        Test.assertMessage(
+            !HandBacking.covers(0, -HandBacking.HOUR_REACH - 20,
+                                0.0, -1.0, 1.0, 0.0),
+            "the hour hand must not reach as far as the minute hand");
+        Test.assertMessage(
+            HandBacking.covers(0, -HandBacking.HOUR_REACH - 20,
+                               1.0, 0.0, 0.0, -1.0),
+            "the minute hand does reach that far");
         return true;
     }
 }

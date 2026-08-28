@@ -40,21 +40,31 @@ module HandBacking {
     }
 
     //! Is this dot underneath either hand?
-    function covers(dx as Number, dy as Number, axes as Array<Float>) as Boolean {
-        return under(dx, dy, axes[0], axes[1], HOUR_REACH) ||
-               under(dx, dy, axes[2], axes[3], MINUTE_REACH);
-    }
-
-    //! Project the dot onto the hand's axis: `along` runs tip-wards, `across`
+    //!
+    //! Takes the axes already unpacked into scalars, and tests both hands
+    //! itself rather than calling a helper twice. This is called once per dot
+    //! with the hand backing on — measured at 11ms a frame in that mode, a
+    //! third of the whole frame — and at ~1100 dots the call overhead was most
+    //! of it. Three interpreted calls per dot became one.
+    //!
+    //! Projects the dot onto each hand's axis: `along` runs tip-wards, `across`
     //! is the perpendicular offset. A dot is covered when it falls inside the
     //! hand's length and half-width.
-    function under(dx as Number, dy as Number, ux as Float, uy as Float,
-                   reach as Number) as Boolean {
-        var along = dx * ux + dy * uy;
-        if (along > reach || along < -COUNTERWEIGHT) {
-            return false;
+    function covers(dx as Number, dy as Number,
+                    hourX as Float, hourY as Float,
+                    minuteX as Float, minuteY as Float) as Boolean {
+        var along = dx * hourX + dy * hourY;
+        if (along <= HOUR_REACH && along >= -COUNTERWEIGHT) {
+            var across = (dx * -hourY) + (dy * hourX);
+            if (across >= -HALF_WIDTH && across <= HALF_WIDTH) {
+                return true;
+            }
         }
-        var across = (dx * -uy) + (dy * ux);
-        return across.abs() <= HALF_WIDTH;
+        along = dx * minuteX + dy * minuteY;
+        if (along <= MINUTE_REACH && along >= -COUNTERWEIGHT) {
+            var across = (dx * -minuteY) + (dy * minuteX);
+            return across >= -HALF_WIDTH && across <= HALF_WIDTH;
+        }
+        return false;
     }
 }

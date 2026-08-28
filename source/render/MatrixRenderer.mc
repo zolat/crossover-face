@@ -37,6 +37,14 @@ module MatrixRenderer {
         // safety net for a settings change, which comes back through onShow.
         DotGrid.ensureBuilt();
 
+        // Anti-aliasing is sticky on the Dc, and it is ruinous here: measured,
+        // the same frame costs about four times as much with it on, because a
+        // cross in the rings layout is mostly diagonal strokes. The dots are
+        // meant to be crisp anyway, so it is turned off explicitly rather than
+        // left to whatever the last drawer wanted.
+        if (dc has :setAntiAlias) {
+            dc.setAntiAlias(false);
+        }
         dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_BLACK);
         dc.clear();
 
@@ -56,8 +64,28 @@ module MatrixRenderer {
         var rings = StatMap.rings;
         var rampTop = Palette.RAMP_STEPS - 1;
 
-        var axes = (backing != null) ? HandBacking.axes() : null;
+        // Unpack the hand axes once. With the backing on, covers() is the only
+        // call left in the dot loop; reading its four floats out of an array
+        // per dot as well would put most of that cost straight back.
+        var hasBacking = (backing != null);
+        var axes = hasBacking ? HandBacking.axes()
+                              : ([0.0, 0.0, 0.0, 0.0] as Array<Float>);
+        var hourX = axes[0];
+        var hourY = axes[1];
+        var minuteX = axes[2];
+        var minuteY = axes[3];
+        // Written as an explicit null test so the type narrows; hasBacking is
+        // the same condition, kept for the dot loop.
         var backingColour = (backing != null) ? backing : 0;
+
+        // Only the rings layout turns its crosses, so in the band layouts every
+        // dot shares one orientation. Reading it here rather than per dot saves
+        // five array lookups on every dot of two layouts out of three.
+        var radial = (StatMap.layout == StatMap.LAYOUT_RINGS);
+        var ax = arms[0];
+        var ay = arms[1];
+        var bx = arms[2];
+        var by = arms[3];
 
         var lastColour = -1;
         for (var ring = 0; ring < StatMap.RINGS; ring++) {
@@ -78,7 +106,8 @@ module MatrixRenderer {
                 var dy = ys[i];
                 var colour;
 
-                if (axes != null && HandBacking.covers(dx, dy, axes)) {
+                if (hasBacking && HandBacking.covers(dx, dy, hourX, hourY,
+                                                     minuteX, minuteY)) {
                     colour = backingColour;
                 } else {
                     var position = positionOf[i];
@@ -108,11 +137,13 @@ module MatrixRenderer {
                 // than the two fillRectangle calls this replaced.
                 var x = centreX + dx;
                 var y = centreY + dy;
-                var a = armOf[i];
-                var ax = arms[a];
-                var ay = arms[a + 1];
-                var bx = arms[a + 2];
-                var by = arms[a + 3];
+                if (radial) {
+                    var a = armOf[i];
+                    ax = arms[a];
+                    ay = arms[a + 1];
+                    bx = arms[a + 2];
+                    by = arms[a + 3];
+                }
                 dc.drawLine(x - ax, y - ay, x + ax, y + ay);
                 dc.drawLine(x - bx, y - by, x + bx, y + by);
             }

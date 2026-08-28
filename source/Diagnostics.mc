@@ -19,6 +19,7 @@ module Diagnostics {
     var frames as Number = 0;
     var totalMs as Number = 0;
     var worstMs as Number = 0;
+    var skips as Number = 0;
 
     function record(ms as Number) as Void {
         if (frames >= WINDOW) {
@@ -32,6 +33,13 @@ module Diagnostics {
         }
     }
 
+    //! A frame the gate skipped. Counted, never averaged in: folding a
+    //! skipped frame's ~0ms into the average would make the readout describe
+    //! how often the face draws rather than what a draw costs.
+    function recordSkip() as Void {
+        skips++;
+    }
+
     function averageMs() as Number {
         return (frames == 0) ? 0 : totalMs / frames;
     }
@@ -42,6 +50,7 @@ module Diagnostics {
             return "no frames yet";
         }
         var free = System.getSystemStats().freeMemory / 1024;
-        return averageMs() + "ms avg / " + worstMs + " worst / " + free + "k free";
+        return averageMs() + "ms avg / " + worstMs + " worst / " +
+               FrameGate.skipPercent() + "% skipped / " + free + "k free";
     }
 }

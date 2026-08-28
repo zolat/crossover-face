@@ -20,19 +20,63 @@ class CrossoverView extends WatchUi.WatchFace {
     function onLayout(dc as Dc) as Void {
         Config.reload();
         DotGrid.ensureBuilt();
+        FrameGate.forget();
         holdHandsAtSystemTime();
+    }
+
+    //! Coming back from the settings menu, which pops rather than re-laying
+    //! out. Rebuilding the cache here keeps it off the first frame back — the
+    //! menu's own Config.reload() only marks it stale — and the gate must
+    //! forget a frame it can no longer vouch for.
+    function onShow() as Void {
+        Config.reload();
+        DotGrid.ensureBuilt();
+        FrameGate.forget();
     }
 
     function onUpdate(dc as Dc) as Void {
         var started = System.getTimer();
         var lowPower = isLowPower();
-        var palette = lowPower ? Palette.alwaysOn : Palette.active;
+        var spans = StatMap.spans();
         // Backing is awake-only: in always-on it would cost luminance for a
         // detail nobody is looking at.
-        MatrixRenderer.draw(dc, StatMap.spans(), palette,
+        var backing = lowPower ? null : backingColour();
+
+        // Awake, this frame is almost always identical to the last one, and
+        // redrawing ~1100 dots to reproduce it is the largest avoidable cost
+        // the face has. Always-on is never skipped: a frame comes once a
+        // minute there, so there is nothing to save and its compositing is
+        // the least predictable.
+        if (!lowPower && !FrameGate.shouldDraw(fingerprint(spans, backing))) {
+            Diagnostics.recordSkip();
+            return;
+        }
+
+        var palette = lowPower ? Palette.alwaysOn : Palette.active;
+        MatrixRenderer.draw(dc, spans, palette,
                             lowPower ? Palette.rampAlwaysOn : Palette.rampActive,
-                            lowPower ? null : backingColour());
+                            backing);
         Diagnostics.record(System.getTimer() - started);
+    }
+
+    //! Everything that can change what the face looks like: the burn-in drift,
+    //! whether the hands are being backed, and every ring's span. The minute is
+    //! in there only when the backing is on, because that is the only time the
+    //! hands' own position decides which dots are lit.
+    private function fingerprint(spans as Array<Array<Float> >,
+                                 backing as Number?) as Array<Float> {
+        var drift = Drift.current();
+        var out = new [4 + (StatMap.RINGS * 2)] as Array<Float>;
+        out[0] = drift[0].toFloat();
+        out[1] = drift[1].toFloat();
+        out[2] = (backing == null) ? -1.0 : backing.toFloat();
+        out[3] = (backing == null) ? 0.0
+                                   : System.getClockTime().min.toFloat();
+        for (var i = 0; i < StatMap.RINGS; i++) {
+            out[4 + (i * 2)] = spans[i][0];
+            out[5 + (i * 2)] = spans[i][1];
+        }
+        return out;
     }
 
     //! The colour to place under the hands, or null when the option is off.
@@ -61,12 +105,14 @@ class CrossoverView extends WatchUi.WatchFace {
 
     function onEnterSleep() as Void {
         _asleep = true;
+        FrameGate.forget();
         WatchUi.requestUpdate();
     }
 
     function onExitSleep() as Void {
         _asleep = false;
         holdHandsAtSystemTime();
+        FrameGate.forget();
         WatchUi.requestUpdate();
     }
 
