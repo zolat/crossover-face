@@ -677,10 +677,137 @@ module MatrixTest {
         return true;
     }
 
+    //! The renderer walks the dots ring by ring, and every hoist it makes out
+    //! of its inner loop assumes this: each ring's dots are contiguous, and
+    //! within a ring they are still in the lattice's scan order. Scan order is
+    //! not cosmetic — in the band layouts a dot's position depends only on its
+    //! row, so scan order is fill order, and it is what makes each ring draw as
+    //! two long runs of one colour instead of hundreds of short ones.
+    (:test)
+    function ringsAreContiguousAndInScanOrder(logger as Logger) as Boolean {
+        for (var l = 0; l < ALL_LAYOUTS.size(); l++) {
+            Properties.setValue(StatMap.PROPERTY_LAYOUT, ALL_LAYOUTS[l]);
+            Config.reload();
+            DotGrid.build();
+
+            Test.assertEqualMessage(DotGrid.ringStart.size(), StatMap.RINGS + 1,
+                "ringStart needs one entry per ring plus the total");
+            Test.assertEqualMessage(DotGrid.ringStart[0], 0,
+                "the first ring must start at the first dot");
+            Test.assertEqualMessage(DotGrid.ringStart[StatMap.RINGS],
+                DotGrid.count, "the ring blocks must account for every dot");
+
+            var longestRun = 0;
+            for (var ring = 0; ring < StatMap.RINGS; ring++) {
+                var from = DotGrid.ringStart[ring];
+                var to = DotGrid.ringStart[ring + 1];
+                Test.assertMessage(to > from, "ring " + ring + " has no dots");
+
+                var previous = -1;
+                for (var i = from; i < to; i++) {
+                    Test.assertEqualMessage(DotGrid.ringOf[i], ring,
+                        "a dot inside ring " + ring + "'s block belongs to " +
+                        DotGrid.ringOf[i]);
+                    // Scan order: row first, then column, strictly increasing.
+                    var key = columnOf(DotGrid.ys[i]) * DotGrid.COLS +
+                              columnOf(DotGrid.xs[i]);
+                    Test.assertMessage(key > previous,
+                        "ring " + ring + " is out of scan order at " + i);
+                    previous = key;
+                }
+                var size = to - from;
+                if (size > longestRun) { longestRun = size; }
+            }
+            logger.debug("layout " + StatMap.layout + ": rings contiguous, " +
+                         "largest " + longestRun + " dots");
+        }
+        Properties.setValue(StatMap.PROPERTY_LAYOUT, StatMap.LAYOUT_BANDS_BOTTOM);
+        Config.reload();
+        return true;
+    }
+
+    //! MatrixRenderer inlines litBetween's two comparisons rather than calling
+    //! isLit per dot. The boundaries are where a copied comparison drifts — an
+    //! inline that used > instead of >= would light one dot fewer per ring and
+    //! nothing else would ever notice.
+    (:test)
+    function litTestsAgreeAtTheBoundaries(logger as Logger) as Boolean {
+        var spans = [
+            [0.0, 0.0] as Array<Float>,     // empty
+            [0.0, 1.0] as Array<Float>,     // full
+            [0.25, 0.75] as Array<Float>,   // a plain range
+            [0.75, 0.25] as Array<Float>,   // wrapping past the origin
+            [0.5, 0.5] as Array<Float>      // a single point
+        ] as Array<Array<Float> >;
+
+        var checked = 0;
+        for (var s = 0; s < spans.size(); s++) {
+            var span = spans[s];
+            var wraps = span[0] > span[1];
+            // Every hundredth, plus the two ends and the pixels either side of
+            // them, which is where the two forms can disagree.
+            var probes = [span[0], span[1], span[0] - 0.0001, span[0] + 0.0001,
+                          span[1] - 0.0001, span[1] + 0.0001] as Array<Float>;
+            for (var i = 0; i <= 100; i++) {
+                probes.add(i / 100.0);
+            }
+            for (var i = 0; i < probes.size(); i++) {
+                var position = probes[i];
+                Test.assertEqualMessage(
+                    StatMap.litBetween(position, span[0], span[1], wraps),
+                    StatMap.isLit(position, span),
+                    "the inlined lit test disagrees with isLit at " + position +
+                    " for span " + span[0] + ".." + span[1]);
+                checked++;
+            }
+        }
+        logger.debug("lit tests agree over " + checked + " probes");
+        return true;
+    }
+
     //! Recover a dot's column from its x offset — build() knows it, the cache
     //! does not store it, and ringFor needs it for the band layouts.
     function columnOf(dx as Number) as Number {
         return ((dx / (DotGrid.PITCH / 2)) + (DotGrid.COLS - 1)) / 2;
+    }
+
+    //! The frame-cost readout is the only way to see what a frame costs on the
+    //! watch, so it has to survive a long session without its average drifting
+    //! into meaninglessness or its counters overflowing.
+    (:test)
+    function frameCostAveragesRecentFrames(logger as Logger) as Boolean {
+        Diagnostics.frames = 0;
+        Diagnostics.totalMs = 0;
+        Diagnostics.worstMs = 0;
+        Test.assertMessage(Diagnostics.summary().equals("no frames yet"),
+            "with no frames recorded there is nothing to average");
+
+        for (var i = 0; i < 40; i++) {
+            Diagnostics.record(30);
+        }
+        Test.assertEqualMessage(Diagnostics.averageMs(), 30,
+            "a steady 30ms frame must average 30ms");
+        Diagnostics.record(90);
+        Test.assertEqualMessage(Diagnostics.worstMs, 90,
+            "the worst frame must be remembered");
+
+        // A day's worth of frames must not swamp a change that just happened.
+        for (var i = 0; i < 5000; i++) {
+            Diagnostics.record(30);
+        }
+        Test.assertMessage(Diagnostics.frames <= Diagnostics.WINDOW,
+            "the window must stay bounded, or the counters run away");
+        for (var i = 0; i < Diagnostics.WINDOW; i++) {
+            Diagnostics.record(10);
+        }
+        Test.assertMessage(Diagnostics.averageMs() < 20,
+            "the average must follow a sustained change, not average it away");
+        logger.debug("after the change: " + Diagnostics.summary());
+
+        Diagnostics.frames = 0;
+        Diagnostics.totalMs = 0;
+        Diagnostics.worstMs = 0;
+        return true;
     }
 
     //! The backing must land on the hands, and only on the hands.

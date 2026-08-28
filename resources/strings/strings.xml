@@ -16,6 +16,7 @@
     <string id="BackingDark">Dark</string>
 
     <string id="RingsTitle">Ring data</string>
+    <string id="DiagnosticsTitle">Frame cost</string>
     <string id="RingPrompt">Which reading this ring shows</string>
     <string id="Ring1Title">Ring 1 — outer / left</string>
     <string id="Ring2Title">Ring 2</string>

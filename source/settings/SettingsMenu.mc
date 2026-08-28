@@ -27,6 +27,9 @@ class SettingsMenu extends WatchUi.Menu2 {
         addItem(new WatchUi.MenuItem(
             Rez.Strings.BackingTitle, backingLabel(), :backing, null));
         addItem(new WatchUi.MenuItem(Rez.Strings.RingsTitle, null, :rings, null));
+        addItem(new WatchUi.MenuItem(
+            Rez.Strings.DiagnosticsTitle, Diagnostics.summary(),
+            :diagnostics, null));
     }
 
     //! Sub-labels are built from the current settings, so they go stale the
@@ -37,9 +40,11 @@ class SettingsMenu extends WatchUi.Menu2 {
         Menu2.onShow();
         setSubLabelOf(0, layoutLabel());
         setSubLabelOf(1, backingLabel());
+        setSubLabelOf(3, Diagnostics.summary());
     }
 
-    private function setSubLabelOf(index as Number, label as ResourceId) as Void {
+    private function setSubLabelOf(index as Number,
+                                   label as ResourceId or String) as Void {
         var item = getItem(index);
         if (item != null) {
             item.setSubLabel(label);
@@ -85,6 +90,11 @@ class SettingsMenuDelegate extends WatchUi.Menu2InputDelegate {
                  Rez.Strings.BackingWhite,
                  Rez.Strings.BackingDark] as Array<ResourceId>,
                 StatMap.backing));
+        } else if (id == :diagnostics) {
+            // Nothing to open — re-reading it is the useful action, since the
+            // figure moves while you are looking at it.
+            item.setSubLabel(Diagnostics.summary());
+            WatchUi.requestUpdate();
         }
     }
 

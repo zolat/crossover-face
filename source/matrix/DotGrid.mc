@@ -88,6 +88,12 @@ module DotGrid {
     var positionOf as Array<Float> = [] as Array<Float>;//! 0.0-1.0 along it
     var armOf as Array<Number> = [] as Array<Number>;   //! offset into ARMS
 
+    //! Where each ring's dots begin, with a final entry holding the total.
+    //! The dots are stored grouped by ring, so the renderer can walk one ring
+    //! at a time and hoist that ring's span, colours and lit test out of its
+    //! inner loop — the loop that runs ~1100 times every frame.
+    var ringStart as Array<Number> = [] as Array<Number>;
+
     //! Set when the layout has changed and the cache no longer describes it.
     var stale as Boolean = true;
 
@@ -179,31 +185,53 @@ module DotGrid {
         return lengths;
     }
 
-    //! Work out every dot's ring, position and orientation, in one pass.
+    //! Squared outer edge of each ring, so a ring test needs no square root.
+    function ringBounds(ringCount as Number) as Array<Number> {
+        var thickness = (RADIUS - HUB) / ringCount;
+        var bounds = new [ringCount] as Array<Number>;
+        for (var k = 0; k < ringCount; k++) {
+            var edge = RADIUS - (k + 1) * thickness;
+            bounds[k] = edge * edge;
+        }
+        return bounds;
+    }
+
+    //! Work out every dot's ring, position and orientation, and store them
+    //! grouped by ring.
     //!
     //! This has to finish inside a single watchdog budget, and earlier versions
-    //! did not. Four things keep it inside one now:
+    //! did not. Four things keep it inside one:
     //!
     //!   - it runs from onLayout, whose budget is a view's rather than an app
     //!     callback's. Building in onStart tripped the watchdog outright;
     //!   - the maths is inlined rather than calling out to StatMap, Angle and
-    //!     orientationFor per dot. Three interpreted calls across ~1100 dots
-    //!     was the bulk of the cost;
+    //!     orientationFor per dot;
     //!   - the expensive part is done once per *four* dots. The lattice is
-    //!     symmetric about both axes, so a dot in the top-left quadrant fixes
-    //!     its three mirror images: they share a ring and a cross orientation,
-    //!     and their positions round the dial are reflections of one angle.
-    //!     Only the array writes are paid per dot;
+    //!     symmetric about both axes, and with an even grid no dot sits on one,
+    //!     so every dot has three mirror images. They share a ring and a cross
+    //!     orientation, and their positions round the dial are reflections of a
+    //!     single angle. Only the array writes are paid per dot;
     //!   - the ring index comes from comparing *squared* distances against
-    //!     squared boundaries, so there is no square root, and the angle comes
-    //!     from a polynomial rather than Math.atan2.
+    //!     squared boundaries, and the angle from a polynomial rather than
+    //!     Math.atan2.
+    //!
+    //! The grouping is what the render loop is built around, and it is not just
+    //! a sort: within each ring the dots keep the order the lattice is scanned
+    //! in, top row to bottom. That matters because the renderer only changes
+    //! pen when the colour changes — and in the band layouts a dot's position
+    //! depends only on its row, so scan order *is* fill order and every ring
+    //! draws as two long runs rather than a few hundred short ones.
+    //!
+    //! Reconciling the two — compute by mirrored quadruple, store in scan order
+    //! — is what the cursors below are for: a dot's slot is decided by its ring
+    //! and its row, not by when it happens to be computed.
     //!
     //! StatMap.ringFor(), StatMap.positionOf() and orientationFor() remain the
     //! readable definition of this maths, and tests assert that this fast path
-    //! agrees with them for every dot — and that it fills every slot exactly
-    //! once, which is the failure mode the agreement check cannot see.
+    //! agrees with them for every dot, fills every slot exactly once, and
+    //! leaves each ring in scan order.
     function build() as Void {
-        var lengths = measureRows();
+        measureRows();
         var total = count;
 
         // Reuse the arrays when the lattice has not changed size, which is
@@ -221,30 +249,87 @@ module DotGrid {
         var centreFill = (layout == LAYOUT_BANDS_CENTRE_LOCAL);
         var ringCount = StatMap.RINGS;
         var lastRing = ringCount - 1;
+        var bounds = ringBounds(ringCount);
 
-        // Squared outer edge of each ring, so the ring test needs no sqrt.
-        var thickness = (RADIUS - HUB) / ringCount;
-        var bounds = new [ringCount] as Array<Number>;
-        for (var k = 0; k < ringCount; k++) {
-            var edge = RADIUS - (k + 1) * thickness;
-            bounds[k] = edge * edge;
+        // --- which ring every dot belongs to, and how many per ring per row --
+        //
+        // Worked out for the top-left quadrant only and mirrored, like the fill
+        // below. The rings are kept so the fill need not derive them twice;
+        // -1 marks a lattice cell that holds no dot.
+        var leftRingAt = new [HALF * HALF] as Array<Number>;
+        var rightRingAt = new [HALF * HALF] as Array<Number>;
+        var blocks = ringCount * ROWS;
+        var blockCount = new [blocks] as Array<Number>;
+        for (var i = 0; i < blocks; i++) {
+            blockCount[i] = 0;
         }
 
-        var topStart = 0;
         for (var r = 0; r < HALF; r++) {
-            var rowLen = lengths[r] * 2;
-            if (rowLen == 0) {
-                continue;
+            var v = (LAST - 2 * r) * STEP;
+            var vSq = v * v;
+            var mirrorRow = LAST - r;
+            var base = r * HALF;
+            for (var c = 0; c < HALF; c++) {
+                var u = (LAST - 2 * c) * STEP;
+                var distanceSq = u * u + vSq;
+                if (distanceSq > RADIUS_SQ || distanceSq < HUB_SQ) {
+                    leftRingAt[base + c] = -1;
+                    rightRingAt[base + c] = -1;
+                    continue;
+                }
+                var leftRing;
+                var rightRing;
+                if (radial) {
+                    var ring = 0;
+                    while (ring < lastRing && distanceSq < bounds[ring]) {
+                        ring++;
+                    }
+                    leftRing = ring;
+                    rightRing = ring;
+                } else {
+                    leftRing = c * ringCount / COLS;
+                    rightRing = (LAST - c) * ringCount / COLS;
+                    if (leftRing > lastRing) { leftRing = lastRing; }
+                    if (rightRing > lastRing) { rightRing = lastRing; }
+                }
+                leftRingAt[base + c] = leftRing;
+                rightRingAt[base + c] = rightRing;
+                blockCount[leftRing * ROWS + r]++;
+                blockCount[rightRing * ROWS + r]++;
+                blockCount[leftRing * ROWS + mirrorRow]++;
+                blockCount[rightRing * ROWS + mirrorRow]++;
             }
-            // Rows mirror about the midline, so the bottom row that matches
-            // this one holds the same columns in the same order.
-            var bottomStart = total - topStart - rowLen;
-            var rowEnd = rowLen - 1;
+        }
 
+        // --- turn those counts into a slot for every dot ---------------------
+        //
+        // Rings come one after another, and inside a ring the rows come in scan
+        // order. Each row's block is filled from both ends: the left half of the
+        // lattice is scanned outward-in so it fills forward, the right half is
+        // scanned inward-out so it fills backward. They meet in the middle, and
+        // the block ends up in column order.
+        ringStart = new [ringCount + 1] as Array<Number>;
+        var leftCursor = new [blocks] as Array<Number>;
+        var rightCursor = new [blocks] as Array<Number>;
+        var at = 0;
+        for (var ring = 0; ring < ringCount; ring++) {
+            ringStart[ring] = at;
+            for (var row = 0; row < ROWS; row++) {
+                var slot = ring * ROWS + row;
+                leftCursor[slot] = at;
+                at += blockCount[slot];
+                rightCursor[slot] = at - 1;
+            }
+        }
+        ringStart[ringCount] = at;
+
+        // --- the fill --------------------------------------------------------
+        for (var r = 0; r < HALF; r++) {
             var y = (2 * r - LAST) * STEP;      //! negative: the top half
             var v = -y;
-            var vSq = v * v;
             var vFloat = v.toFloat();
+            var mirrorRow = LAST - r;
+            var base = r * HALF;
 
             // In the band layouts every dot in a row shares its position, so
             // it is worked out once here rather than once per dot.
@@ -262,34 +347,39 @@ module DotGrid {
                 }
             }
 
-            var j = 0;
             for (var c = 0; c < HALF; c++) {
-                var x = (2 * c - LAST) * STEP;  //! negative: the left half
-                var u = -x;
-                var distanceSq = u * u + vSq;
-                if (distanceSq > RADIUS_SQ || distanceSq < HUB_SQ) {
+                var leftRing = leftRingAt[base + c];
+                if (leftRing < 0) {
                     continue;
                 }
+                var rightRing = rightRingAt[base + c];
+                var x = (2 * c - LAST) * STEP;  //! negative: the left half
+                var u = -x;
 
                 // The four dots this one piece of work fills.
-                var topLeft = topStart + j;
-                var topRight = topStart + rowEnd - j;
-                var bottomLeft = bottomStart + j;
-                var bottomRight = bottomStart + rowEnd - j;
+                var topLeftSlot = leftRing * ROWS + r;
+                var topRightSlot = rightRing * ROWS + r;
+                var bottomLeftSlot = leftRing * ROWS + mirrorRow;
+                var bottomRightSlot = rightRing * ROWS + mirrorRow;
+
+                var topLeft = leftCursor[topLeftSlot];
+                var topRight = rightCursor[topRightSlot];
+                var bottomLeft = leftCursor[bottomLeftSlot];
+                var bottomRight = rightCursor[bottomRightSlot];
+                leftCursor[topLeftSlot] = topLeft + 1;
+                rightCursor[topRightSlot] = topRight - 1;
+                leftCursor[bottomLeftSlot] = bottomLeft + 1;
+                rightCursor[bottomRightSlot] = bottomRight - 1;
 
                 xs[topLeft] = x;        ys[topLeft] = y;
                 xs[topRight] = u;       ys[topRight] = y;
                 xs[bottomLeft] = x;     ys[bottomLeft] = v;
                 xs[bottomRight] = u;    ys[bottomRight] = v;
 
-                if (radial) {
-                    var ring = 0;
-                    while (ring < lastRing && distanceSq < bounds[ring]) {
-                        ring++;
-                    }
-                    ringOf[topLeft] = ring;     ringOf[topRight] = ring;
-                    ringOf[bottomLeft] = ring;  ringOf[bottomRight] = ring;
+                ringOf[topLeft] = leftRing;     ringOf[bottomLeft] = leftRing;
+                ringOf[topRight] = rightRing;   ringOf[bottomRight] = rightRing;
 
+                if (radial) {
                     // Turns clockwise from twelve for the top-right quadrant,
                     // strictly between 0.0 and 0.25 — no dot sits on an axis.
                     // The other three quadrants are reflections of it.
@@ -323,13 +413,6 @@ module DotGrid {
                     armOf[topLeft] = aligned;       armOf[bottomRight] = aligned;
                     armOf[topRight] = mirrored;     armOf[bottomLeft] = mirrored;
                 } else {
-                    var leftRing = c * ringCount / COLS;
-                    var rightRing = (LAST - c) * ringCount / COLS;
-                    if (leftRing > lastRing) { leftRing = lastRing; }
-                    if (rightRing > lastRing) { rightRing = lastRing; }
-                    ringOf[topLeft] = leftRing;     ringOf[bottomLeft] = leftRing;
-                    ringOf[topRight] = rightRing;   ringOf[bottomRight] = rightRing;
-
                     positionOf[topLeft] = topPosition;
                     positionOf[topRight] = topPosition;
                     positionOf[bottomLeft] = bottomPosition;
@@ -338,9 +421,7 @@ module DotGrid {
                     armOf[topLeft] = 0;         armOf[topRight] = 0;
                     armOf[bottomLeft] = 0;      armOf[bottomRight] = 0;
                 }
-                j++;
             }
-            topStart += rowLen;
         }
 
         stale = false;

@@ -24,6 +24,7 @@ class CrossoverView extends WatchUi.WatchFace {
     }
 
     function onUpdate(dc as Dc) as Void {
+        var started = System.getTimer();
         var lowPower = isLowPower();
         var palette = lowPower ? Palette.alwaysOn : Palette.active;
         // Backing is awake-only: in always-on it would cost luminance for a
@@ -31,6 +32,7 @@ class CrossoverView extends WatchUi.WatchFace {
         MatrixRenderer.draw(dc, StatMap.spans(), palette,
                             lowPower ? Palette.rampAlwaysOn : Palette.rampActive,
                             lowPower ? null : backingColour());
+        Diagnostics.record(System.getTimer() - started);
     }
 
     //! The colour to place under the hands, or null when the option is off.

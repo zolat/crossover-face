@@ -118,17 +118,31 @@ module StatMap {
         return ((DotGrid.RADIUS - dy).toFloat() / SPAN);
     }
 
+    //! Is a dot at this position inside the span, given the span already
+    //! unpacked into its ends and whether it wraps?
+    //!
+    //! This is the exact shape MatrixRenderer inlines. The renderer walks the
+    //! dots ring by ring, so the unpacking and the wrap test hoist out of its
+    //! inner loop and only the two comparisons are left — and at ~1100 dots a
+    //! frame, a call here rather than a comparison cost about 6ms every frame.
+    //! isLit() below is this plus the unpacking, and litTestsAgree pins the two
+    //! together at the boundaries, which is where a copy of a comparison drifts.
+    function litBetween(position as Float, start as Float, end as Float,
+                        wraps as Boolean) as Boolean {
+        if (wraps) {
+            return (position >= start) || (position <= end);
+        }
+        return (position >= start) && (position <= end);
+    }
+
     //! Is a dot at this position inside the span?
     //!
     //! A span whose end is before its start wraps past the ring's origin —
     //! a sub-zero temperature range crossing twelve o'clock does exactly this,
-    //! running from, say, :55 round to :03. The renderer calls this per dot
-    //! rather than keeping its own copy, so the two cannot drift apart.
+    //! running from, say, :55 round to :03. This is the readable definition,
+    //! used by the tests and by anything not in the render loop.
     function isLit(position as Float, span as Array<Float>) as Boolean {
-        if (span[0] <= span[1]) {
-            return (position >= span[0]) && (position <= span[1]);
-        }
-        return (position >= span[0]) || (position <= span[1]);
+        return litBetween(position, span[0], span[1], span[0] > span[1]);
     }
 
     //! Classify a dot into a palette slot: ring * 2, plus 1 when lit.
