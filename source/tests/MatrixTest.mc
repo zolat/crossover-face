@@ -354,6 +354,90 @@ module MatrixTest {
         return true;
     }
 
+    //! Holding the fills back in always-on works by handing the renderer a
+    //! span nothing is inside, rather than branching ~1100 times a frame. That
+    //! only holds if no dot in any layout ever falls in it — and the obvious
+    //! wrong choice, (0, 0), lights any dot sitting exactly at the origin.
+    (:test)
+    function heldBackFillsLightNothingAnywhere(logger as Logger) as Boolean {
+        var nothing = StatMap.noSpans();
+        Test.assertMessage(!(StatMap.NEVER_LIT[0] > StatMap.NEVER_LIT[1]),
+            "the empty span must not read as wrapping, or it lights everything");
+
+        for (var l = 0; l < ALL_LAYOUTS.size(); l++) {
+            StatMap.layout = ALL_LAYOUTS[l];
+            var lit = 0;
+            var checked = 0;
+            for (var row = 0; row < DotGrid.ROWS; row++) {
+                var dy = DotGrid.offsetAt(row);
+                for (var col = 0; col < DotGrid.COLS; col++) {
+                    var dx = DotGrid.offsetAt(col);
+                    if (!DotGrid.contains(dx, dy)) {
+                        continue;
+                    }
+                    if (StatMap.classify(col, dx, dy, nothing) % 2 == 1) {
+                        lit++;
+                    }
+                    checked++;
+                }
+            }
+            logger.debug("layout " + StatMap.layout + ": " + lit +
+                         " of " + checked + " dots lit");
+            Test.assertEqualMessage(lit, 0,
+                "a dot is lit by the empty span in layout " + StatMap.layout);
+        }
+        StatMap.layout = StatMap.LAYOUT_BANDS_BOTTOM;
+        return true;
+    }
+
+    //! The reason to want it is not only that it looks calmer: the filled dots
+    //! are the brightest thing on the face and they barely move, which is
+    //! exactly what burns an AMOLED in. Holding them back has to actually cut
+    //! the light, or the option is cosmetic.
+    (:test)
+    function heldBackFillsCutAlwaysOnLuminance(logger as Logger) as Boolean {
+        Config.reload();
+        var busy = everySpan(0.0, 0.82);
+        for (var l = 0; l < ALL_LAYOUTS.size(); l++) {
+            StatMap.layout = ALL_LAYOUTS[l];
+            var withFills = frameLuminance(busy, Palette.alwaysOn);
+            var heldBack = frameLuminance(StatMap.noSpans(), Palette.alwaysOn);
+            logger.debug("layout " + StatMap.layout + ": with fills " +
+                         withFills + ", held back " + heldBack);
+            Test.assertMessage(heldBack < withFills,
+                "holding the fills back must lower always-on luminance");
+            Test.assertMessage(heldBack < BUDGET,
+                "and must still sit inside the burn-in budget");
+        }
+        StatMap.layout = StatMap.LAYOUT_BANDS_BOTTOM;
+        return true;
+    }
+
+    (:test)
+    function alwaysOnFillSettingIsClamped(logger as Logger) as Boolean {
+        Properties.setValue(StatMap.PROPERTY_ALWAYS_ON_FILL, 99);
+        Config.reload();
+        Test.assertEqualMessage(StatMap.alwaysOnFill,
+            StatMap.ALWAYS_ON_FILL_SHOWN,
+            "an out-of-range value must fall back to showing the data");
+
+        Properties.setValue(StatMap.PROPERTY_ALWAYS_ON_FILL,
+                            StatMap.ALWAYS_ON_FILL_HIDDEN);
+        Config.reload();
+        Test.assertEqualMessage(StatMap.alwaysOnFill,
+            StatMap.ALWAYS_ON_FILL_HIDDEN, "a valid value must be honoured");
+
+        // The menu reads its sub-label straight off the setting, so an
+        // unhandled value would index past the end of the label table.
+        var menu = new SettingsMenu();
+        menu.onShow();
+
+        Properties.setValue(StatMap.PROPERTY_ALWAYS_ON_FILL,
+                            StatMap.ALWAYS_ON_FILL_SHOWN);
+        Config.reload();
+        return true;
+    }
+
     //! Every ring full is the brightest frame the face can draw. If that fits
     //! the budget, no real reading can blank the screen.
     (:test)
@@ -525,6 +609,10 @@ module MatrixTest {
         return (label == null) ? "" : label.toString();
     }
 
+    //! Every settings row that shows a value, by index. The rings row is not
+    //! here: it opens a sub-menu and carries no value of its own.
+    const MENU_VALUE_ROWS = [0, 1, 2, 4] as Array<Number>;
+
     (:test)
     function settingsMenuRefreshesItsSubLabels(logger as Logger) as Boolean {
         Properties.setValue(StatMap.PROPERTY_LAYOUT, StatMap.LAYOUT_BANDS_BOTTOM);
@@ -542,6 +630,18 @@ module MatrixTest {
         logger.debug("was '" + before + "', now '" + subLabelOf(menu, 0) + "'");
         Test.assertMessage(!subLabelOf(menu, 0).equals(before),
             "onShow must refresh the sub-label to the new setting");
+
+        // onShow refreshes rows by index, so inserting a row silently points
+        // the refreshes at the wrong ones. Every row that carries a value must
+        // still have one after a refresh.
+        for (var i = 0; i < MENU_VALUE_ROWS.size(); i++) {
+            var row = MENU_VALUE_ROWS[i];
+            Test.assertMessage(menu.getItem(row) != null,
+                "menu row " + row + " is missing");
+            Test.assertMessage(subLabelOf(menu, row).length() > 0,
+                "menu row " + row + " lost its sub-label — the indexes " +
+                "onShow refreshes have drifted from the rows it adds");
+        }
 
         Properties.setValue(StatMap.PROPERTY_LAYOUT, StatMap.LAYOUT_BANDS_BOTTOM);
         Config.reload();

@@ -37,7 +37,11 @@ class CrossoverView extends WatchUi.WatchFace {
     function onUpdate(dc as Dc) as Void {
         var started = System.getTimer();
         var lowPower = isLowPower();
-        var spans = StatMap.spans();
+        // Held back in always-on when asked: the field keeps its colour but
+        // loses its waterlines, and the data comes back on a wrist raise.
+        var spans = (lowPower &&
+                     StatMap.alwaysOnFill == StatMap.ALWAYS_ON_FILL_HIDDEN)
+            ? StatMap.noSpans() : StatMap.spans();
         // Backing is awake-only: in always-on it would cost luminance for a
         // detail nobody is looking at.
         var backing = lowPower ? null : backingColour();

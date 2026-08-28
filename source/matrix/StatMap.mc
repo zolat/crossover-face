@@ -23,8 +23,15 @@ module StatMap {
         BACKING_DARK = 2
     }
 
+    //! Whether always-on shows the data or just the bare field of dots.
+    enum AlwaysOnFill {
+        ALWAYS_ON_FILL_SHOWN = 0,   //! The same image awake and asleep.
+        ALWAYS_ON_FILL_HIDDEN = 1   //! Colour only; the data appears on a raise.
+    }
+
     const PROPERTY_LAYOUT = "layout";
     const PROPERTY_BACKING = "handBacking";
+    const PROPERTY_ALWAYS_ON_FILL = "alwaysOnFill";
 
     //! Four rings, each independently assigned to a Source.
     const RINGS = 4;
@@ -35,6 +42,7 @@ module StatMap {
 
     var layout as Number = LAYOUT_BANDS_BOTTOM;
     var backing as Number = BACKING_OFF;
+    var alwaysOnFill as Number = ALWAYS_ON_FILL_SHOWN;
 
     //! Which source each ring shows. Index 0 is the leftmost band, or the
     //! outermost ring.
@@ -52,6 +60,8 @@ module StatMap {
                             LAYOUT_BANDS_BOTTOM, LAYOUT_RINGS);
         backing = readNumber(PROPERTY_BACKING, BACKING_OFF,
                              BACKING_OFF, BACKING_DARK);
+        alwaysOnFill = readNumber(PROPERTY_ALWAYS_ON_FILL, ALWAYS_ON_FILL_SHOWN,
+                                  ALWAYS_ON_FILL_SHOWN, ALWAYS_ON_FILL_HIDDEN);
 
         var defaults = [Source.SOURCE_STEPS, Source.SOURCE_HEART_RATE,
                         Source.SOURCE_BATTERY, Source.SOURCE_BODY_BATTERY]
@@ -79,6 +89,26 @@ module StatMap {
             value = fallback;
         }
         return value;
+    }
+
+    //! A span nothing is inside.
+    //!
+    //! Positions run from 0.0 to below 1.0, so a span sitting out at 2.0 can
+    //! never contain one. It also does not read as wrapping, since its start
+    //! is not after its end — a wrapping span would light everything *outside*
+    //! itself, which is the opposite of what this is for.
+    //!
+    //! This is how always-on hides the fills: not a branch in the render loop
+    //! that runs ~1100 times a frame, just a span nothing falls in.
+    const NEVER_LIT = [2.0, 2.0] as Array<Float>;
+
+    //! Every ring empty, for always-on when the fills are held back.
+    function noSpans() as Array<Array<Float> > {
+        var out = new [RINGS] as Array<Array<Float> >;
+        for (var i = 0; i < RINGS; i++) {
+            out[i] = NEVER_LIT;
+        }
+        return out;
     }
 
     //! Current span for every ring. Read once per frame.

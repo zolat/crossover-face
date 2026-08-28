@@ -361,6 +361,22 @@ def main(outdir: str = "build/mockups") -> int:
         sheet(panels, f"{variant.upper()} — active vs always-on").save(path)
         written.append(path)
 
+    # 3b. Always-on with the fills held back: the data appears when you look.
+    #     A span of (2, 2) can never contain a position, which is how the face
+    #     itself hides them — no branch in the render loop, just a span that
+    #     nothing falls inside.
+    nothing = [(2.0, 2.0)] * 4
+    for variant in VARIANTS:
+        panels = []
+        for label, spans in (("ALWAYS-ON, data shown", values),
+                             ("ALWAYS-ON, data hidden", nothing)):
+            face = render(variant, spans, always_on=True)
+            panels.append((f"{label}   lum {measure(face) * 100:.2f}%",
+                           composite(face)))
+        path = os.path.join(outdir, f"06-always-on-fill-{variant}.png")
+        sheet(panels, f"{variant.upper()} — always-on with and without the fills").save(path)
+        written.append(path)
+
     # 4. Worst case: every stat at 100%, the frame the luminance test guards.
     panels = []
     for variant in VARIANTS:

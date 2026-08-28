@@ -11,6 +11,10 @@
 
     <string id="BackingTitle">Behind hands</string>
     <string id="BackingPrompt">Clears the dots under the hands while the watch is awake</string>
+    <string id="AlwaysOnFillTitle">Always-on data</string>
+    <string id="AlwaysOnFillPrompt">Whether always-on shows the levels or just the colours</string>
+    <string id="AlwaysOnFillShown">Shown</string>
+    <string id="AlwaysOnFillHidden">Colour only</string>
     <string id="BackingOff">Off</string>
     <string id="BackingWhite">White</string>
     <string id="BackingDark">Dark</string>

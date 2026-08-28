@@ -13,6 +13,12 @@
             <listEntry value="2">@Strings.BackingDark</listEntry>
         </settingConfig>
     </setting>
+    <setting propertyKey="@Properties.alwaysOnFill" title="@Strings.AlwaysOnFillTitle" prompt="@Strings.AlwaysOnFillPrompt">
+        <settingConfig type="list">
+            <listEntry value="0">@Strings.AlwaysOnFillShown</listEntry>
+            <listEntry value="1">@Strings.AlwaysOnFillHidden</listEntry>
+        </settingConfig>
+    </setting>
     <setting propertyKey="@Properties.ring1" title="@Strings.Ring1Title" prompt="@Strings.RingPrompt">
         <settingConfig type="list">
             <listEntry value="0">@Strings.SourceSteps</listEntry>

@@ -4,6 +4,9 @@
     <property id="layout" type="number">0</property>
     <!-- 0 off, 1 white, 2 dark. Kept in sync with StatMap.Backing. -->
     <property id="handBacking" type="number">0</property>
+    <!-- 0 show the data in always-on, 1 colour only.
+         Kept in sync with StatMap.AlwaysOnFill. -->
+    <property id="alwaysOnFill" type="number">0</property>
     <!-- Which Source each ring shows. See Source.Kind:
          0 steps, 1 heart rate, 2 battery, 3 body battery,
          4 temperature range, 5 rain chance, 6 off. -->
