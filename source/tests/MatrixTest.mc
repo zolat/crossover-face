@@ -302,8 +302,8 @@ module MatrixTest {
                 "source " + kind + " reported a span outside 0-1");
         }
 
-        // Intensity minutes is a level, so it fills from the origin. The
-        // simulator reports no activity, which is exactly the null-goal path.
+        // Intensity minutes is a level, so it fills from the origin whatever
+        // the week's activity happens to be.
         var minutes = Source.span(Source.SOURCE_INTENSITY_MINUTES);
         Test.assertEqualMessage(minutes[0], 0.0,
             "a level must start at the origin");
