@@ -16,7 +16,9 @@ make build      # debug .prg for the simulator
 make sim        # build, start the simulator if needed, sideload, stream println
 make test       # build with -t, run the 21-test suite in the simulator
 make package    # signed .iq for the store
-make install    # sideload to a USB watch (opens OpenMTP; see README)
+make install    # build, verify MTP mode, push straight to the watch
+make push       # build and push, skipping the checks
+make reveal     # fallback: open OpenMTP for a manual drag
 make sdk-info   # resolved SDK path, device and key
 ```
 
@@ -47,6 +49,11 @@ python3 tools/luminance.py <face.png>   # measure against the 10% AMOLED budget
 - **A killed simulator looks like a test failure.** If `make test` prints nothing but
   `TESTS FAILED`, the simulator died mid-run (a parallel session restarting it will do this).
   Re-run before believing it.
+- **The watch must be in MTP mode and OpenMTP must not be running.** Only one process may
+  claim the USB interface; `make push` quits OpenMTP for you. `idProduct 0x5246` (21062) is MTP,
+  `0x0003` is Garmin's proprietary mode, which cannot be written to — answer **yes** to
+  *Use MTP?* on the watch. Note that `ioreg` prints `idProduct` *before* `idVendor`, so a
+  `grep -A` window anchored on the vendor will silently miss it.
 - **`luminance.py` wants a raw 390×390 face render**, not the contact sheets in `build/mockups/`
   — a sheet measures meaninglessly high. `mockup.py` prints per-face figures itself.
 
@@ -138,6 +145,20 @@ Dots are **crosses, not squares** (2·DOT−1 = 9 lit pixels, not 25) — that i
 inside the luminance budget. `Drift`'s −2/+3 offsets are forced by the 10px pitch and 5px dot:
 they are exactly DOT apart and consume exactly the slack, so a dot neither overlaps itself nor
 lands on its neighbour. A symmetric ±3 breaks this; `driftDutyCycleIsOnePhaseInFour` catches it.
+
+### Sideloading is automated — don't reintroduce the manual drag
+
+`tools/mtp_push.py` drives OpenMTP's own MTP engine (`kalam.dylib`, an arm64 Go library inside
+the app bundle) through ctypes, so `make install` pushes the `.prg` with no GUI. libmtp is not
+an option: `libusb_claim_interface()` returns `-3` because macOS's Image Capture daemon holds
+the interface, so `mtp-detect` finds the watch and still cannot open it.
+
+Two traps live in that driver. The exported callbacks read `on_cb_result_t*`, which looks like
+a pointer to a function pointer but is not — kalam calls the address it is handed, so `byref()`
+aborts with SIGBUS at exactly the value passed. And a ctypes callback that gets garbage
+collected while Go still holds it is a segfault, which is why they are kept on the instance.
+The JSON contract is transcribed from OpenMTP's own unminified bindings in `app.asar`; if
+OpenMTP ships a breaking change, re-read them there rather than guessing.
 
 ## Notes
 

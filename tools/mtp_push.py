@@ -65,7 +65,7 @@ class Kalam:
     """
 
     def __init__(self, dylib: str = DYLIB, timeout: float = 180.0,
-                 abi: str = "byref"):
+                 abi: str = "direct"):
         if not os.path.exists(dylib):
             raise KalamError(
                 f"kalam not found at {dylib}\n"
@@ -82,10 +82,12 @@ class Kalam:
     def _as_arg(self, callback):
         """How a callback is handed over.
 
-        The exported signature is `on_cb_result_t*` — a pointer to a function
-        pointer — so byref() is the reading that matches the header. Whether
-        cgo actually dereferences it is not something the header settles, so
-        the other reading stays available behind --abi for one experiment.
+        The exported signature reads `on_cb_result_t*`, which looks like a
+        pointer to a function pointer, but kalam's C shim does
+        `send_cb_result(cb, data)` -> `cb(data)`: it calls the address it is
+        given. Passing byref() therefore hands it the address of the pointer
+        and it jumps into the stack — SIGBUS, with the faulting pc equal to
+        the value passed. The function pointer goes over directly.
         """
         return ctypes.byref(callback) if self._abi == "byref" else callback
 
@@ -288,7 +290,7 @@ def main(argv: list[str] | None = None) -> int:
                         help="storage id (default: the first reported)")
     parser.add_argument("--timeout", type=float, default=180.0,
                         help="seconds to wait for any one call")
-    parser.add_argument("--abi", choices=("byref", "direct"), default="byref",
+    parser.add_argument("--abi", choices=("byref", "direct"), default="direct",
                         help="how callbacks are passed (see Kalam._as_arg)")
     args = parser.parse_args(argv)
 

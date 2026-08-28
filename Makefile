@@ -11,11 +11,15 @@ NAME   := CrossoverFace
 PRG := bin/$(NAME).prg
 IQ  := bin/$(NAME).iq
 
+PUSH  := tools/mtp_push.py
+KALAM := /Applications/OpenMTP.app/Contents/Resources/bin/arm64/kalam.dylib
+
 MONKEYC  := $(SDK)bin/monkeyc
 MONKEYDO := $(SDK)bin/monkeydo
 SIMULATOR := $(SDK)bin/connectiq
 
-.PHONY: all build test sim simulator-up install package clean sdk-info
+.PHONY: all build test sim simulator-up install push push-built reveal \
+        package clean sdk-info
 
 all: build
 
@@ -66,14 +70,41 @@ install: build
 		echo "No Garmin device on USB. Connect the watch with a data cable."; \
 		exit 1; \
 	fi; \
-	echo "Watch is connected over MTP, which macOS cannot mount."; \
-	echo "Opening OpenMTP — drag the revealed file into GARMIN/Apps/"; \
-	echo; \
-	echo "  $(PRG)"; \
-	echo; \
-	echo "Then on the watch: hold MENU -> Watch Face -> Crossover Face"; \
-	open -a OpenMTP 2>/dev/null || echo "(brew install --cask openmtp)"; \
-	open -R $(PRG)
+	if ! ioreg -p IOUSB -w0 -l 2>/dev/null | grep -q '"idProduct" = 21062'; then \
+		echo "The watch is on USB but not in MTP mode (needs idProduct 0x5246)."; \
+		echo "Unplug it, plug it back in, and answer YES to \"Use MTP?\"."; \
+		exit 1; \
+	fi; \
+	if [ ! -f "$(KALAM)" ]; then \
+		echo "OpenMTP is not installed, so there is no MTP engine to drive:"; \
+		echo "  brew install --cask openmtp"; \
+		exit 1; \
+	fi; \
+	$(MAKE) -s push-built || { \
+		echo; echo "Direct push failed — falling back to the manual drag."; \
+		$(MAKE) -s reveal; \
+	}
+
+## Push straight to the watch over MTP — no GUI, no drag.
+## Drives OpenMTP's own MTP engine (kalam.dylib) through tools/mtp_push.py.
+push: build push-built
+
+## The push itself, assuming bin/ is already current. install: calls this
+## rather than push: so the face is not compiled twice.
+push-built:
+	@if pgrep -f 'OpenMTP.app/Contents/MacOS/OpenMTP' >/dev/null; then \
+		echo "Quitting OpenMTP — only one process may claim the watch."; \
+		osascript -e 'quit app "OpenMTP"' >/dev/null 2>&1; /bin/sleep 2; \
+	fi
+	@python3 $(PUSH) $(PRG)
+	@echo "On the watch: hold MENU -> Watch Face -> Crossover Face"
+
+## The old manual route, kept as the fallback: open OpenMTP and reveal the
+## .prg so it can be dragged into GARMIN/Apps by hand.
+reveal: build
+	@echo "Drag the revealed file into GARMIN/Apps/"; echo; echo "  $(PRG)"; echo
+	@open -a OpenMTP 2>/dev/null || echo "(brew install --cask openmtp)"
+	@open -R $(PRG)
 
 ## Signed store package.
 package:

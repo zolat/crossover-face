@@ -11,7 +11,8 @@ physical analogue hands sweep over it without ever obscuring anything.
 ```sh
 make build      # compile for the simulator
 make sim        # launch the simulator and sideload
-make install    # sideload onto a USB-connected watch
+make install    # push straight onto a USB-connected watch, no GUI
+make push       # same, skipping the mass-storage / USB-mode checks
 make test       # run the unit tests
 make package    # signed .iq for the Connect IQ Store
 make sdk-info   # show resolved SDK path, device and key
@@ -258,35 +259,86 @@ the mockups stay an honest preview rather than drifting into wishful thinking.
 ## Installing on the watch
 
 ```sh
-make install
+make install    # build, check the watch is in MTP mode, push
+make push       # build and push, skipping the checks
+make reveal     # the old manual route, kept as a fallback
 ```
 
-**This device generation is MTP-only.** Garmin moved away from USB mass storage, so the
-watch never appears in `/Volumes` and there is nothing to `cp` to. The USB Mode prompt on
-the watch offers two things, and neither is mass storage:
+The face goes onto the watch **directly, with no GUI and no drag**. `make
+install` quits OpenMTP first if it is running — only one process may claim the
+watch's USB interface at a time — and afterwards verifies the file against the
+watch's own directory listing rather than trusting the transfer to have worked.
+
+**This device generation is MTP-only.** Garmin moved away from USB mass storage,
+so the watch never appears in `/Volumes`. The USB Mode prompt on the watch offers
+two things, and neither is mass storage:
 
 | Answer | What you get | Mountable? |
 |---|---|---|
 | **Yes, use MTP** | MTP (`idProduct 0x5246`) — what you want | No, but MTP clients can reach it |
 | No | Garmin's proprietary protocol (`idProduct 0x0003`) | No, and it may not even charge |
 
-So answer **yes** to *Use MTP?*, then `make install` opens [OpenMTP](https://openmtp.ganeshrvel.com/)
-and reveals the `.prg` in Finder. Drag it into **GARMIN/Apps/** — that one file is all the watch needs. The
-`.prg.debug.xml` beside it stays on your Mac; it symbolicates crash logs pulled from
-`GARMIN/Apps/LOGS/`. Then on the watch hold **MENU → Watch Face → Crossover Face**.
+So answer **yes** to *Use MTP?*. If the watch is plugged in but sitting in
+proprietary mode, `make install` says so and stops rather than failing obscurely.
+Then on the watch hold **MENU → Watch Face → Crossover Face**. The
+`.prg.debug.xml` beside the `.prg` stays on your Mac; it symbolicates crash logs
+pulled from `GARMIN/Apps/LOGS/`.
 
-`libmtp`'s CLI (`mtp-sendfile`) does *detect* the watch, but cannot write to it: Garmin's
-MTP implementation does not support the bulk-metadata call libmtp uses to resolve a parent
-folder, so every send fails with `could not get storage id from parent id`. OpenMTP walks
-the tree itself and works. If you want to confirm the Mac sees the watch at all:
+### How the push works
 
-```sh
-ioreg -p IOUSB -w0 -l | grep -E '"idVendor"|"idProduct"'   # Garmin is idVendor 2334 (0x091E)
-mtp-detect | grep -i "friendly name"                       # should say Instinct Crossover AMOLED
+macOS ships no usable MTP client, and **libmtp cannot talk to this watch**:
+`libusb_claim_interface()` returns `-3`, access denied, because macOS's own Image
+Capture daemon (`icdd`) holds the interface. `mtp-detect` therefore finds the
+device and still cannot open it:
+
+```
+Device 0 (VID=091e and PID=5246) is UNKNOWN in libmtp v1.1.23.
+error returned by libusb_claim_interface() = -3
+LIBMTP PANIC: Unable to initialize device
 ```
 
-`make install` still copies directly if a mass-storage volume *is* present, so it keeps
-working for older Garmin devices.
+OpenMTP works where libmtp does not — and its MTP engine is not the GUI. It is a
+Go library, kalam, shipped inside the app bundle as a plain arm64 dylib with a C
+ABI:
+
+```
+/Applications/OpenMTP.app/Contents/Resources/bin/arm64/kalam.dylib
+```
+
+`tools/mtp_push.py` drives that dylib directly through ctypes, so the build loop
+gets the engine that already works with this watch, minus the drag. Nothing is
+reimplemented and nothing is patched — the library is loaded out of the installed
+app exactly as OpenMTP loads it, which means **OpenMTP is still a dependency, but
+only as somewhere to find the library.** It never runs.
+
+The JSON contract the driver speaks is transcribed from OpenMTP 3.3.0's own
+bindings, which ship unminified inside `app.asar`, rather than guessed from the
+exported symbols.
+
+One trap worth recording, because the header actively misleads. The export reads:
+
+```c
+void Initialize(on_cb_result_t* onDonePtr);   // typedef void (*on_cb_result_t)(char*)
+```
+
+which looks like a pointer *to* a function pointer. It is not — kalam calls the
+address it is handed. Passing `byref()` makes Go jump into the stack and abort
+with a `SIGBUS` whose faulting pc is exactly the value passed. The function
+pointer goes over directly.
+
+The driver is usable on its own, and is the quickest way to see what is actually
+on the watch:
+
+```sh
+python3 tools/mtp_push.py --info            # device, firmware, storages
+python3 tools/mtp_push.py --ls /GARMIN/Apps # list a folder
+```
+
+If the push cannot run — no OpenMTP installed, watch in the wrong mode, anything
+else — `make install` falls back to the old behaviour of opening OpenMTP and
+revealing the `.prg` for a manual drag. `make install` also still copies directly
+if a mass-storage volume *is* present, so it keeps working for older Garmin
+devices.
 
 ## Settings
 
@@ -494,35 +546,86 @@ the mockups stay an honest preview rather than drifting into wishful thinking.
 ## Installing on the watch
 
 ```sh
-make install
+make install    # build, check the watch is in MTP mode, push
+make push       # build and push, skipping the checks
+make reveal     # the old manual route, kept as a fallback
 ```
 
-**This device generation is MTP-only.** Garmin moved away from USB mass storage, so the
-watch never appears in `/Volumes` and there is nothing to `cp` to. The USB Mode prompt on
-the watch offers two things, and neither is mass storage:
+The face goes onto the watch **directly, with no GUI and no drag**. `make
+install` quits OpenMTP first if it is running — only one process may claim the
+watch's USB interface at a time — and afterwards verifies the file against the
+watch's own directory listing rather than trusting the transfer to have worked.
+
+**This device generation is MTP-only.** Garmin moved away from USB mass storage,
+so the watch never appears in `/Volumes`. The USB Mode prompt on the watch offers
+two things, and neither is mass storage:
 
 | Answer | What you get | Mountable? |
 |---|---|---|
 | **Yes, use MTP** | MTP (`idProduct 0x5246`) — what you want | No, but MTP clients can reach it |
 | No | Garmin's proprietary protocol (`idProduct 0x0003`) | No, and it may not even charge |
 
-So answer **yes** to *Use MTP?*, then `make install` opens [OpenMTP](https://openmtp.ganeshrvel.com/)
-and reveals the `.prg` in Finder. Drag it into **GARMIN/Apps/** — that one file is all the watch needs. The
-`.prg.debug.xml` beside it stays on your Mac; it symbolicates crash logs pulled from
-`GARMIN/Apps/LOGS/`. Then on the watch hold **MENU → Watch Face → Crossover Face**.
+So answer **yes** to *Use MTP?*. If the watch is plugged in but sitting in
+proprietary mode, `make install` says so and stops rather than failing obscurely.
+Then on the watch hold **MENU → Watch Face → Crossover Face**. The
+`.prg.debug.xml` beside the `.prg` stays on your Mac; it symbolicates crash logs
+pulled from `GARMIN/Apps/LOGS/`.
 
-`libmtp`'s CLI (`mtp-sendfile`) does *detect* the watch, but cannot write to it: Garmin's
-MTP implementation does not support the bulk-metadata call libmtp uses to resolve a parent
-folder, so every send fails with `could not get storage id from parent id`. OpenMTP walks
-the tree itself and works. If you want to confirm the Mac sees the watch at all:
+### How the push works
 
-```sh
-ioreg -p IOUSB -w0 -l | grep -E '"idVendor"|"idProduct"'   # Garmin is idVendor 2334 (0x091E)
-mtp-detect | grep -i "friendly name"                       # should say Instinct Crossover AMOLED
+macOS ships no usable MTP client, and **libmtp cannot talk to this watch**:
+`libusb_claim_interface()` returns `-3`, access denied, because macOS's own Image
+Capture daemon (`icdd`) holds the interface. `mtp-detect` therefore finds the
+device and still cannot open it:
+
+```
+Device 0 (VID=091e and PID=5246) is UNKNOWN in libmtp v1.1.23.
+error returned by libusb_claim_interface() = -3
+LIBMTP PANIC: Unable to initialize device
 ```
 
-`make install` still copies directly if a mass-storage volume *is* present, so it keeps
-working for older Garmin devices.
+OpenMTP works where libmtp does not — and its MTP engine is not the GUI. It is a
+Go library, kalam, shipped inside the app bundle as a plain arm64 dylib with a C
+ABI:
+
+```
+/Applications/OpenMTP.app/Contents/Resources/bin/arm64/kalam.dylib
+```
+
+`tools/mtp_push.py` drives that dylib directly through ctypes, so the build loop
+gets the engine that already works with this watch, minus the drag. Nothing is
+reimplemented and nothing is patched — the library is loaded out of the installed
+app exactly as OpenMTP loads it, which means **OpenMTP is still a dependency, but
+only as somewhere to find the library.** It never runs.
+
+The JSON contract the driver speaks is transcribed from OpenMTP 3.3.0's own
+bindings, which ship unminified inside `app.asar`, rather than guessed from the
+exported symbols.
+
+One trap worth recording, because the header actively misleads. The export reads:
+
+```c
+void Initialize(on_cb_result_t* onDonePtr);   // typedef void (*on_cb_result_t)(char*)
+```
+
+which looks like a pointer *to* a function pointer. It is not — kalam calls the
+address it is handed. Passing `byref()` makes Go jump into the stack and abort
+with a `SIGBUS` whose faulting pc is exactly the value passed. The function
+pointer goes over directly.
+
+The driver is usable on its own, and is the quickest way to see what is actually
+on the watch:
+
+```sh
+python3 tools/mtp_push.py --info            # device, firmware, storages
+python3 tools/mtp_push.py --ls /GARMIN/Apps # list a folder
+```
+
+If the push cannot run — no OpenMTP installed, watch in the wrong mode, anything
+else — `make install` falls back to the old behaviour of opening OpenMTP and
+revealing the `.prg` for a manual drag. `make install` also still copies directly
+if a mass-storage volume *is* present, so it keeps working for older Garmin
+devices.
 
 ## Settings
 
@@ -605,7 +708,10 @@ resources/
   properties.xml      the layout setting's stored value
   settings/           how that setting is presented in Garmin Connect
   strings/            app name and setting labels
-tools/                mockup + luminance measurement
+tools/
+  mockup.py           design mockups, rendered into the device art
+  luminance.py        always-on luminance budget measurement
+  mtp_push.py         push the .prg to the watch over MTP, no GUI
 ```
 
 The signing key is deliberately outside the repo, and `.gitignore` covers `*.der` / `*.pem`
