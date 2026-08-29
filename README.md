@@ -392,6 +392,12 @@ inside the mark's window span three degrees of angle on a square lattice, so a r
 them staggers instead of lining up. Nothing made of lattice dots can be a straight line at an
 arbitrary angle. One dot cannot be crooked.
 
+That dot is **filled, not a cross**. Every other dot on the face is two thin strokes, so a
+white cross among eleven hundred of them is just another cross — it was tried, and at arm's
+length it vanished. A solid block is the only shape on the field that is not a cross, and
+that, rather than the colour, is what makes it read as a mark. It costs nine lit pixels
+becoming twenty-five, once.
+
 Which dot is decided by `DotGrid.markedDot()`: of the dots inside a window around the marked
 position, the one nearest the middle of its ring — the middle column of a band, the mid
 radius of a ring — so the mark sits in the body of its ring rather than trailing off at the

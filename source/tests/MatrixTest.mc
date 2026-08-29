@@ -1072,8 +1072,10 @@ module MatrixTest {
             var lum = relativeLuminance(Palette.active[ring * 2 + 1]);
             if (lum < dimmest) { dimmest = lum; }
         }
+        // A marked dot is filled rather than a cross, so it lights DOT squared
+        // pixels where an ordinary dot lights 2*DOT-1.
         var step = (relativeLuminance(Palette.MARKER) - dimmest) *
-                   LIT_PIXELS_PER_DOT * StatMap.RINGS / area;
+                   DotGrid.DOT * DotGrid.DOT * StatMap.RINGS / area;
         logger.debug("awake full field " + base + " plus at most " + step);
         Test.assertMessage(base + step < BUDGET,
             "even awake, the mark must not push the field past the budget");

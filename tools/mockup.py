@@ -251,6 +251,7 @@ def render(variant: str, spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
                 continue
 
             x, y = centre + dx, centre + dy
+            marked_here = False
             if axes is not None and hand_covers(dx, dy, axes):
                 colour = backing
             else:
@@ -259,6 +260,7 @@ def render(variant: str, spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
                 # legible whether or not now falls inside today's range.
                 if not always_on and mark_dots.get(ring) == (dx, dy):
                     colour = MARKER
+                    marked_here = True
                 else:
                     start, end = spans[ring]
                     lit = start <= position <= end
@@ -277,6 +279,12 @@ def render(variant: str, spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
             # +DOT-1, not +DOT. Getting this wrong drew 6x6 dots against the
             # watch's 5x5 and inflated every luminance reading by ~44%.
             left, top = x - half + drift[0], y - half + drift[1]
+            if marked_here:
+                # Filled, not a cross - mirrors MatrixRenderer. On a field of
+                # thin crosses only a solid block reads as a mark.
+                draw.rectangle([left, top, left + DOT - 1, top + DOT - 1],
+                               fill=colour)
+                continue
             arm = ARMS[orientation_at(dx, dy)] if variant == "rings" else ARMS[0]
             draw_dot(draw, left, top, colour, arm)
     return img
