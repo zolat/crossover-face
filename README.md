@@ -358,7 +358,7 @@ The face has four rings, and **each one is independently assigned to a source**:
 | Heart rate | level | `Activity.currentHeartRate`, resting → 180bpm |
 | Battery | level | `System.getSystemStats()` |
 | Body Battery | level | `SensorHistory` |
-| Temperature range | **range** | `Weather` today's low → high, on a 0–60°C scale |
+| Temperature range | **range** + mark | `Weather` today's low → high, on a 0–60°C scale, with now marked |
 | Chance of rain | level | `Weather.precipitationChance` |
 | Off | — | nothing |
 
@@ -375,6 +375,26 @@ Its **0–60°C scale is deliberately far wider than any weather needs**: it put
 every minute mark, so the band can be read off the dial exactly the way you read the minute
 hand. 18°C sits where :18 does. A tighter scale would use the ring better and be harder to
 read.
+
+A white line across the band marks **where the current temperature falls** in that range.
+Without it a day of 11→22°C looks identical at dawn and at noon, and the reading is already
+in the conditions the low and high come from. The mark outranks the fill, so it stays legible
+when now sits *outside* today's range — an overnight low or a stale forecast puts it there
+routinely, and drawing it where it actually falls is the honest answer.
+
+It is **awake only**, for the same reason the hand backing is: white is the most luminous
+thing the face can draw, always-on is the mode measured against the burn-in budget, and it is
+not the mode anyone is reading closely. It returns on a wrist raise.
+
+The mark's width is **sized per ring** rather than by one constant. A lattice row is 0.026 of
+a band's position but 0.076 of a turn on the innermost ring, so a band-tuned window falls
+clean between dots there and the mark simply is not drawn. `DotGrid` derives each ring's
+half-width from its inner edge, which makes the mark one dot wide at a ring's inside and a
+few at its outside — a tick that follows the circle. Two consequences worth knowing: in
+**bands — fill from centre** the mark draws twice, once either side of the midline, because
+that is how the layout measures everything; and in the band layouts the outer bands do not
+reach the top and bottom of a round screen, so the lowest few degrees of the leftmost band
+are clipped to a couple of dots, exactly as its fill is. The rings layout has no such gap.
 
 The scale **wraps rather than clamps**, which the minute-mark mapping implies: −5°C belongs
 at :55, five degrees anticlockwise of twelve, exactly where minute 55 sits. Clamping instead
