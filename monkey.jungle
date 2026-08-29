@@ -1,2 +1,11 @@
 project.manifest = manifest.xml
 project.typecheck = strict
+
+# Say where the source is, rather than letting monkeyc find it.
+#
+# Left unset, the compiler globs source/** *recursively from the project root* —
+# which sweeps in every git worktree under .claude/worktrees/ and compiles a
+# second copy of the whole face alongside this one. It fails as a wall of
+# "Redefinition of ..." naming files in a sibling branch, which reads like a
+# problem with your own tree. Naming the path confines the build to it.
+base.sourcePath = source

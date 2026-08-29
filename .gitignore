@@ -16,6 +16,11 @@ developer_key*
 # Mockup + build output
 build/
 
+# Worktrees for parallel sessions. They are checkouts of this same repo, so
+# they must never be committed into it — and monkey.jungle's sourcePath is what
+# keeps the compiler out of them.
+.claude/worktrees/
+
 # Python
 __pycache__/
 
