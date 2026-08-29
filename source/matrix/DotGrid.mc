@@ -106,6 +106,23 @@ module DotGrid {
     //! mark lands in the middle of a band rather than trailing off at the rim.
     var markMiddle as Array<Number> = [] as Array<Number>;
 
+    //! The mark each ring last landed on, and the position it was asked for.
+    //!
+    //! markedDot() walks a whole ring to answer, so a marked ring used to be
+    //! walked twice per drawn frame — once to place the mark, once to draw. The
+    //! mark itself moves with the current temperature, which is to say hourly,
+    //! so almost every one of those walks re-derived the answer it gave a
+    //! second ago.
+    //!
+    //! Keyed on the position asked for rather than timed: the mark is allowed
+    //! to move the instant its reading does, and a position that has not
+    //! changed cannot have landed on a different dot. Seeded with a position no
+    //! ring can hold — Source.NO_MARKER is -1.0 and is a legitimate *answer*,
+    //! so the empty key has to sit outside even that.
+    const NO_MARK_KEY = -2.0;
+    var markedFor as Array<Float> = [] as Array<Float>;
+    var markedAt as Array<Number> = [] as Array<Number>;
+
     //! Where each ring's dots begin, with a final entry holding the total.
     //! The dots are stored grouped by ring, so the renderer can walk one ring
     //! at a time and hoist that ring's span, colours and lit test out of its
@@ -239,6 +256,39 @@ module DotGrid {
         return out;
     }
 
+    //! Which dot this ring marks, remembered between frames.
+    //!
+    //! The entry point the renderer uses. It owns the window as well as the
+    //! search, so the caller passes a position and gets a dot — which is also
+    //! what lets the answer be cached against that position, since the window
+    //! is a pure function of it.
+    //!
+    //! A negative position means the ring marks nothing, and is cached like any
+    //! other: an unmarked ring should not pay a comparison per frame to
+    //! rediscover that.
+    function markedDotFor(ring as Number, mark as Float) as Number {
+        if (markedFor[ring] == mark) {
+            return markedAt[ring];
+        }
+        var at = (mark >= 0.0)
+            ? markedDot(ring, StatMap.windowAround(mark, markerHalf[ring]))
+            : -1;
+        markedFor[ring] = mark;
+        markedAt[ring] = at;
+        return at;
+    }
+
+    //! Forget every cached mark. The dots themselves have moved, so an index
+    //! remembered against the old lattice means nothing.
+    function forgetMarks(ringCount as Number) as Void {
+        markedFor = new [ringCount] as Array<Float>;
+        markedAt = new [ringCount] as Array<Number>;
+        for (var k = 0; k < ringCount; k++) {
+            markedFor[k] = NO_MARK_KEY;
+            markedAt[k] = -1;
+        }
+    }
+
     //! Which dot of this ring the mark lands on, or -1 when none does.
     //!
     //! A mark is one dot, not a row of them: a row drawn out of crosses reads
@@ -334,6 +384,8 @@ module DotGrid {
         var bounds = ringBounds(ringCount);
         markerHalf = markerWidths(ringCount);
         markMiddle = markMiddles(ringCount);
+        // The cached marks are indices into the arrays about to be rewritten.
+        forgetMarks(ringCount);
 
         // --- which ring every dot belongs to, and how many per ring per row --
         //

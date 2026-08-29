@@ -197,11 +197,64 @@ the face would not load. The rule:
 rebuild; `MatrixRenderer` is a flat indexed walk. There is no `ringOf`: dots are stored grouped
 by ring, so `ringStart` already says which ring an index belongs to. The single deliberate exception is
 `StatMap.isLit()`, called per dot (~6ms/frame) so the lit test has one definition shared with the
-tests. Current cost: avg 36ms, peak 44ms. **If you add per-dot work or raise the dot count,
-re-measure** — wrap `onUpdate` in `System.getTimer()` and read `make sim` output.
+tests.
 
 Caching the field to a `BufferedBitmap` is not an option: 390×390 at 16bpp is ~304KB against a
 128KB watch-face memory budget.
+
+**Most frames are not drawn, and most of the rest draw one ring.** `FrameGate` is what
+decides, and it is the largest lever the face has — bigger than anything left inside the
+loop. It fingerprints each frame in two parts: a *field* print (drift, hands) whose change
+clears the screen and redraws everything, and a *ring* print per ring (span, mark, over
+flag) whose change redraws only that ring. Awake and still, nothing is drawn at all.
+
+`MatrixRenderer.draw` therefore takes a dirty set and a `clears` flag, and a clean ring is
+not walked. Two rules make partial redraw safe and neither is optional:
+
+- **every change is drawn `HOLD` (2) consecutive draws.** Not drawing is safe whatever the
+  device does with its buffers; drawing *part* of a frame is only safe if the Dc handed to
+  `onUpdate` holds what was last presented, and on a double-buffered device it holds the
+  frame from two draws ago. Repeating into two draws covers both;
+- **`FrameGate.sinceClear` forces a full clear every `MAX_SKIPS` frames.** A partial redraw
+  repairs nothing outside the ring it draws, so without this a seconds ring — which never
+  skips — would never clear, and a notification drawn over the face would stay there. It
+  counts skipped frames too, which is what preserves the old cap's guarantee exactly.
+  That repair is **one** frame, not `HOLD` of them, and the asymmetry is deliberate: a
+  clear plus four rings defines the whole buffer by itself, so repeating it buys nothing.
+  Holding it was measured at default rings — where the repair is nearly every draw there
+  is — and cost the skip rate 82% → 68% for no visible difference.
+
+A mark is a solid block and a dot is a cross, so repainting a ring covers only 9 of the 25
+pixels a mark occupies. `MatrixRenderer` blacks the cell before repainting —
+unconditionally, since the ring is being repainted anyway and that needs no reasoning about
+which frame a move landed on. It keeps **two** slots, `drawnMark` and `previousMark`, and
+blacks both: with one, a mark moving P→Q rubs out P on the first held draw and Q on the
+second, so the buffer the second draw lands in keeps P's sixteen stray pixels under a
+nine-pixel cross. That is the one place where `HOLD` alone is not enough.
+
+### Measuring a frame
+
+`Diagnostics` keeps two averages, and they answer different questions: the **drawn** cost is
+what the watchdog is judged against, the **idle** cost is what a frame pays to decide it has
+nothing to do. Never fold them together. Set `Diagnostics.TRACE = true` to have the summary
+printed every ten frames — that is the only way to read it outside the on-device menu, since
+the simulator has no input injection to reach that menu with.
+
+**Measure with an A/B out of one binary, never against a figure from another day.** This
+machine ran ~2.4x the frame times of the ones in `2ec08e3`, and a second simulator starting
+up mid-session moved a "before" by 9ms on its own — enough to invent a regression that was
+not there. The A/B that produced the figures below put a temporary `const` in `plan()` that
+reproduced the old whole-frame behaviour, so both legs came from one build under one load.
+
+    rings                    whole-frame gate   per-ring gate
+    seconds + temperature    89ms / 115 worst   31ms / 97 worst    1% -> 0% skipped
+    defaults                 85ms / 118 worst   70ms / 94 worst    82% -> 81% skipped
+
+Read the defaults row as the regression check it is. The skip rate is unchanged, because
+with four slow sources the whole-frame gate already skipped ~82% of frames and there was
+nothing there to win; the drawn frames got cheaper only because some of them are now a
+single ring rather than all four. **If you add per-dot work or raise the dot count,
+re-measure both rows.**
 
 ### What the memory budget actually measures
 
