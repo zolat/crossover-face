@@ -60,11 +60,14 @@ SOURCE_TEMPERATURE = 4
 THEME = [(0xE8, 0x79, 0xF9), (0xB8, 0xD6, 0x4B), (0x7F, 0xD4, 0xFF), (0xFF, 0x6B, 0x5B)]
 
 # Mirrors Palette.MARKER: the current temperature called out on the range it
-# sits in. Near-white, carrying a third of its own band's colour — what makes a
+# sits in. Carrying rather more than half its own band's colour — what makes a
 # mark read is that it is the only solid dot on a field of crosses, not that it
 # is white, so the hue can settle into the palette. Awake only.
+#
+# Tinted rather than dimmed: scaling drags the colour off the band-to-white line
+# and collides with the over tier the waterline dot sits on. See Palette.mc.
 MARKER = (0xFF, 0xFF, 0xFF)
-MARKER_TINT = 0.35
+MARKER_TINT = 0.55
 
 # Mirrors Palette.OVER_TINT: the tier a ring draws once it is past a goal it can
 # beat. "Stronger" cannot be a brightening — LIFT is 1.0 precisely because these

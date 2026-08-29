@@ -69,11 +69,13 @@ module Palette {
     //! The colour of a mark called out on a ring — today, the current
     //! temperature against the day's range.
     //!
-    //! Near-white, carrying a third of the colour of the band it sits in. It
+    //! Carrying rather more than half the colour of the band it sits in. It
     //! was pure white, on the reasoning that every ramp stop is saturated so
     //! only an unsaturated colour reads as a marker rather than as more data.
     //! That is true but it overshot: pure white read as a hole punched through
-    //! the field rather than a point on it.
+    //! the field rather than a point on it. A third of the band's colour was
+    //! the first correction and did not go far enough — on an AMOLED the mark
+    //! still read as a white pixel rather than as part of the palette.
     //!
     //! Tinting costs less legibility than it looks like it should, because
     //! colour is not what carries the mark. MatrixRenderer makes the point from
@@ -88,8 +90,22 @@ module Palette {
     //! the most luminous thing the face can draw, and always-on is the mode
     //! measured against the burn-in budget. CrossoverView holds the mark back
     //! there the same way it holds back the hand backing.
+    //! Why tint further rather than dim: the obvious way to take brightness
+    //! out of the mark is to scale it down, and that does not work here. The
+    //! waterline dot on an over-goal ring lands on the over tier and has to
+    //! stay above it, and scaling drags the colour off the band-to-white line
+    //! the tier sits on — measured, it collides on the moss and ice rings after
+    //! about 6%, which is not enough to see. Tinting slides the mark down that
+    //! same line toward its own band, so it stays clear of the tier for as long
+    //! as MARKER_TINT stays below OVER_TINT, and that is the only bound.
+    //!
+    //! Measured at this tint, with the ordering the tests pin —
+    //! band < over < mark — on the two rings where it is tightest:
+    //!
+    //!     moss   band 0.77   over 0.84   mark 0.87
+    //!     orchid band 0.60   over 0.72   mark 0.78
     const MARKER = 0xFFFFFF;
-    const MARKER_TINT = 0.35;
+    const MARKER_TINT = 0.55;
 
     //! How far an over-goal ring's second lap is tinted toward the mark.
     //!
