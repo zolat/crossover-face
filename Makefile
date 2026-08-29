@@ -14,12 +14,16 @@ IQ  := bin/$(NAME).iq
 PUSH  := tools/mtp_push.py
 KALAM := /Applications/OpenMTP.app/Contents/Resources/bin/arm64/kalam.dylib
 
+## There is one simulator per machine, so parallel sessions have to take turns.
+## SIM_LOCK serialises them; see tools/sim_lock.sh for why it is not shlock.
+SIM_LOCK := tools/sim_lock.sh
+
 MONKEYC  := $(SDK)bin/monkeyc
 MONKEYDO := $(SDK)bin/monkeydo
 SIMULATOR := $(SDK)bin/connectiq
 
-.PHONY: all build test sim simulator-up install push push-built reveal \
-        package clean sdk-info
+.PHONY: all build test test-lock sim simulator-up install push push-built \
+        reveal package clean sdk-info
 
 all: build
 
@@ -31,13 +35,37 @@ build:
 ## Unit tests (source annotated with :test).
 ## monkeydo exits non-zero even when every test passes, so the summary line is
 ## what decides the result.
+##
+## The run holds the simulator lock from before the simulator is started until
+## after monkeydo returns. Without it a second session sideloading mid-run takes
+## this one down, and a killed run prints a bare "TESTS FAILED" with no output —
+## indistinguishable from a real failure. $$$$ is the recipe shell's own PID, so
+## a session that dies leaves a lock the next one can see is stale.
 test:
 	@mkdir -p bin
 	"$(MONKEYC)" -f monkey.jungle -o bin/$(NAME)-test.prg -y "$(KEY)" -d $(DEVICE) -w -t
-	@$(MAKE) -s simulator-up
-	@out=$$("$(MONKEYDO)" bin/$(NAME)-test.prg $(DEVICE) -t 2>&1); \
+	@$(SIM_LOCK) acquire $$$$ || exit 1; \
+	trap '$(SIM_LOCK) release $$$$' EXIT INT TERM; \
+	$(MAKE) -s simulator-up; \
+	out=$$("$(MONKEYDO)" bin/$(NAME)-test.prg $(DEVICE) -t 2>&1); \
 	echo "$$out"; \
-	echo "$$out" | grep -q "^PASSED" || { echo; echo "TESTS FAILED"; exit 1; }
+	echo "$$out" | grep -q "^PASSED" && exit 0; \
+	echo; \
+	if echo "$$out" | grep -q "^Ran [0-9]"; then \
+		echo "TESTS FAILED"; \
+	else \
+		echo "TESTS FAILED — but nothing ran, so this is contention, not a"; \
+		echo "failing test. Something else took the simulator mid-run. The lock"; \
+		echo "only covers make targets, so a hand-rolled monkeydo slips past it."; \
+		others=$$(pgrep -fl 'MonkeyDoDeux' || true); \
+		[ -n "$$others" ] && { echo "still attached:"; echo "$$others" | sed 's/^/  /'; }; \
+		echo "Re-run before believing this."; \
+	fi; \
+	exit 1
+
+## Prove the lock still behaves. Cheap, and it caught a real bug once.
+test-lock:
+	@tools/sim_lock_test.sh
 
 ## Start the simulator unless it is already running.
 simulator-up:
@@ -50,8 +78,18 @@ simulator-up:
 
 ## Launch the simulator (if not already up) and sideload the face.
 ## Stays attached to stream println output — Ctrl-C to detach.
+##
+## This holds the lock for as long as it stays attached, which is deliberate.
+## The first cut only *waited* for the lock and then let go, on the theory that
+## an interrupted look at the face is cheaper than an interrupted test run.
+## That has it backwards: an attached monkeydo owns the simulator, so it is the
+## test run that gets dropped — and it is dropped silently, with no output at
+## all. Whoever is watching the face can see a message and press Ctrl-C; a test
+## run cannot. So `sim` keeps the lock and `test` waits its turn.
 sim: build
-	@$(MAKE) -s simulator-up
+	@$(SIM_LOCK) acquire $$$$ || exit 1; \
+	trap '$(SIM_LOCK) release $$$$' EXIT INT TERM; \
+	$(MAKE) -s simulator-up; \
 	"$(MONKEYDO)" $(PRG) $(DEVICE)
 
 ## Get the built face onto the watch.

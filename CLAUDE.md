@@ -14,7 +14,8 @@ covers the working knowledge that spans files and is easy to break.
 ```sh
 make build      # debug .prg for the simulator
 make sim        # build, start the simulator if needed, sideload, stream println
-make test       # build with -t, run the 21-test suite in the simulator
+make test       # build with -t, run the 48-test suite (takes the simulator lock)
+make test-lock  # self-test tools/sim_lock.sh
 make package    # signed .iq for the store
 make install    # build, verify MTP mode, push straight to the watch
 make push       # build and push, skipping the checks
@@ -39,6 +40,39 @@ python3 tools/mockup.py [outdir]        # default build/mockups
 python3 tools/luminance.py <face.png>   # measure against the 10% AMOLED budget
 ```
 
+## Parallel sessions share three things
+
+Several agents work this repo at once, in worktrees under `.claude/worktrees/`.
+Three resources are shared across all of them, and each one has bitten this project.
+
+**The compiler will eat your neighbour's branch.** `monkeyc` globs `source/**` *recursively
+from the project root*, so without `base.sourcePath = source` in `monkey.jungle` a build at
+the repo root compiles every worktree's copy of the face alongside its own. It fails as a
+wall of `Redefinition of ...` naming files on a sibling branch, which looks like your tree is
+broken. **Never remove that line.**
+
+**The simulator is a singleton.** One per machine, one persisted app-data store, and
+`monkeydo` sideloads into it by device id. Two sessions doing that at once take each other's
+run down — and the loser prints a bare `TESTS FAILED` with *no output*, which is
+indistinguishable from a real failure. `make test` and `make sim` serialise on
+`tools/sim_lock.sh` (a lock directory outside the repo, holding the owner's PID so a dead
+session's lock can be proved stale). `sim` holds it for as long as it stays attached, because
+an attached `monkeydo` owns the simulator and would otherwise silently kill test runs.
+
+> The lock only covers the make targets. A hand-rolled `monkeydo` slips past it — so run the
+> simulator through `make`, and never `pkill -f monkeydo`, which kills every session's.
+
+If a run does die, `make test` now says so rather than blaming the tests: no `Ran N tests`
+line means contention, and it names whatever is still attached. **Re-run before believing a
+bare failure.**
+
+**The watch is a singleton too.** `make install` / `make push` claim the USB interface, and
+only one process may hold it. Nothing serialises that yet — coordinate by hand.
+
+Editing `Makefile`, `monkey.jungle` or `CLAUDE.md` changes them under every session
+immediately, worktrees included. That is usually what you want for a fix like the ones above,
+but say so rather than letting another agent discover it mid-run.
+
 ### Command gotchas
 
 - **There is no lint or typecheck step.** `monkey.jungle` sets `project.typecheck = strict` and
@@ -47,8 +81,8 @@ python3 tools/luminance.py <face.png>   # measure against the 10% AMOLED budget
   `^PASSED` and ignores the exit code. Never judge a raw `monkeydo` run by its status code — read
   the summary line.
 - **A killed simulator looks like a test failure.** If `make test` prints nothing but
-  `TESTS FAILED`, the simulator died mid-run (a parallel session restarting it will do this).
-  Re-run before believing it.
+  `TESTS FAILED`, the simulator died mid-run. The target now diagnoses this itself — no
+  `Ran N tests` line means contention, not a bug — but re-run before believing it either way.
 - **The watch must be in MTP mode and OpenMTP must not be running.** Only one process may
   claim the USB interface; `make push` quits OpenMTP for you. `idProduct 0x5246` (21062) is MTP,
   `0x0003` is Garmin's proprietary mode, which cannot be written to — answer **yes** to
