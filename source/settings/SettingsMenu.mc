@@ -28,6 +28,8 @@ class SettingsMenu extends WatchUi.Menu2 {
             Rez.Strings.BackingTitle, backingLabel(), :backing, null));
         addItem(new WatchUi.MenuItem(Rez.Strings.AlwaysOnFillTitle,
             alwaysOnFillLabel(), :alwaysOnFill, null));
+        addItem(new WatchUi.MenuItem(
+            Rez.Strings.RotationTitle, rotationLabel(), :rotation, null));
         addItem(new WatchUi.MenuItem(Rez.Strings.RingsTitle, null, :rings, null));
         addItem(new WatchUi.MenuItem(
             Rez.Strings.DiagnosticsTitle, Diagnostics.summary(),
@@ -42,7 +44,8 @@ class SettingsMenu extends WatchUi.Menu2 {
         Menu2.onShow();
         setSubLabelOf(0, backingLabel());
         setSubLabelOf(1, alwaysOnFillLabel());
-        setSubLabelOf(3, Diagnostics.summary());
+        setSubLabelOf(2, rotationLabel());
+        setSubLabelOf(4, Diagnostics.summary());
     }
 
     private function setSubLabelOf(index as Number,
@@ -57,6 +60,12 @@ class SettingsMenu extends WatchUi.Menu2 {
         var labels = [Rez.Strings.AlwaysOnFillShown,
                       Rez.Strings.AlwaysOnFillHidden] as Array<ResourceId>;
         return labels[StatMap.alwaysOnFill];
+    }
+
+    private function rotationLabel() as ResourceId {
+        var labels = [Rez.Strings.RotationRadial,
+                      Rez.Strings.RotationUpright] as Array<ResourceId>;
+        return labels[StatMap.rotation];
     }
 
     private function backingLabel() as ResourceId {
@@ -91,6 +100,12 @@ class SettingsMenuDelegate extends WatchUi.Menu2InputDelegate {
                 [Rez.Strings.AlwaysOnFillShown,
                  Rez.Strings.AlwaysOnFillHidden] as Array<ResourceId>,
                 StatMap.alwaysOnFill));
+        } else if (id == :rotation) {
+            push(new ChoiceMenu(Rez.Strings.RotationTitle,
+                StatMap.PROPERTY_ROTATION,
+                [Rez.Strings.RotationRadial,
+                 Rez.Strings.RotationUpright] as Array<ResourceId>,
+                StatMap.rotation));
         } else if (id == :diagnostics) {
             // Nothing to open — re-reading it is the useful action, since the
             // figure moves while you are looking at it.

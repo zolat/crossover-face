@@ -90,6 +90,17 @@ module MatrixRenderer {
         // the same condition, kept for the dot loop.
         var backingColour = (backing != null) ? backing : 0;
 
+        // Whether the crosses follow their rings, read once. Upright, every
+        // dot shares one orientation, so hoisting it here rather than reading
+        // armOf per dot saves five array lookups on all ~1100 of them — the
+        // orientations stay cached either way, because which way a cross
+        // points is geometry and this setting only decides whether to use it.
+        var turned = (StatMap.rotation == StatMap.ROTATION_RADIAL);
+        var ax = arms[0];
+        var ay = arms[1];
+        var bx = arms[2];
+        var by = arms[3];
+
         var markAt = new [StatMap.RINGS] as Array<Number>;
 
         var lastColour = -1;
@@ -147,15 +158,18 @@ module MatrixRenderer {
                     lastColour = colour;
                 }
                 // A cross of two strokes through the dot's centre, turned to
-                // follow the circle it sits on. drawLine measured *faster* than
-                // the two fillRectangle calls this replaced.
+                // follow the circle it sits on unless the setting says upright.
+                // drawLine measured *faster* than the two fillRectangle calls
+                // this replaced.
                 var x = centreX + dx;
                 var y = centreY + dy;
-                var a = armOf[i];
-                var ax = arms[a];
-                var ay = arms[a + 1];
-                var bx = arms[a + 2];
-                var by = arms[a + 3];
+                if (turned) {
+                    var a = armOf[i];
+                    ax = arms[a];
+                    ay = arms[a + 1];
+                    bx = arms[a + 2];
+                    by = arms[a + 3];
+                }
                 dc.drawLine(x - ax, y - ay, x + ax, y + ay);
                 dc.drawLine(x - bx, y - by, x + bx, y + by);
             }

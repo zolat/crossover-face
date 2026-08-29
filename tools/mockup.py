@@ -215,7 +215,8 @@ def render(spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
            held_back: bool = False,
            backing: tuple[int, int, int] | None = None,
            at_time: tuple[int, int] = (10, 9),
-           drift: tuple[int, int] = (0, 0), marks=None) -> Image.Image:
+           drift: tuple[int, int] = (0, 0), marks=None,
+           rotate: bool = True) -> Image.Image:
     img = Image.new("RGB", (SIZE, SIZE), (0, 0, 0))
     draw = ImageDraw.Draw(img)
     # Which dot each ring marks, worked out once rather than per dot.
@@ -277,7 +278,9 @@ def render(spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
                 draw.rectangle([left, top, left + DOT - 1, top + DOT - 1],
                                fill=colour)
                 continue
-            draw_dot(draw, left, top, colour, ARMS[orientation_at(dx, dy)])
+            # Mirrors StatMap.Rotation: turned to follow the ring, or upright.
+            arm = ARMS[orientation_at(dx, dy)] if rotate else ARMS[0]
+            draw_dot(draw, left, top, colour, arm)
     return img
 
 
@@ -410,7 +413,18 @@ def main(outdir: str = "build/mockups") -> int:
     values = [(0.0, 0.68), (0.0, 0.55), (0.0, 0.82), (0.0, 0.40)]
     written = []
 
-    # 1. Weak-tier sweep: how dark before the hues stop reading.
+    # 1. Dot rotation: the same face with its crosses turned and upright.
+    panels = []
+    for label, rotate in (("FOLLOW THE RINGS", True), ("UPRIGHT", False)):
+        face = render(values, rotate=rotate)
+        panels.append((f"{label}   luminance {measure(face) * 100:.2f}%",
+                       composite(face)))
+    path = os.path.join(outdir, "01-rotation.png")
+    sheet(panels, "Dot rotation — each cross turned to follow its ring, "
+                  "or left upright").save(path)
+    written.append(path)
+
+    # 2. Weak-tier sweep: how dark before the hues stop reading.
     global WEAK_ACTIVE
     original = WEAK_ACTIVE
     panels = []
@@ -424,7 +438,7 @@ def main(outdir: str = "build/mockups") -> int:
     sheet(panels, "Unfilled-tier strength").save(path)
     written.append(path)
 
-    # 2. Active vs always-on: proof the modes read as the same image.
+    # 3. Active vs always-on: proof the modes read as the same image.
     panels = []
     for label, always_on in (("ACTIVE", False), ("ALWAYS-ON", True)):
         face = render(values, always_on=always_on)
@@ -434,7 +448,7 @@ def main(outdir: str = "build/mockups") -> int:
     sheet(panels, "Active vs always-on").save(path)
     written.append(path)
 
-    # 3. Always-on with the fills held back: the data appears when you look.
+    # 4. Always-on with the fills held back: the data appears when you look.
     #    A span of (2, 2) can never contain a position, which is how the face
     #    itself hides them — no branch in the render loop, just a span that
     #    nothing falls inside.
@@ -450,14 +464,14 @@ def main(outdir: str = "build/mockups") -> int:
     sheet(panels, "Always-on with and without the fills").save(path)
     written.append(path)
 
-    # 4. Worst case: every stat at 100%, the frame the luminance test guards.
+    # 5. Worst case: every stat at 100%, the frame the luminance test guards.
     face = render([(0.0, 1.0)] * 4, always_on=True)
     path = os.path.join(outdir, "04-worst-case.png")
     sheet([(f"ALWAYS-ON   lum {measure(face) * 100:.2f}%", composite(face))],
           "Worst case — every stat 100%, always-on").save(path)
     written.append(path)
 
-    # 5. Hand backing — the awake-only option, hands drawn at system time.
+    # 6. Hand backing — the awake-only option, hands drawn at system time.
     when = (10, 9)
     panels = []
     for label, backing in (("OFF", None), ("WHITE", (255, 255, 255)),
@@ -469,7 +483,7 @@ def main(outdir: str = "build/mockups") -> int:
     sheet(panels, "Behind hands — awake only, hands held at system time").save(path)
     written.append(path)
 
-    # 6. Rings assigned to weather — temperature is a range, not a level, and
+    # 7. Rings assigned to weather — temperature is a range, not a level, and
     #    the mark says where in that range now falls.
     weather_assign = (4, 5, 2, 0)          # temperature, rain, battery, steps
     weather_spans = [(11 / 60, 22 / 60), (0.0, 0.35), (0.0, 0.82), (0.0, 0.68)]
@@ -482,7 +496,7 @@ def main(outdir: str = "build/mockups") -> int:
           "white mark = 17C now").save(path)
     written.append(path)
 
-    # 7. Burn-in drift: how long any one pixel stays lit over a full cycle.
+    # 8. Burn-in drift: how long any one pixel stays lit over a full cycle.
     phases = [(-2, -2), (3, 3), (3, -2), (-2, 3)]
     duty = {}
     for dx, dy in phases:

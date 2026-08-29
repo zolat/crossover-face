@@ -181,7 +181,8 @@ texture rather than a chunky LED panel.
 
 **Each cross is turned to follow the circle it sits on** — one stroke pointing out from the
 centre, the other across it. Crosses read as `+` on the axes and `×` on the diagonals, which
-gives the field a radial grain matching the rings it is drawing.
+gives the field a radial grain matching the rings it is drawing. It is a setting (see
+**Dot rotation**); upright, the field reads as a plain lattice with the rings drawn on it.
 
 A cross has 90° rotational symmetry, so four orientations at 22.5° apart cover every
 distinct one — and at 5px that is about all the resolution there is anyway. Each dot's
@@ -437,6 +438,19 @@ reading rather than a missing one. A frosty range therefore has its start *after
 and `StatMap.isLit()` handles that case: a span whose end precedes its start wraps past the
 origin. (−5°C and 55°C share a position; nothing confuses them in practice, and the scale
 already wraps 60 onto 0 the same way.)
+
+### Dot rotation
+
+Follow the rings (default), or Upright. Turned, each cross points one stroke out from the
+centre and lays the other across it, so the field carries the same radial grain the rings do.
+Upright, every cross is the same `+` and the dots read as a plain lattice the rings are drawn
+on.
+
+It is **free either way**. Which way a cross would point is pure geometry, so `DotGrid` caches
+it whatever the setting says and the renderer simply stops reading it — the setting never
+touches the cache, and `rotationDoesNotReachTheCache` pins that. Upright is if anything the
+cheaper frame, because the orientation lookup hoists out of the dot loop. Every orientation
+lights the same nine pixels, so the luminance is identical: the mockup measures both at 4.82%.
 
 ### Behind hands
 

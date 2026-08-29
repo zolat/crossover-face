@@ -115,8 +115,8 @@ implementations together so they cannot drift silently.
 
 Stored values are **list indices**, so `resources/properties.xml`, `resources/settings/settings.xml`,
 `resources/strings/strings.xml`, the enums in `StatMap`/`Source`, and the label arrays in
-`source/settings/SettingsMenu.mc` all have to agree. Six properties today: `handBacking`,
-`alwaysOnFill`, `ring1`–`ring4`.
+`source/settings/SettingsMenu.mc` all have to agree. Seven properties today: `handBacking`,
+`alwaysOnFill`, `dotRotation`, `ring1`–`ring4`.
 
 `SettingsMenu.onShow()` refreshes sub-labels **by row index**, and `getItem()` on a wrong
 index returns null rather than throwing — so adding or removing a row silently stops
@@ -132,6 +132,15 @@ sub-menu pops.
 To change a setting in the simulator: **File → Edit Persistent Storage → Edit
 Application.Properties**. Persisted values beat `properties.xml`, so a stale one survives a
 rebuild until **Reset All App Data**.
+
+### Dot rotation is a render choice, not a cached one
+
+`StatMap.rotation` decides only whether `MatrixRenderer` indexes `DotGrid.armOf` per dot or
+uses the one upright cross it hoists. Which way a cross *would* point is geometry, so it is
+cached either way and toggling the setting needs no rebuild. Do not move this into
+`DotGrid.build()`: it would cost a full ~1100-dot rebuild per toggle, and the next step from
+there is making the ring mapping conditional again. `rotationDoesNotReachTheCache` is the
+guard. Every orientation lights nine pixels, so neither setting moves the luminance.
 
 ### The 10% luminance budget
 

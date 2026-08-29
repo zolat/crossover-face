@@ -10,6 +10,10 @@
     <string id="AlwaysOnFillPrompt">Whether always-on shows the levels or just the colours</string>
     <string id="AlwaysOnFillShown">Shown</string>
     <string id="AlwaysOnFillHidden">Colour only</string>
+    <string id="RotationTitle">Dot rotation</string>
+    <string id="RotationPrompt">Whether each cross turns to follow the ring it sits on</string>
+    <string id="RotationRadial">Follow the rings</string>
+    <string id="RotationUpright">Upright</string>
     <string id="BackingOff">Off</string>
     <string id="BackingWhite">White</string>
     <string id="BackingDark">Dark</string>

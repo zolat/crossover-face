@@ -502,6 +502,31 @@ module MatrixTest {
         return true;
     }
 
+    //! Same contract for the rotation setting.
+    (:test)
+    function rotationSettingIsClamped(logger as Logger) as Boolean {
+        Properties.setValue(StatMap.PROPERTY_ROTATION, 99);
+        Config.reload();
+        Test.assertEqualMessage(StatMap.rotation, StatMap.ROTATION_RADIAL,
+            "an out-of-range value must fall back to following the rings");
+
+        Properties.setValue(StatMap.PROPERTY_ROTATION,
+                            StatMap.ROTATION_UPRIGHT);
+        Config.reload();
+        Test.assertEqualMessage(StatMap.rotation, StatMap.ROTATION_UPRIGHT,
+            "a valid value must be honoured");
+
+        // The menu reads its sub-label straight off the setting, so an
+        // unhandled value would index past the end of the label table.
+        var menu = new SettingsMenu();
+        menu.onShow();
+
+        Properties.setValue(StatMap.PROPERTY_ROTATION,
+                            StatMap.ROTATION_RADIAL);
+        Config.reload();
+        return true;
+    }
+
     //! Every ring full is the brightest frame the face can draw. If that fits
     //! the budget, no real reading can blank the screen.
     (:test)
@@ -671,7 +696,7 @@ module MatrixTest {
 
     //! Every settings row that shows a value, by index. The rings row is not
     //! here: it opens a sub-menu and carries no value of its own.
-    const MENU_VALUE_ROWS = [0, 1, 3] as Array<Number>;
+    const MENU_VALUE_ROWS = [0, 1, 2, 4] as Array<Number>;
 
     (:test)
     function settingsMenuRefreshesItsSubLabels(logger as Logger) as Boolean {
@@ -780,6 +805,40 @@ module MatrixTest {
         logger.debug("orientations used: " + distinct);
         Test.assertEqualMessage(distinct, (1 << DotGrid.ORIENTATIONS) - 1,
             "the field should carry every orientation");
+        return true;
+    }
+
+    //! Turning the crosses upright is a *drawing* decision, not a geometric
+    //! one: which way a cross would point is pure geometry, so it stays cached
+    //! either way and the renderer simply stops reading it. Wiring the setting
+    //! into build() instead would work, and would quietly cost a full rebuild
+    //! of ~1100 dots every time the setting changed — and worse, would tempt
+    //! someone to make the *ring* mapping conditional next. This pins the
+    //! cache as independent of the setting.
+    (:test)
+    function rotationDoesNotReachTheCache(logger as Logger) as Boolean {
+        Properties.setValue(StatMap.PROPERTY_ROTATION, StatMap.ROTATION_RADIAL);
+        Config.reload();
+        DotGrid.build();
+        var turned = new [DotGrid.count] as Array<Number>;
+        for (var i = 0; i < DotGrid.count; i++) {
+            turned[i] = DotGrid.armOf[i];
+        }
+
+        Properties.setValue(StatMap.PROPERTY_ROTATION, StatMap.ROTATION_UPRIGHT);
+        Config.reload();
+        DotGrid.build();
+        Test.assertEqualMessage(DotGrid.armOf.size(), turned.size(),
+            "the cache changed size with the rotation setting");
+        for (var i = 0; i < turned.size(); i++) {
+            Test.assertEqualMessage(DotGrid.armOf[i], turned[i],
+                "dot " + i + " changed orientation with the setting — the " +
+                "cache must not depend on it");
+        }
+        logger.debug(turned.size() + " orientations unchanged by the setting");
+
+        Properties.setValue(StatMap.PROPERTY_ROTATION, StatMap.ROTATION_RADIAL);
+        Config.reload();
         return true;
     }
 

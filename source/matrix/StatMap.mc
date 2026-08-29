@@ -23,8 +23,21 @@ module StatMap {
         ALWAYS_ON_FILL_HIDDEN = 1   //! Colour only; the data appears on a raise.
     }
 
+    //! Whether each cross turns to follow the ring it sits on.
+    //!
+    //! Turned, one stroke points out from the centre and the other lies across
+    //! it, so the field reads as `+` on the axes and `×` on the diagonals and
+    //! carries the same radial grain the rings do. Upright, every cross is the
+    //! same `+` and the field reads as a plain lattice with the rings drawn on
+    //! it. Both light nine pixels a dot, so neither costs luminance.
+    enum Rotation {
+        ROTATION_RADIAL = 0,        //! Each cross follows its ring.
+        ROTATION_UPRIGHT = 1        //! Every cross stays upright.
+    }
+
     const PROPERTY_BACKING = "handBacking";
     const PROPERTY_ALWAYS_ON_FILL = "alwaysOnFill";
+    const PROPERTY_ROTATION = "dotRotation";
 
     //! Four rings, each independently assigned to a Source.
     const RINGS = 4;
@@ -34,6 +47,7 @@ module StatMap {
 
     var backing as Number = BACKING_OFF;
     var alwaysOnFill as Number = ALWAYS_ON_FILL_SHOWN;
+    var rotation as Number = ROTATION_RADIAL;
 
     //! Which source each ring shows. Index 0 is the outermost ring.
     var rings as Array<Number> = [
@@ -50,6 +64,8 @@ module StatMap {
                              BACKING_OFF, BACKING_DARK);
         alwaysOnFill = readNumber(PROPERTY_ALWAYS_ON_FILL, ALWAYS_ON_FILL_SHOWN,
                                   ALWAYS_ON_FILL_SHOWN, ALWAYS_ON_FILL_HIDDEN);
+        rotation = readNumber(PROPERTY_ROTATION, ROTATION_RADIAL,
+                              ROTATION_RADIAL, ROTATION_UPRIGHT);
 
         var defaults = [Source.SOURCE_STEPS, Source.SOURCE_HEART_RATE,
                         Source.SOURCE_BATTERY, Source.SOURCE_BODY_BATTERY]
