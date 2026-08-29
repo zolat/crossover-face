@@ -25,6 +25,14 @@ import Toybox.Lang;
 //! The fingerprint is compared value by value rather than hashed. A hash
 //! collision here would freeze a stale frame until the cap fired, and the
 //! comparison is a dozen floats — far cheaper than the draw it guards.
+//!
+//! One source defeats all of this on purpose. A ring assigned to seconds moves
+//! its span every tick, so the fingerprint differs every second and the gate
+//! opens every second — the skip percentage in the diagnostics readout drops to
+//! roughly nothing. That is not a fault: it is the face drawing at exactly the
+//! rate it drew at before this module existed, which is why it stays inside the
+//! watchdog. It is a battery cost, and it is the cost of asking for a second
+//! hand; nothing here needs changing to accommodate it.
 module FrameGate {
 
     //! Draw at least this often regardless, so anything drawn over the face

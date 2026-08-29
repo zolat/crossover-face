@@ -112,10 +112,16 @@ module StatMap {
     }
 
     //! Current span for every ring. Read once per frame.
-    function spans() as Array<Array<Float> > {
+    //!
+    //! `awake` is passed straight through to the sources rather than acted on
+    //! here: whether a reading still means anything in always-on is a property
+    //! of the reading, so it belongs beside the reading's own definition. Only
+    //! seconds cares. The view decides the value, because its power test has a
+    //! fallback that reads the view's own sleep state.
+    function spans(awake as Boolean) as Array<Array<Float> > {
         var out = new [RINGS] as Array<Array<Float> >;
         for (var i = 0; i < RINGS; i++) {
-            out[i] = Source.span(rings[i]);
+            out[i] = Source.span(rings[i], awake);
         }
         return out;
     }

@@ -268,7 +268,7 @@ module MatrixTest {
         Test.assertEqualMessage(StatMap.rings[0], Source.SOURCE_STEPS,
             "an out-of-range source must fall back to the default");
 
-        Test.assertEqualMessage(Source.span(Source.SOURCE_OFF)[1], 0.0,
+        Test.assertEqualMessage(Source.span(Source.SOURCE_OFF, true)[1], 0.0,
             "an off ring must have an empty span");
 
         for (var ring = 0; ring < StatMap.RINGS; ring++) {

@@ -39,9 +39,13 @@ class CrossoverView extends WatchUi.WatchFace {
         var lowPower = isLowPower();
         // Held back in always-on when asked: the field keeps its colour but
         // loses its waterlines, and the data comes back on a wrist raise.
+        //
+        // The power mode also reaches the sources themselves, which is how a
+        // seconds ring goes quiet in always-on: there is one frame a minute
+        // there, so a per-second reading could only be stale.
         var spans = (lowPower &&
                      StatMap.alwaysOnFill == StatMap.ALWAYS_ON_FILL_HIDDEN)
-            ? StatMap.noSpans() : StatMap.spans();
+            ? StatMap.noSpans() : StatMap.spans(!lowPower);
         // Backing is awake-only: in always-on it would cost luminance for a
         // detail nobody is looking at.
         var backing = lowPower ? null : backingColour();
