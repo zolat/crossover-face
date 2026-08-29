@@ -352,6 +352,65 @@ module MatrixTest {
         return true;
     }
 
+    //! Weather is sampled once a minute, and all of it from one call.
+    //!
+    //! The watch syncs weather from the phone on the order of tens of minutes,
+    //! so asking every second asked a question whose answer could not have
+    //! changed. A minute is what always-on already gets.
+    //!
+    //! The sharper half is that the three readings now come from **one** call.
+    //! They used to take a getCurrentConditions() each, so on a temperature
+    //! ring the band and the mark drawn inside it could come from different
+    //! samples — a disagreement no test could have caught, because the
+    //! simulator reports no weather at all and every reading is null.
+    (:test)
+    function weatherIsSampledOnceAMinute(logger as Logger) as Boolean {
+        // A fresh sample is taken when there is none.
+        WeatherData.forget();
+        Test.assertMessage(!WeatherData.sampled,
+            "forget() must drop the sample");
+        WeatherData.dayRange();
+        Test.assertMessage(WeatherData.sampled,
+            "reading must take a sample when there is none");
+
+        // Within the minute the stored sample answers — including the null one
+        // the simulator gives, which is cached like any other answer rather
+        // than re-asked every frame.
+        var taken = WeatherData.takenAt;
+        WeatherData.dayRange();
+        WeatherData.currentFraction();
+        WeatherData.rainChance();
+        Test.assertEqualMessage(WeatherData.takenAt, taken,
+            "three reads inside the minute must share one sample — a band and " +
+            "the mark inside it cannot come from different ones");
+
+        // Past the minute, the watch is asked again.
+        WeatherData.takenAt = System.getTimer() - WeatherData.REFRESH_MS - 1;
+        var stale = WeatherData.takenAt;
+        WeatherData.dayRange();
+        Test.assertMessage(WeatherData.takenAt != stale,
+            "a sample older than REFRESH_MS must be replaced");
+        logger.debug("sample refreshed after " + WeatherData.REFRESH_MS + "ms");
+
+        // getTimer wraps about every 25 days. A sample that looks like it was
+        // taken in the future is that wrap, not a fresh reading — treating it
+        // as fresh would freeze the weather until the counter caught up.
+        WeatherData.takenAt = System.getTimer() + 1000000;
+        var future = WeatherData.takenAt;
+        WeatherData.dayRange();
+        Test.assertMessage(WeatherData.takenAt != future,
+            "a sample from the future is a wrapped timer and must be retaken, " +
+            "or the weather freezes until the counter catches up");
+
+        // The arithmetic is untouched by any of this: fraction() is pure, and
+        // is what the scale tests above pin.
+        Test.assertEqualMessage(WeatherData.fraction(30.0), 0.5,
+            "caching must not have reached the scale");
+
+        WeatherData.forget();
+        return true;
+    }
+
     //! A frosty day spans twelve o'clock: its start is *after* its end.
     (:test)
     function spanWrappingPastTheOriginStaysLit(logger as Logger) as Boolean {
