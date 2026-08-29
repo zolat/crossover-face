@@ -1,10 +1,27 @@
 import Toybox.Lang;
+import Toybox.System;
 import Toybox.Weather;
 
 //! Today's weather, normalised for drawing. Pure queries, no drawing.
 //!
 //! Temperatures arrive from Garmin in Celsius regardless of the watch's display
 //! units, and the ring shows no numbers, so no conversion is needed.
+//!
+//! **One sample a minute, and one sample for all three readings.** The watch
+//! syncs weather from the phone on the order of tens of minutes, so a face
+//! asking every second was asking a question whose answer could not have
+//! changed a thousand times over. A minute is what always-on already gets — it
+//! is handed one frame a minute — so this makes the awake face agree with the
+//! asleep one rather than being sixty times more eager about data that does not
+//! move.
+//!
+//! The saving is not why it is worth doing: the whole per-frame preamble this
+//! sits in measures 0-1ms against a ~70ms frame, and `Diagnostics`'s *idle*
+//! figure is what would notice if that ever changed. What is worth doing is
+//! the second half — the three readings now come from **one** call. They used
+//! to take a `getCurrentConditions()` each, so on a temperature ring the band
+//! and the mark drawn inside it could come from two different samples. One
+//! sample cannot disagree with itself.
 module WeatherData {
 
     //! The temperature scale the ring spans: 0C at twelve o'clock, running
@@ -17,22 +34,78 @@ module WeatherData {
     const SCALE_MIN_C = 0.0;
     const SCALE_MAX_C = 60.0;
 
-    //! Today's low and high as fractions of the scale, or null when there is
-    //! no forecast — a watch that has never synced has no weather at all.
-    function dayRange() as Array<Float>? {
+    //! How long a sample is reused before the watch is asked again.
+    const REFRESH_MS = 60000;
+
+    //! The last sample, and when it was taken. Nulls are cached like any other
+    //! answer: a watch that has never synced has no weather, and rediscovering
+    //! that every second is the same wasted question.
+    var takenAt as Number = 0;
+    var sampled as Boolean = false;
+    var lowC as Float? = null;
+    var highC as Float? = null;
+    var nowC as Float? = null;
+    var rain as Float? = null;
+
+    //! Take a fresh sample if the last one has expired.
+    //!
+    //! `System.getTimer()` and not the clock: it is monotonic, where the wall
+    //! clock can jump under a time-zone change or a sync and would then either
+    //! freeze the sample or expire it every frame. It does wrap — it is a
+    //! 32-bit millisecond count, so about every 25 days — and a sample that
+    //! appears to have been taken in the future is that wrap rather than a
+    //! fresh reading, so it is treated as stale.
+    function refresh() as Void {
+        var now = System.getTimer();
+        if (sampled && now >= takenAt && (now - takenAt) < REFRESH_MS) {
+            return;
+        }
+        takenAt = now;
+        sampled = true;
+        lowC = null;
+        highC = null;
+        nowC = null;
+        rain = null;
+
         if (!(Toybox has :Weather)) {
-            return null;
+            return;
         }
         var conditions = Weather.getCurrentConditions();
         if (conditions == null) {
-            return null;
+            return;
         }
         var low = conditions.lowTemperature;
         var high = conditions.highTemperature;
+        if (low != null && high != null) {
+            lowC = low.toFloat();
+            highC = high.toFloat();
+        }
+        var current = conditions.temperature;
+        if (current != null) {
+            nowC = current.toFloat();
+        }
+        var chance = conditions.precipitationChance;
+        if (chance != null) {
+            rain = clamp(chance / 100.0);
+        }
+    }
+
+    //! Drop the sample, so the next read goes to the watch. For the tests, and
+    //! for anything that needs to prove it is seeing a fresh reading.
+    function forget() as Void {
+        sampled = false;
+    }
+
+    //! Today's low and high as fractions of the scale, or null when there is
+    //! no forecast — a watch that has never synced has no weather at all.
+    function dayRange() as Array<Float>? {
+        refresh();
+        var low = lowC;
+        var high = highC;
         if (low == null || high == null) {
             return null;
         }
-        return [fraction(low.toFloat()), fraction(high.toFloat())] as Array<Float>;
+        return [fraction(low), fraction(high)] as Array<Float>;
     }
 
     //! Where the temperature right now sits on the same scale, or null when
@@ -44,35 +117,24 @@ module WeatherData {
     //! overnight low or a stale forecast routinely puts the current
     //! temperature outside it, and the honest answer is to draw it where it
     //! actually falls.
+    //!
+    //! A minute's staleness is invisible here, and that is measurable rather
+    //! than hopeful: the mark is a single dot, and a ring's dots are 0.026 to
+    //! 0.076 of a turn apart, so the mark does not move until the reading has
+    //! shifted by something between one and a half and four and a half degrees.
     function currentFraction() as Float? {
-        if (!(Toybox has :Weather)) {
+        refresh();
+        var current = nowC;
+        if (current == null) {
             return null;
         }
-        var conditions = Weather.getCurrentConditions();
-        if (conditions == null) {
-            return null;
-        }
-        var now = conditions.temperature;
-        if (now == null) {
-            return null;
-        }
-        return fraction(now.toFloat());
+        return fraction(current);
     }
 
     //! Chance of precipitation, 0.0-1.0, or null when unknown.
     function rainChance() as Float? {
-        if (!(Toybox has :Weather)) {
-            return null;
-        }
-        var conditions = Weather.getCurrentConditions();
-        if (conditions == null) {
-            return null;
-        }
-        var chance = conditions.precipitationChance;
-        if (chance == null) {
-            return null;
-        }
-        return clamp(chance / 100.0);
+        refresh();
+        return rain;
     }
 
     //! Where a Celsius temperature sits on the ring's scale, 0.0-1.0.
