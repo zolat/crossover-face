@@ -376,25 +376,34 @@ every minute mark, so the band can be read off the dial exactly the way you read
 hand. 18°C sits where :18 does. A tighter scale would use the ring better and be harder to
 read.
 
-A white line across the band marks **where the current temperature falls** in that range.
-Without it a day of 11→22°C looks identical at dawn and at noon, and the reading is already
-in the conditions the low and high come from. The mark outranks the fill, so it stays legible
-when now sits *outside* today's range — an overnight low or a stale forecast puts it there
+A single white dot marks **where the current temperature falls** in that range. Without it a
+day of 11→22°C looks identical at dawn and at noon, and the reading is already in the
+conditions the low and high come from. The mark outranks the fill, so it stays legible when
+now sits *outside* today's range — an overnight low or a stale forecast puts it there
 routinely, and drawing it where it actually falls is the honest answer.
 
 It is **awake only**, for the same reason the hand backing is: white is the most luminous
 thing the face can draw, always-on is the mode measured against the burn-in budget, and it is
 not the mode anyone is reading closely. It returns on a wrist raise.
 
-The mark's width is **sized per ring** rather than by one constant. A lattice row is 0.026 of
-a band's position but 0.076 of a turn on the innermost ring, so a band-tuned window falls
-clean between dots there and the mark simply is not drawn. `DotGrid` derives each ring's
-half-width from its inner edge, which makes the mark one dot wide at a ring's inside and a
-few at its outside — a tick that follows the circle. Two consequences worth knowing: in
-**bands — fill from centre** the mark draws twice, once either side of the midline, because
-that is how the layout measures everything; and in the band layouts the outer bands do not
-reach the top and bottom of a round screen, so the lowest few degrees of the leftmost band
-are clipped to a couple of dots, exactly as its fill is. The rings layout has no such gap.
+**It is one dot, not a row of them.** A row was tried first and does not work: drawn out of
+crosses it reads as a bumpy dotted band rather than a line, and in the rings layout the dots
+inside the mark's window span three degrees of angle on a square lattice, so a radial run of
+them staggers instead of lining up. Nothing made of lattice dots can be a straight line at an
+arbitrary angle. One dot cannot be crooked.
+
+Which dot is decided by `DotGrid.markedDot()`: of the dots inside a window around the marked
+position, the one nearest the middle of its ring — the middle column of a band, the mid
+radius of a ring — so the mark sits in the body of its ring rather than trailing off at the
+rim. The window's half-width is **sized per ring**, because a lattice row is 0.026 of a
+band's position but 0.076 of a turn on the innermost ring; one constant would fall clean
+between dots there and the mark would not be drawn at all.
+
+Two consequences worth knowing. The mark snaps to a dot, so it carries up to about half a
+degree of rounding — the dial has 38 rows across 60°C. And in the band layouts the outer
+bands do not reach the top and bottom of a round screen, so the lowest few degrees of the
+leftmost band have no dots to mark, exactly as its fill has none; the rings layout has no
+such gap.
 
 The scale **wraps rather than clamps**, which the minute-mark mapping implies: −5°C belongs
 at :55, five degrees anticlockwise of twelve, exactly where minute 55 sits. Clamping instead

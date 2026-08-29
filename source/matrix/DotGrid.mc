@@ -99,6 +99,16 @@ module DotGrid {
     //! outward into the few-dot tick a radial mark should be.
     var markerHalf as Array<Float> = [] as Array<Float>;
 
+    //! The middle of each ring, measured *across* it rather than along it:
+    //! the centre column's x offset in the band layouts, the squared mid
+    //! radius in the rings layout.
+    //!
+    //! A mark is a single dot, and this is what decides which one. The window
+    //! above says which dots are close enough to the marked position; this
+    //! picks the one of those sitting furthest from the ring's edges, so the
+    //! mark lands in the middle of a band rather than trailing off at the rim.
+    var markMiddle as Array<Number> = [] as Array<Number>;
+
     //! Where each ring's dots begin, with a final entry holding the total.
     //! The dots are stored grouped by ring, so the renderer can walk one ring
     //! at a time and hoist that ring's span, colours and lit test out of its
@@ -235,6 +245,79 @@ module DotGrid {
         return out;
     }
 
+    //! The across-the-ring middle of each ring. See markMiddle.
+    function markMiddles(ringCount as Number, radial as Boolean)
+            as Array<Number> {
+        var out = new [ringCount] as Array<Number>;
+        if (radial) {
+            var thickness = (RADIUS - HUB).toFloat() / ringCount;
+            for (var k = 0; k < ringCount; k++) {
+                var mid = RADIUS - (k + 0.5) * thickness;
+                out[k] = (mid * mid).toNumber();
+            }
+            return out;
+        }
+        // Bands: the ring is a run of columns, so its middle is the midpoint
+        // of the first and last column that maps to it.
+        for (var k = 0; k < ringCount; k++) {
+            var first = -1;
+            var last = -1;
+            for (var col = 0; col < COLS; col++) {
+                if (col * ringCount / COLS == k) {
+                    if (first < 0) { first = col; }
+                    last = col;
+                }
+            }
+            out[k] = (offsetAt(first) + offsetAt(last)) / 2;
+        }
+        return out;
+    }
+
+    //! Which dot of this ring the mark lands on, or -1 when none does.
+    //!
+    //! A mark is one dot, not a row of them: a row drawn out of crosses reads
+    //! as a bumpy dotted band rather than a line, and on a square lattice a
+    //! radial run of them staggers instead of lining up. One dot cannot be
+    //! crooked.
+    //!
+    //! Called once per marked ring per frame — never per dot. The render loop
+    //! is left comparing an index, which is cheaper than the two float
+    //! comparisons a window test costs.
+    function markedDot(ring as Number, window as Array<Float>) as Number {
+        var from = window[0];
+        var to = window[1];
+        var wraps = (from > to);
+        var middle = markMiddle[ring];
+        var radial = (StatMap.layout == LAYOUT_RINGS_LOCAL);
+        var last = ringStart[ring + 1];
+        var best = -1;
+        var bestOff = 0;
+        for (var i = ringStart[ring]; i < last; i++) {
+            var p = positionOf[i];
+            // StatMap.litBetween()'s body again, over the mark's window.
+            var inside = wraps ? ((p >= from) || (p <= to))
+                               : ((p >= from) && (p <= to));
+            if (!inside) {
+                continue;
+            }
+            var off;
+            if (radial) {
+                var dx = xs[i];
+                var dy = ys[i];
+                off = (dx * dx + dy * dy - middle).abs();
+            } else {
+                off = (xs[i] - middle).abs();
+            }
+            // Strictly less, so a tie keeps the first in scan order and the
+            // choice is repeatable frame to frame.
+            if (best < 0 || off < bestOff) {
+                best = i;
+                bestOff = off;
+            }
+        }
+        return best;
+    }
+
     //! Work out every dot's ring, position and orientation, and store them
     //! grouped by ring.
     //!
@@ -290,6 +373,7 @@ module DotGrid {
         var lastRing = ringCount - 1;
         var bounds = ringBounds(ringCount);
         markerHalf = markerWidths(ringCount, radial, centreFill);
+        markMiddle = markMiddles(ringCount, radial);
 
         // --- which ring every dot belongs to, and how many per ring per row --
         //

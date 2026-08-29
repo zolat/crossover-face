@@ -91,6 +91,47 @@ def marked(position: float, mark: float, half: float) -> bool:
         else (lo <= position <= hi)
 
 
+def mark_middle(ring: int, variant: str) -> float:
+    """The across-the-ring middle. Mirrors DotGrid.markMiddles."""
+    if variant == "rings":
+        thickness = (RADIUS - HUB) / RINGS
+        mid = RADIUS - (ring + 0.5) * thickness
+        return mid * mid
+    cols = [c for c in range(COLS) if c * RINGS // COLS == ring]
+    first, last = cols[0], cols[-1]
+    return ((2 * first - (COLS - 1)) * (PITCH // 2)
+            + (2 * last - (COLS - 1)) * (PITCH // 2)) / 2
+
+
+def marked_dot(ring: int, mark: float, variant: str):
+    """The single dot a mark lands on, as (dx, dy), or None.
+
+    Mirrors DotGrid.markedDot: of the dots inside the mark's window, the one
+    nearest the middle of its ring. A mark is one dot rather than a row of
+    them — a row of crosses reads as a bumpy band, and on a square lattice a
+    radial run of them staggers instead of lining up.
+    """
+    if mark is None or mark < 0.0:
+        return None
+    half, middle = marker_half(ring, variant), mark_middle(ring, variant)
+    mapper = VARIANTS[variant]
+    best, best_off = None, None
+    for row in range(ROWS):
+        dy = (2 * row - (ROWS - 1)) * (PITCH // 2)
+        for col in range(COLS):
+            dx = (2 * col - (COLS - 1)) * (PITCH // 2)
+            d = dx * dx + dy * dy
+            if d > RADIUS * RADIUS or d < HUB * HUB:
+                continue
+            r, position = mapper(col, dx, dy)
+            if r != ring or not marked(position, mark, half):
+                continue
+            off = abs(d - middle) if variant == "rings" else abs(dx - middle)
+            if best_off is None or off < best_off:
+                best, best_off = (dx, dy), off
+    return best
+
+
 def mix(a, b, t):
     return tuple(round(x + (y - x) * t) for x, y in zip(a, b))
 
@@ -190,6 +231,13 @@ def render(variant: str, spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
     img = Image.new("RGB", (SIZE, SIZE), (0, 0, 0))
     draw = ImageDraw.Draw(img)
     mapper = VARIANTS[variant]
+    # Which dot each ring marks, worked out once rather than per dot.
+    mark_dots = {}
+    if marks is not None and not always_on:
+        for r in range(RINGS):
+            at = marked_dot(r, marks[r], variant)
+            if at is not None:
+                mark_dots[r] = at
     axes = hand_axes(*at_time) if backing else None
     centre = SIZE // 2
     half = DOT // 2
@@ -207,11 +255,9 @@ def render(variant: str, spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
                 colour = backing
             else:
                 ring, position = mapper(col, dx, dy)
-                mark = None if marks is None else marks[ring]
                 # Awake only, and it outranks the fill: the mark has to be
                 # legible whether or not now falls inside today's range.
-                if (mark is not None and mark >= 0.0 and not always_on
-                        and marked(position, mark, marker_half(ring, variant))):
+                if not always_on and mark_dots.get(ring) == (dx, dy):
                     colour = MARKER
                 else:
                     start, end = spans[ring]

@@ -23,9 +23,11 @@ import Toybox.Lang;
 //!
 //! A ring may also carry a *mark* — one position called out on top of the span,
 //! which is how the temperature ring shows where the current reading falls
-//! inside today's low-to-high. The mark is handed here as a position and turned
-//! into an ordinary span once per ring, so it is lit by the same two
-//! comparisons rather than by a lit test of its own.
+//! inside today's low-to-high. It is a single dot: a whole row of them, drawn
+//! out of crosses, reads as a bumpy dotted band rather than a line, and in the
+//! rings layout a radial run of dots on a square lattice staggers instead of
+//! lining up. The dot is chosen once per ring by DotGrid.markedDot(), so the
+//! loop below only compares an index.
 //!
 //! Grouping also keeps the pen still. The renderer only calls setColor when the
 //! colour actually changes, and because each ring keeps the lattice's scan
@@ -110,19 +112,16 @@ module MatrixRenderer {
             var isRamp = (rings[ring] == Source.SOURCE_TEMPERATURE);
             var last = ringStart[ring + 1];
 
-            // The mark, hoisted the same way the span is. Rings with nothing to
-            // mark leave `marked` false, and their dots pay one local read.
+            // The mark is a single dot, and which dot it is depends on live
+            // data, so it cannot be cached — but it can be found once here
+            // rather than tested for ~280 times below. The loop is then left
+            // comparing an index, which is cheaper than the window test it
+            // replaces and cheaper than the face was before marks existed.
+            var markAt = -1;
             var mark = markers[ring];
-            var marked = (mark >= 0.0);
-            var markFrom = 0.0;
-            var markTo = 0.0;
-            var markWraps = false;
-            if (marked) {
-                // An ordinary span, so the same two comparisons light it.
-                var window = StatMap.windowAround(mark, markerHalf[ring]);
-                markFrom = window[0];
-                markTo = window[1];
-                markWraps = (markFrom > markTo);
+            if (mark >= 0.0) {
+                markAt = DotGrid.markedDot(
+                    ring, StatMap.windowAround(mark, markerHalf[ring]));
             }
 
             for (var i = ringStart[ring]; i < last; i++) {
@@ -133,30 +132,23 @@ module MatrixRenderer {
                 if (hasBacking && HandBacking.covers(dx, dy, hourX, hourY,
                                                      minuteX, minuteY)) {
                     colour = backingColour;
+                } else if (i == markAt) {
+                    // The mark outranks the fill: it has to be legible whether
+                    // or not now falls inside today's range.
+                    colour = markerColour;
                 } else {
                     var position = positionOf[i];
                     // StatMap.litBetween()'s body, inlined. This is the
-                    // innermost statement in the whole face, and it appears
-                    // twice here: once for the ring's span, once for the mark's
-                    // window. litTestsAgreeAtTheBoundaries pins both to the
-                    // readable definition.
-                    if (marked && (markWraps
-                            ? ((position >= markFrom) || (position <= markTo))
-                            : ((position >= markFrom) && (position <= markTo)))) {
-                        // The mark outranks the fill: it has to be legible
-                        // whether or not now falls inside today's range.
-                        colour = markerColour;
+                    // innermost statement in the whole face.
+                    var lit = wraps
+                        ? ((position >= from) || (position <= to))
+                        : ((position >= from) && (position <= to));
+                    if (lit) {
+                        colour = isRamp
+                            ? ramp[(position * rampTop).toNumber()]
+                            : strong;
                     } else {
-                        var lit = wraps
-                            ? ((position >= from) || (position <= to))
-                            : ((position >= from) && (position <= to));
-                        if (lit) {
-                            colour = isRamp
-                                ? ramp[(position * rampTop).toNumber()]
-                                : strong;
-                        } else {
-                            colour = weak;
-                        }
+                        colour = weak;
                     }
                 }
 
