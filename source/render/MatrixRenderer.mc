@@ -29,6 +29,14 @@ import Toybox.Lang;
 //! lining up. The dot is chosen once per ring by DotGrid.markedDot() and drawn
 //! after the loop, so the loop itself never learns marks exist.
 //!
+//! A ring may also be *over* — past a goal it can beat, running a second lap.
+//! That costs the dot loop nothing at all. Such a ring is full by definition, so
+//! its unfilled tier has nothing left to say; the span already describes the
+//! overflow, and the two colours the loop reads are simply swapped underneath
+//! it — unfilled becomes "goal met", filled becomes "gone past it". Four
+//! assignments a frame, hoisted with everything else, and the innermost
+//! statement in the face is untouched.
+//!
 //! Grouping also keeps the pen still. The renderer only calls setColor when the
 //! colour actually changes, and because each ring keeps the lattice's scan
 //! order, a band layout's ring draws as two long runs — unfilled, then filled —
@@ -39,7 +47,7 @@ import Toybox.Lang;
 module MatrixRenderer {
 
     function draw(dc as Dc, spans as Array<Array<Float> >,
-                  markers as Array<Float>,
+                  markers as Array<Float>, overs as Array<Boolean>,
                   palette as Array<Number>, ramp as Array<Number>,
                   backing as Number?) as Void {
         // Normally a no-op: onLayout has already built the cache. This is the
@@ -74,6 +82,7 @@ module MatrixRenderer {
         var rings = StatMap.rings;
         var rampTop = Palette.RAMP_STEPS - 1;
         var markerColour = Palette.markerOf;
+        var overColour = Palette.overOf;
 
         // Unpack the hand axes once. With the backing on, covers() is the only
         // call left in the dot loop; reading its four floats out of an array
@@ -111,6 +120,14 @@ module MatrixRenderer {
             var wraps = (from > to);
             var weak = palette[ring * 2];
             var strong = palette[ring * 2 + 1];
+            // Past the goal, the span describes the second lap rather than the
+            // fill, so the two tiers are re-pointed to match. The ring is full
+            // either way, which is why its unfilled tier is free to be reused:
+            // "not yet in the overflow" is exactly "goal met".
+            if (overs[ring]) {
+                weak = strong;
+                strong = overColour[ring];
+            }
             var isRamp = (rings[ring] == Source.SOURCE_TEMPERATURE);
             var last = ringStart[ring + 1];
 

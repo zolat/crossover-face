@@ -91,6 +91,21 @@ module Palette {
     const MARKER = 0xFFFFFF;
     const MARKER_TINT = 0.35;
 
+    //! How far an over-goal ring's second lap is tinted toward the mark.
+    //!
+    //! "Slightly stronger" cannot mean scaling the colour up: that is the whole
+    //! reason LIFT is 1.0, since ice and orchid already sit at a full channel
+    //! and multiplying would clamp and shift the hue rather than brighten it.
+    //! So the tier is the band mixed toward white, the same move the mark
+    //! makes, stopping well short of it.
+    //!
+    //! It sits about midway between the mark's tint and the band itself, which
+    //! is what leaves room on both sides: clearly stronger than a ring that
+    //! merely met its goal, and clearly dimmer than the solid dot marking the
+    //! lap's waterline, which lands *on* this tier and has to stay legible
+    //! against it. theOverTierReadsBrighterThanTheBand holds that order.
+    const OVER_TINT = 0.70;
+
     //! Backing drawn under the analogue hands when that option is on.
     const BACKING_WHITE = 0xFFFFFF;
     const BACKING_DARK = 0x101010;
@@ -107,6 +122,15 @@ module Palette {
 
     //! The mark's colour on each ring. One entry per ring, not per slot.
     var markerOf as Array<Number> = [] as Array<Number>;
+
+    //! The second lap's colour on each ring — what a ring past its goal draws
+    //! where it would otherwise draw the plain filled colour. One entry per
+    //! ring, not per slot: the renderer swaps it into the ring's filled slot
+    //! for the frame, so the dot loop still reads exactly two colours.
+    //!
+    //! Awake only, like markerOf and for the same reason, so there is no
+    //! always-on tier to keep in step.
+    var overOf as Array<Number> = [] as Array<Number>;
     var rampActive as Array<Number> = [] as Array<Number>;
     var rampAlwaysOn as Array<Number> = [] as Array<Number>;
 
@@ -115,9 +139,11 @@ module Palette {
         var asleep = [] as Array<Number>;
         var held = [] as Array<Number>;
         var marks = [] as Array<Number>;
+        var beyond = [] as Array<Number>;
         for (var ring = 0; ring < StatMap.RINGS; ring++) {
             var colour = THEME[ring % THEME.size()];
             marks.add(mix(MARKER, colour, MARKER_TINT));
+            beyond.add(mix(MARKER, colour, OVER_TINT));
             var lifted = scale(colour, LIFT);
             awake.add(scale(colour, WEAK_ACTIVE));
             awake.add(colour);
@@ -135,6 +161,7 @@ module Palette {
         alwaysOn = asleep;
         heldBack = held;
         markerOf = marks;
+        overOf = beyond;
 
         var ramp = [] as Array<Number>;
         var rampLifted = [] as Array<Number>;

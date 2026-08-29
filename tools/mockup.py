@@ -66,9 +66,19 @@ THEME = [(0xE8, 0x79, 0xF9), (0xB8, 0xD6, 0x4B), (0x7F, 0xD4, 0xFF), (0xFF, 0x6B
 MARKER = (0xFF, 0xFF, 0xFF)
 MARKER_TINT = 0.35
 
+# Mirrors Palette.OVER_TINT: the tier a ring draws once it is past a goal it can
+# beat. "Stronger" cannot be a brightening — LIFT is 1.0 precisely because these
+# hues already sit at a full channel — so it is the band mixed toward white, the
+# same move the mark makes and stopping well short of it. Awake only.
+OVER_TINT = 0.70
+
 
 def marker_colour(ring: int):
     return mix(MARKER, THEME[ring % len(THEME)], MARKER_TINT)
+
+
+def over_colour(ring: int):
+    return mix(MARKER, THEME[ring % len(THEME)], OVER_TINT)
 
 
 def marker_half(ring: int, variant: str) -> float:
@@ -241,7 +251,8 @@ def render(variant: str, spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
            held_back: bool = False,
            backing: tuple[int, int, int] | None = None,
            at_time: tuple[int, int] = (10, 9),
-           drift: tuple[int, int] = (0, 0), marks=None) -> Image.Image:
+           drift: tuple[int, int] = (0, 0), marks=None,
+           overs=None) -> Image.Image:
     img = Image.new("RGB", (SIZE, SIZE), (0, 0, 0))
     draw = ImageDraw.Draw(img)
     mapper = VARIANTS[variant]
@@ -279,14 +290,24 @@ def render(variant: str, spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
                     start, end = spans[ring]
                     lit = start <= position <= end
                     source = assign[ring]
+                    over = bool(overs and overs[ring]) and not always_on
                     if lit and source == SOURCE_TEMPERATURE:
                         colour = temperature_colour(position)
+                    elif lit and over:
+                        # Past the goal the span is the second lap, so the
+                        # filled tier becomes "gone past it" — mirrors the
+                        # per-ring swap in MatrixRenderer.
+                        colour = over_colour(ring)
                     else:
                         colour = THEME[ring % len(THEME)]
                     if always_on:
                         colour = scale(colour, LIFT)
                     if not lit:
-                        if held_back:
+                        if over:
+                            # The ring is full either way, so its unfilled tier
+                            # is free to mean "goal met" — no dimming at all.
+                            weak = 1.0
+                        elif held_back:
                             weak = WEAK_HELD_BACK
                         elif always_on:
                             weak = WEAK_ALWAYS_ON
@@ -530,7 +551,45 @@ def main(outdir: str = "build/mockups") -> int:
                   "white mark = 17C now").save(path)
     written.append(path)
 
-    # 7. Burn-in drift: how long any one pixel stays lit over a full cycle.
+    # 7. Past the goal — steps on ring 1, read as a second lap. Mirrors
+    #    Source.goal()/over() and StatMap.markers(): the span stops describing
+    #    the fill and describes the overflow, the ring's two tiers become
+    #    "goal met" and "gone past it", and the solid dot is the lap's
+    #    waterline. A completed lap carries no dot — its waterline is the
+    #    ring's own edge, so there is nothing left to point at.
+    def goal_lap(reading: float):
+        """(span, over, mark) for a goal reading. Mirrors Source.goal()."""
+        if reading <= 1.0:
+            return (0.0, reading), False, NO_MARK
+        end = 1.0 if reading >= 2.0 else reading - 1.0
+        return (0.0, end), True, (NO_MARK if end >= 1.0 else end)
+
+    def goal_face(variant: str, reading: float):
+        span, over, mark = goal_lap(reading)
+        return render(variant, [span] + values[1:],
+                      marks=[mark, NO_MARK, NO_MARK, NO_MARK],
+                      overs=[over, False, False, False])
+
+    panels = []
+    for reading in (0.34, 1.0, 1.34, 2.5):
+        face = goal_face("bands", reading)
+        panels.append((f"steps {reading * 100:.0f}%   "
+                       f"lum {measure(face) * 100:.2f}%", composite(face)))
+    path = os.path.join(outdir, "08-over-goal.png")
+    sheet(panels, "Ring 1 = steps past its goal — the overflow runs a second "
+                  "lap, dot = the waterline").save(path)
+    written.append(path)
+
+    panels = []
+    for variant in VARIANTS:
+        face = goal_face(variant, 1.34)
+        panels.append((f"{variant.upper()}   lum {measure(face) * 100:.2f}%",
+                       composite(face)))
+    path = os.path.join(outdir, "09-over-goal-layouts.png")
+    sheet(panels, "Steps at 134% — the second lap in every layout").save(path)
+    written.append(path)
+
+    # 8. Burn-in drift: how long any one pixel stays lit over a full cycle.
     phases = [(-2, -2), (3, 3), (3, -2), (-2, 3)]
     duty = {}
     for dx, dy in phases:

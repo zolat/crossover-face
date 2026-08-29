@@ -126,11 +126,44 @@ module StatMap {
         return out;
     }
 
+    //! Which rings are past their goal, and so drawing a second lap. Read once
+    //! per frame, beside spans() and from the same `awake`.
+    //!
+    //! There is no noOvers() to match noSpans() and noMarkers(). Those exist
+    //! because a span and a mark are worth the same in either power mode and
+    //! have to be held back deliberately; over-ness is awake-only at its
+    //! source, so passing always-on's `awake` through here already returns
+    //! nothing lit up.
+    function overs(awake as Boolean) as Array<Boolean> {
+        var out = new [RINGS] as Array<Boolean>;
+        for (var i = 0; i < RINGS; i++) {
+            out[i] = Source.over(rings[i], awake);
+        }
+        return out;
+    }
+
     //! The position each ring marks, or Source.NO_MARKER. Read once per frame.
-    function markers() as Array<Float> {
+    //!
+    //! A ring running a second lap marks its waterline — where the overflow
+    //! has reached — and that is taken from the end of the lap span rather than
+    //! read from the source again. The dot is then *by definition* the end of
+    //! the arc it terminates and cannot drift from it, and the source is read
+    //! twice a frame rather than three times.
+    //!
+    //! A lap that reached 1.0 marks nothing. Its waterline is the ring's own
+    //! edge, so there is no boundary left to point at, and a window centred on
+    //! 1.0 would wrap past the origin and let markedDot pick from both ends of
+    //! the ring at once. A band tinted end to end already says "well past it".
+    function markers(spans as Array<Array<Float> >,
+                     overs as Array<Boolean>) as Array<Float> {
         var out = new [RINGS] as Array<Float>;
         for (var i = 0; i < RINGS; i++) {
-            out[i] = Source.marker(rings[i]);
+            if (overs[i]) {
+                var lap = spans[i][1];
+                out[i] = (lap >= 1.0) ? Source.NO_MARKER : lap;
+            } else {
+                out[i] = Source.marker(rings[i]);
+            }
         }
         return out;
     }

@@ -46,11 +46,17 @@ class CrossoverView extends WatchUi.WatchFace {
         var hideFills = lowPower &&
                         StatMap.alwaysOnFill == StatMap.ALWAYS_ON_FILL_HIDDEN;
         var spans = hideFills ? StatMap.noSpans() : StatMap.spans(!lowPower);
+        // Which rings are past a goal they can beat, read from the same power
+        // mode the spans were: a lap span without its flag would read as a
+        // fill of the same length. Always-on never reports one, so held-back
+        // always-on needs nothing extra here.
+        var overs = StatMap.overs(!lowPower);
         // Awake-only, for the same reason the hand backing is: the mark is a
         // dozen white dots, which is the most expensive thing per dot the face
         // can draw, in the mode that is measured against the burn-in budget and
         // the mode nobody is reading closely. It comes back on a wrist raise.
-        var markers = lowPower ? StatMap.noMarkers() : StatMap.markers();
+        var markers = lowPower ? StatMap.noMarkers()
+                               : StatMap.markers(spans, overs);
         // Backing is awake-only: in always-on it would cost luminance for a
         // detail nobody is looking at.
         var backing = lowPower ? null : backingColour();
@@ -61,7 +67,7 @@ class CrossoverView extends WatchUi.WatchFace {
         // minute there, so there is nothing to save and its compositing is
         // the least predictable.
         if (!lowPower &&
-            !FrameGate.shouldDraw(fingerprint(spans, markers, backing))) {
+            !FrameGate.shouldDraw(fingerprint(spans, markers, overs, backing))) {
             Diagnostics.recordSkip();
             return;
         }
@@ -73,7 +79,7 @@ class CrossoverView extends WatchUi.WatchFace {
         var palette = hideFills
             ? Palette.heldBack
             : (lowPower ? Palette.alwaysOn : Palette.active);
-        MatrixRenderer.draw(dc, spans, markers, palette,
+        MatrixRenderer.draw(dc, spans, markers, overs, palette,
                             lowPower ? Palette.rampAlwaysOn : Palette.rampActive,
                             backing);
         Diagnostics.record(System.getTimer() - started);
@@ -87,23 +93,33 @@ class CrossoverView extends WatchUi.WatchFace {
     //! The marks have to be in here. The current temperature moves while the
     //! day's low and high sit still, so a fingerprint of spans alone would call
     //! that frame identical and freeze the mark until the skip cap fired.
+    //!
+    //! So do the over flags, and for a sharper reason: a ring crossing its goal
+    //! goes from a fill of 0.05 to a lap of 0.05, which is the *same span*. The
+    //! frame it changes colour on is one the gate would otherwise skip. The
+    //! waterline dot happens to move at the same moment and would cover for it
+    //! today, but that leaves redrawing correct only for as long as the dot
+    //! exists, so the flags are named here in their own right.
+    //!
     //! Not private so markMovesForceARedraw can call it. What this function
     //! leaves out is invisible from anywhere else: the face simply stops
     //! updating, which looks like nothing at all going wrong.
     function fingerprint(spans as Array<Array<Float> >,
                          markers as Array<Float>,
+                         overs as Array<Boolean>,
                          backing as Number?) as Array<Float> {
         var drift = Drift.current();
-        var out = new [4 + (StatMap.RINGS * 3)] as Array<Float>;
+        var out = new [4 + (StatMap.RINGS * 4)] as Array<Float>;
         out[0] = drift[0].toFloat();
         out[1] = drift[1].toFloat();
         out[2] = (backing == null) ? -1.0 : backing.toFloat();
         out[3] = (backing == null) ? 0.0
                                    : System.getClockTime().min.toFloat();
         for (var i = 0; i < StatMap.RINGS; i++) {
-            out[4 + (i * 3)] = spans[i][0];
-            out[5 + (i * 3)] = spans[i][1];
-            out[6 + (i * 3)] = markers[i];
+            out[4 + (i * 4)] = spans[i][0];
+            out[5 + (i * 4)] = spans[i][1];
+            out[6 + (i * 4)] = markers[i];
+            out[7 + (i * 4)] = overs[i] ? 1.0 : 0.0;
         }
         return out;
     }

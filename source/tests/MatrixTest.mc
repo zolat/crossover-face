@@ -1,4 +1,5 @@
 import Toybox.Application;
+import Toybox.Graphics;
 import Toybox.Lang;
 import Toybox.Math;
 import Toybox.Test;
@@ -1133,13 +1134,14 @@ module MatrixTest {
         at12[0] = 12.0 / 60.0;
         at18[0] = 18.0 / 60.0;
 
-        var before = view.fingerprint(spans, at12, null);
-        var after = view.fingerprint(spans, at18, null);
+        var none = noOvers();
+        var before = view.fingerprint(spans, at12, none, null);
+        var after = view.fingerprint(spans, at18, none, null);
         logger.debug("fingerprint is " + before.size() + " values");
         Test.assertMessage(!FrameGate.same(before, after),
             "a mark that moved must change the fingerprint");
         Test.assertMessage(
-            FrameGate.same(before, view.fingerprint(spans, at12, null)),
+            FrameGate.same(before, view.fingerprint(spans, at12, none, null)),
             "an unchanged mark must leave the fingerprint alone");
         return true;
     }
@@ -1250,6 +1252,356 @@ module MatrixTest {
                     "the per-ring table is doing nothing");
             }
         }
+        return true;
+    }
+
+    //! Every ring inside its goal, and every ring past it.
+    function noOvers() as Array<Boolean> {
+        return everyOver(false);
+    }
+
+    function allOvers() as Array<Boolean> {
+        return everyOver(true);
+    }
+
+    function everyOver(value as Boolean) as Array<Boolean> {
+        var out = new [StatMap.RINGS] as Array<Boolean>;
+        for (var i = 0; i < StatMap.RINGS; i++) {
+            out[i] = value;
+        }
+        return out;
+    }
+
+    //! Past the goal the span stops describing the fill and describes the
+    //! second lap, so 100% and 250% no longer draw the same band.
+    //!
+    //! The cap is the interesting end. At twice the goal the lap is full, and
+    //! carrying on round would report "only just started" at the exact moment
+    //! of doing double — the reading would run backwards as the day went on.
+    (:test)
+    function overGoalRunsASecondLap(logger as Logger) as Boolean {
+        var readings = [0.0, 0.34, 1.0, 1.05, 1.34, 1.99, 2.0, 3.5]
+                       as Array<Float>;
+        var laps = [0.0, 0.34, 1.0, 0.05, 0.34, 0.99, 1.0, 1.0]
+                   as Array<Float>;
+        for (var i = 0; i < readings.size(); i++) {
+            var span = Source.goal(readings[i], true);
+            logger.debug(readings[i] + " -> [" + span[0] + ", " + span[1] + "]");
+            Test.assertEqualMessage(span[0], 0.0,
+                "a goal always fills from the origin");
+            Test.assertMessage((span[1] - laps[i]).abs() < 0.001,
+                "a reading of " + readings[i] + " should span to " + laps[i] +
+                " but spanned to " + span[1]);
+        }
+        return true;
+    }
+
+    //! Exactly the goal is not over it. The test is strictly greater, and at
+    //! `>=` a ring hitting 100% would report a zero-length lap and drop a mark
+    //! on the origin at the very moment the goal was met.
+    (:test)
+    function exactlyTheGoalIsNotOver(logger as Logger) as Boolean {
+        Test.assertMessage(!Source.isOver(1.0, true),
+            "exactly the goal must read as full, not as a lap of nothing");
+        Test.assertMessage(Source.isOver(1.001, true),
+            "a step past the goal must start the second lap");
+
+        var atGoal = Source.goal(1.0, true);
+        Test.assertMessage((atGoal[1] - 1.0).abs() < 0.001,
+            "a met goal must still fill its ring end to end");
+        return true;
+    }
+
+    //! The invariant the whole feature rests on: the span is a lap exactly when
+    //! the flag says it is. If the two could ever disagree, the renderer would
+    //! draw a 105% ring's lap span without swapping its tiers — and a ring that
+    //! had just beaten its goal would read as 5% of the way to it.
+    (:test)
+    function theLapAndTheOverFlagAgree(logger as Logger) as Boolean {
+        for (var mode = 0; mode < 2; mode++) {
+            var awake = (mode == 1);
+            for (var step = 0; step <= 250; step++) {
+                var value = step / 100.0;
+                var over = Source.isOver(value, awake);
+                var span = Source.goal(value, awake);
+                var capped = (value > 1.0) ? 1.0 : value;
+                var lap = (value >= 2.0) ? 1.0 : value - 1.0;
+                var expected = over ? lap : capped;
+                Test.assertMessage((span[1] - expected).abs() < 0.001,
+                    "awake " + awake + " at " + value + ": flag says over=" +
+                    over + " but the span ends at " + span[1] +
+                    ", not " + expected);
+            }
+        }
+        // And asleep nothing is ever over, however far past the goal it is.
+        Test.assertMessage(!Source.isOver(2.5, false),
+            "always-on must not report an overflow");
+        var asleep = Source.goal(2.5, false);
+        Test.assertMessage((asleep[1] - 1.0).abs() < 0.001,
+            "asleep, a beaten goal still reads as simply full");
+        return true;
+    }
+
+    //! Always-on shows a beaten goal as a plain full band: no brighter tier and
+    //! no white dot, the way it already carries no mark and no hand backing.
+    //! This is the mode measured against the burn-in budget, and the mode
+    //! nobody is reading closely.
+    (:test)
+    function alwaysOnCarriesNoOverflow(logger as Logger) as Boolean {
+        Config.reload();
+        var none = StatMap.overs(false);
+        Test.assertEqualMessage(none.size(), StatMap.RINGS,
+            "every ring needs an entry, or the renderer reads past the end");
+        for (var i = 0; i < StatMap.RINGS; i++) {
+            Test.assertMessage(!none[i],
+                "ring " + i + " reports an overflow in always-on");
+        }
+        // Whatever the watch happens to read, no source is over while asleep.
+        for (var kind = 0; kind < Source.COUNT; kind++) {
+            Test.assertMessage(!Source.over(kind, false),
+                "source " + kind + " overflows in always-on");
+        }
+        return true;
+    }
+
+    //! Only a goal can be beaten. Everything else is bounded by what it
+    //! measures, cyclic, or a range whose wrap is the design — so an overflow
+    //! there would be meaningless rather than merely unused.
+    (:test)
+    function onlyGoalSourcesOverflow(logger as Logger) as Boolean {
+        for (var kind = 0; kind < Source.COUNT; kind++) {
+            if (kind == Source.SOURCE_STEPS ||
+                kind == Source.SOURCE_INTENSITY_MINUTES) {
+                continue;
+            }
+            Test.assertMessage(!Source.over(kind, true),
+                "source " + kind + " has no goal but reports overflowing one");
+        }
+        // The two that do are wired to the shared predicate rather than
+        // testing for themselves — asserted against the reading rather than a
+        // fixed answer, since the simulator's own step count decides it.
+        Test.assertEqualMessage(
+            Source.over(Source.SOURCE_STEPS, true),
+            Source.isOver(WatchData.steps(), true),
+            "steps must decide over-ness the same way its span does");
+        Test.assertEqualMessage(
+            Source.over(Source.SOURCE_INTENSITY_MINUTES, true),
+            Source.isOver(WatchData.intensityMinutes(), true),
+            "intensity minutes must decide over-ness the same way its span does");
+        return true;
+    }
+
+    //! Where the over tier sits, and why it is a mix rather than a brightening.
+    //!
+    //! Scaling the colour up is not available — that is the whole reason LIFT
+    //! is 1.0 — so "stronger" is the band mixed toward white. It has to clear
+    //! the band it replaces, or beating the goal changes nothing; and it has to
+    //! stay under the mark, because the waterline dot lands *on* this tier and
+    //! is the only thing saying how far the lap has run.
+    (:test)
+    function theOverTierReadsBrighterThanTheBand(logger as Logger) as Boolean {
+        Config.reload();
+        Test.assertEqualMessage(Palette.overOf.size(), StatMap.RINGS,
+            "every ring needs an over colour");
+        Test.assertMessage(
+            Palette.OVER_TINT > Palette.MARKER_TINT && Palette.OVER_TINT < 1.0,
+            "the over tier must sit between the mark's tint and the band");
+
+        for (var ring = 0; ring < StatMap.RINGS; ring++) {
+            var weak = relativeLuminance(Palette.active[ring * 2]);
+            var band = relativeLuminance(Palette.active[ring * 2 + 1]);
+            var over = relativeLuminance(Palette.overOf[ring]);
+            var mark = relativeLuminance(Palette.markerOf[ring]);
+            logger.debug("ring " + ring + ": weak " + weak + " band " + band +
+                         " over " + over + " mark " + mark);
+            Test.assertMessage(weak < band,
+                "ring " + ring + ": the unfilled tier must stay under the band");
+            Test.assertMessage(band < over,
+                "ring " + ring + ": beating the goal must read stronger than " +
+                "merely meeting it");
+            Test.assertMessage(over < mark,
+                "ring " + ring + ": the waterline dot must outshine the lap " +
+                "it sits on, or nothing says how far the lap has run");
+
+            // "Tinted toward white" means exactly that: between the two.
+            for (var shift = 0; shift <= 16; shift += 8) {
+                var o = (Palette.overOf[ring] >> shift) & 0xFF;
+                var b = (Palette.active[ring * 2 + 1] >> shift) & 0xFF;
+                var w = (Palette.MARKER >> shift) & 0xFF;
+                var low = (b < w) ? b : w;
+                var high = (b < w) ? w : b;
+                Test.assertMessage(o >= low && o <= high,
+                    "ring " + ring + " channel " + shift + " landed outside " +
+                    "the band and white it is mixed from");
+            }
+        }
+
+        for (var a = 0; a < StatMap.RINGS; a++) {
+            for (var b = a + 1; b < StatMap.RINGS; b++) {
+                Test.assertMessage(Palette.overOf[a] != Palette.overOf[b],
+                    "rings " + a + " and " + b + " share an over colour, so " +
+                    "the per-ring table is doing nothing");
+            }
+        }
+        return true;
+    }
+
+    //! The waterline is the end of the lap, taken from the span rather than
+    //! read from the source a second time — so the dot cannot drift from the
+    //! arc it terminates. A ring that is not over keeps its own source's mark.
+    (:test)
+    function theWaterlineMarksTheEndOfTheLap(logger as Logger) as Boolean {
+        Config.reload();
+        var spans = everySpan(0.0, 0.34);
+        var marks = StatMap.markers(spans, allOvers());
+        for (var i = 0; i < StatMap.RINGS; i++) {
+            Test.assertMessage((marks[i] - 0.34).abs() < 0.001,
+                "ring " + i + " marked " + marks[i] + " rather than the end " +
+                "of its lap");
+        }
+
+        var unchanged = StatMap.markers(spans, noOvers());
+        for (var i = 0; i < StatMap.RINGS; i++) {
+            Test.assertEqualMessage(unchanged[i],
+                Source.marker(StatMap.rings[i]),
+                "ring " + i + " is not over, so its own source decides the mark");
+        }
+        return true;
+    }
+
+    //! A lap that reached its end marks nothing. Its waterline is the ring's
+    //! own edge, so there is no boundary left to point at — and a window
+    //! centred on 1.0 wraps past the origin, which would let markedDot choose
+    //! between dots at both ends of the ring and land the dot at the wrong one.
+    (:test)
+    function aFullLapHasNoWaterline(logger as Logger) as Boolean {
+        Config.reload();
+        var marks = StatMap.markers(everySpan(0.0, 1.0), allOvers());
+        for (var i = 0; i < StatMap.RINGS; i++) {
+            Test.assertEqualMessage(marks[i], Source.NO_MARKER,
+                "ring " + i + " marked a completed lap at " + marks[i]);
+        }
+        // Just short of the end still marks, so this is the cap and not an
+        // off-by-one that quietly swallowed the top of the lap.
+        var nearly = StatMap.markers(everySpan(0.0, 0.99), allOvers());
+        Test.assertMessage(nearly[0] > 0.0,
+            "a lap one step short of full must still carry its waterline");
+        return true;
+    }
+
+    //! Every ring past its goal is the brightest field the face can draw, since
+    //! the whole ring is lit and part of it in the raised tier. Awake carries no
+    //! burn-in budget, but the frame is worth pricing against it anyway — the
+    //! same reasoning as the mark's own luminance test.
+    (:test)
+    function overGoalCostsLittleLuminance(logger as Logger) as Boolean {
+        Config.reload();
+        // What an over ring hands the dot loop: unfilled becomes the band,
+        // filled becomes the over tier. Every dot at the over tier is the worst
+        // it can reach, so the whole ring is spanned.
+        var swapped = new [StatMap.RINGS * 2] as Array<Number>;
+        for (var ring = 0; ring < StatMap.RINGS; ring++) {
+            swapped[ring * 2] = Palette.active[ring * 2 + 1];
+            swapped[ring * 2 + 1] = Palette.overOf[ring];
+        }
+        var full = everySpan(0.0, 1.0);
+        for (var l = 0; l < ALL_LAYOUTS.size(); l++) {
+            StatMap.layout = ALL_LAYOUTS[l];
+            var met = frameLuminance(full, Palette.active);
+            var over = frameLuminance(full, swapped);
+            logger.debug("layout " + StatMap.layout + ": goal met " + met +
+                         ", every ring over " + over);
+            Test.assertMessage(over > met,
+                "beating every goal must actually raise the field");
+            Test.assertMessage(over < BUDGET,
+                "every ring over goal exceeds the luminance budget");
+        }
+        StatMap.layout = StatMap.LAYOUT_BANDS_BOTTOM;
+        return true;
+    }
+
+    //! Crossing the goal is the one change the frame gate cannot see in the
+    //! spans: a fill of 0.05 and a lap of 0.05 are the same two numbers, and
+    //! the frame the ring changes colour on is one the gate would skip.
+    //!
+    //! The marks are held identical here on purpose. The waterline moves at the
+    //! same moment and would mask this today, so testing through it would only
+    //! prove the dot exists — not that the flags are in the fingerprint.
+    (:test)
+    function overFlagsForceARedraw(logger as Logger) as Boolean {
+        var view = new CrossoverView();
+        var spans = everySpan(0.0, 0.05);
+        var marks = new [StatMap.RINGS] as Array<Float>;
+        for (var i = 0; i < StatMap.RINGS; i++) {
+            marks[i] = Source.NO_MARKER;
+        }
+
+        var under = view.fingerprint(spans, marks, noOvers(), null);
+        var over = view.fingerprint(spans, marks, allOvers(), null);
+        logger.debug("fingerprint is " + under.size() + " values");
+        Test.assertMessage(!FrameGate.same(under, over),
+            "crossing the goal must change the fingerprint — the span alone " +
+            "cannot tell a lap of 0.05 from a fill of 0.05");
+        Test.assertMessage(
+            FrameGate.same(under, view.fingerprint(spans, marks, noOvers(), null)),
+            "an unchanged flag must leave the fingerprint alone");
+        return true;
+    }
+
+    //! Drive the real renderer, into a real Dc, with a ring past its goal.
+    //!
+    //! Everything above tests the decisions; this tests that the draw actually
+    //! runs. The over path adds an array the renderer indexes per ring and a
+    //! palette table it indexes the same way, and a mistake in either is an
+    //! out-of-bounds that no amount of checking the inputs would catch — it
+    //! only shows up when something walks the rings and draws.
+    //!
+    //! Every ring is driven over at once, and one of them is temperature, so
+    //! the ramp and the swap are exercised together. The marks land on the
+    //! waterline, which is the case that draws a marked dot on top of the
+    //! raised tier rather than on the plain band.
+    (:test)
+    function theRendererDrawsAnOverGoalRing(logger as Logger) as Boolean {
+        Config.reload();
+        DotGrid.ensureBuilt();
+
+        // A real Dc, off screen, and a *small* one. A full 390x390 buffer is
+        // ~304KB against a 128KB budget — it is why the face cannot cache its
+        // field, and asking for one here takes the test runner out with it.
+        // Size does not matter to what this covers: the renderer still walks
+        // every dot and picks every colour, and the drawing clips.
+        var bitmap = Graphics.createBufferedBitmap(
+            {:width => 64, :height => 64}).get();
+        if (!(bitmap instanceof Graphics.BufferedBitmap)) {
+            logger.debug("no buffered bitmap available; draw not exercised");
+            return true;
+        }
+        var dc = bitmap.getDc();
+
+        var spans = everySpan(0.0, 0.34);
+        var overs = allOvers();
+        var marks = StatMap.markers(spans, overs);
+        // One ring on the ramp, so the ramp and the swap are drawn together.
+        var was = StatMap.rings[1];
+        StatMap.rings[1] = Source.SOURCE_TEMPERATURE;
+
+        for (var l = 0; l < ALL_LAYOUTS.size(); l++) {
+            StatMap.layout = ALL_LAYOUTS[l];
+            DotGrid.invalidate();
+            DotGrid.ensureBuilt();
+            // Both with the hand backing and without: backing is the one other
+            // thing that can win a dot away from the tiers.
+            MatrixRenderer.draw(dc, spans, marks, overs, Palette.active,
+                                Palette.rampActive, null);
+            MatrixRenderer.draw(dc, spans, marks, overs, Palette.active,
+                                Palette.rampActive, Palette.BACKING_WHITE);
+            logger.debug("layout " + StatMap.layout + " drew an over field");
+        }
+
+        StatMap.rings[1] = was;
+        StatMap.layout = StatMap.LAYOUT_BANDS_BOTTOM;
+        DotGrid.invalidate();
+        DotGrid.ensureBuilt();
         return true;
     }
 
@@ -1495,10 +1847,11 @@ module MatrixTest {
     }
 
     //! The view's fingerprint, laid out as CrossoverView.fingerprint() lays it:
-    //! the drift pair, the backing and its minute, then every ring's two ends.
-    //! Only the first ring's sweep moves here.
+    //! the drift pair, the backing and its minute, then four values per ring —
+    //! its two span ends, its mark and its over flag. Only the first ring's
+    //! sweep moves here.
     function fingerprintAtSecond(second as Number) as Array<Float> {
-        var out = new [4 + (StatMap.RINGS * 2)] as Array<Float>;
+        var out = new [4 + (StatMap.RINGS * 4)] as Array<Float>;
         for (var i = 0; i < out.size(); i++) {
             out[i] = 0.0;
         }

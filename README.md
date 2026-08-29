@@ -366,13 +366,13 @@ The face has four rings, and **each one is independently assigned to a source**:
 
 | Source | Shape | Where it comes from |
 |---|---|---|
-| Steps | level | `ActivityMonitor` steps ÷ your step goal |
+| Steps | **goal** — level, then a second lap | `ActivityMonitor` steps ÷ your step goal |
 | Heart rate | level | `Activity.currentHeartRate`, resting → 180bpm |
 | Battery | level | `System.getSystemStats()` |
 | Body Battery | level | `SensorHistory` |
 | Temperature range | **range** + mark | `Weather` today's low → high, on a 0–60°C scale, with now marked |
 | Chance of rain | level | `Weather.precipitationChance` |
-| Intensity minutes | level | `ActivityMonitor` weekly active minutes ÷ your weekly goal |
+| Intensity minutes | **goal** — level, then a second lap | `ActivityMonitor` weekly active minutes ÷ your weekly goal |
 | Seconds | level, **awake only** | `System.getClockTime()`, filling through each minute |
 | Off | — | nothing |
 
@@ -384,6 +384,50 @@ slab; in rings, as an arc.
 
 Temperature is the one source drawn on a ramp rather than a flat hue — ice through orchid to
 rust — so the band reads as a temperature rather than just a length.
+
+#### Past the goal — the second lap
+
+Two sources are **goals** rather than bounded quantities: steps and intensity minutes. A goal
+can be beaten, and both used to be capped at 100%, so the moment you hit your target the ring
+stopped saying anything — 100% and 250% drew the identical full band, and a full
+intensity-minutes band on Thursday lost the rest of the week.
+
+Past the goal the overflow **runs a second lap**. The ring reads as complete in its ordinary
+colour, and the part of it the overflow has reached is drawn in a raised tier — so 134% is a
+full band with its first third lightened. A single filled dot marks the lap's **waterline**,
+the same shape as the temperature mark and for the same reason: at 103% the raised part is one
+dot high, and without the dot small overflows are invisible.
+
+The mechanism costs the render loop nothing, which is why it is done this way. A ring past its
+goal is full by definition, so its *unfilled* tier has nothing left to describe: the span is
+re-pointed at the overflow and the ring's two colours are swapped underneath the loop —
+unfilled becomes "goal met", filled becomes "gone past it". Four assignments a frame, hoisted
+out with the span ends and the ramp test. No dot ever learns that overflow exists.
+
+Three edges are deliberate:
+
+- **Exactly the goal is not over it.** The test is strictly greater. At `>=` a ring hitting
+  100% would report a zero-length lap and drop a mark on the origin at the very moment the
+  goal was met.
+- **At double, the lap stops.** 200% and beyond draw one completed lap rather than starting a
+  third, because carrying on round would report "only just started" at the moment of doing
+  twice the goal — the ring would run backwards as the day went on. A lap that reached its end
+  carries no dot: its waterline is the ring's own edge, so there is nothing left to point at.
+- **It is awake only**, like the mark and the hand backing. Asleep a beaten goal reads as a
+  plain full band, which is true — it just stops saying by how much. Always-on is the mode
+  measured against the burn-in budget, and every ring over goal costs 6.9% of screen luminance
+  against 6.1% for every ring merely full.
+
+The raised tier is the band **mixed toward white**, not a brightening. Brightening is not
+available: `Palette.LIFT` is 1.0 precisely because ice and orchid already sit at a full
+channel, so scaling up clamps and shifts the hue rather than lightening it. The tier sits
+about midway between the band and the mark's own tint, which leaves room on both sides —
+clearly stronger than a ring that merely met its goal, and clearly dimmer than the waterline
+dot that lands on top of it. `theOverTierReadsBrighterThanTheBand` holds that order.
+
+Nothing else overflows, and the reasons differ. Battery, Body Battery and rain are bounded by
+what they measure. Heart rate's 180bpm is a display ceiling, not a goal you complete. Seconds
+is cyclic. Temperature is a range whose wrap past twelve is the design rather than an overflow.
 
 **Seconds is the one source that goes quiet.** It fills its ring from the origin and resets on
 the minute — in the rings layout the leading edge of that fill is where a second hand would

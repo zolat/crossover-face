@@ -5,9 +5,16 @@ import Toybox.SensorHistory;
 import Toybox.System;
 import Toybox.UserProfile;
 
-//! Reads device state and normalises it to 0.0-1.0, which is all the face
+//! Reads device state and normalises it for drawing, which is all the face
 //! needs: the design shows no numbers, only fill levels. Pure queries — nothing
 //! here draws, so the renderer stays ignorant of where data comes from.
+//!
+//! Most readings are bounded by what they measure and come back inside 0.0-1.0.
+//! The two *goals* — steps and intensity minutes — do not: they report the raw
+//! ratio to the goal and go past 1.0 when the goal is beaten, because a beaten
+//! goal is exactly the thing the face wants to show. Source turns the excess
+//! into a second lap; capping it here would throw the reading away before
+//! anything could.
 module WatchData {
 
     //! Heart rate is mapped between the user's resting rate and this ceiling.
@@ -17,8 +24,11 @@ module WatchData {
     const HR_CEILING = 180;
 
     //! Steps, heart rate, battery, body battery — the order StatMap expects.
+    //! Steps is capped here, unlike at its source, because this one promises
+    //! normalised values.
     function normalised() as Array<Float> {
-        return [steps(), heartRate(), battery(), bodyBattery()] as Array<Float>;
+        return [clamp(steps()), heartRate(), battery(), bodyBattery()]
+               as Array<Float>;
     }
 
     function steps() as Float {
@@ -28,7 +38,7 @@ module WatchData {
         if (count == null || goal == null || goal <= 0) {
             return 0.0;
         }
-        return clamp(count.toFloat() / goal);
+        return ratio(count.toFloat() / goal);
     }
 
     //! Weekly intensity minutes against the weekly goal. Garmin counts a
@@ -41,7 +51,7 @@ module WatchData {
         if (minutes == null || goal == null || goal <= 0) {
             return 0.0;
         }
-        return clamp(minutes.total.toFloat() / goal);
+        return ratio(minutes.total.toFloat() / goal);
     }
 
     function heartRate() as Float {
@@ -82,6 +92,15 @@ module WatchData {
         return clamp(level / 100.0);
     }
 
+    //! A goal ratio. Floored at zero, and deliberately *not* capped at one:
+    //! past the goal the excess is the reading, and Source.lap() is what turns
+    //! it into a second lap round the ring.
+    function ratio(value as Float) as Float {
+        if (value < 0.0) { return 0.0; }
+        return value;
+    }
+
+    //! For the readings that genuinely cannot exceed their range.
     function clamp(value as Float) as Float {
         if (value < 0.0) { return 0.0; }
         if (value > 1.0) { return 1.0; }
