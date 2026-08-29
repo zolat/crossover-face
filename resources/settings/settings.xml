@@ -1,11 +1,4 @@
 <settings xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://developer.garmin.com/downloads/connect-iq/resources.xsd">
-    <setting propertyKey="@Properties.layout" title="@Strings.LayoutTitle" prompt="@Strings.LayoutPrompt">
-        <settingConfig type="list">
-            <listEntry value="0">@Strings.LayoutBandsBottom</listEntry>
-            <listEntry value="1">@Strings.LayoutBandsCentre</listEntry>
-            <listEntry value="2">@Strings.LayoutRings</listEntry>
-        </settingConfig>
-    </setting>
     <setting propertyKey="@Properties.handBacking" title="@Strings.BackingTitle" prompt="@Strings.BackingPrompt">
         <settingConfig type="list">
             <listEntry value="0">@Strings.BackingOff</listEntry>
@@ -17,6 +10,12 @@
         <settingConfig type="list">
             <listEntry value="0">@Strings.AlwaysOnFillShown</listEntry>
             <listEntry value="1">@Strings.AlwaysOnFillHidden</listEntry>
+        </settingConfig>
+    </setting>
+    <setting propertyKey="@Properties.dotRotation" title="@Strings.RotationTitle" prompt="@Strings.RotationPrompt">
+        <settingConfig type="list">
+            <listEntry value="0">@Strings.RotationRadial</listEntry>
+            <listEntry value="1">@Strings.RotationUpright</listEntry>
         </settingConfig>
     </setting>
     <setting propertyKey="@Properties.ring1" title="@Strings.Ring1Title" prompt="@Strings.RingPrompt">

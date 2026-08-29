@@ -2,8 +2,8 @@ import Toybox.Application;
 import Toybox.Lang;
 import Toybox.WatchUi;
 
-//! Application entry point. Owns the view's lifecycle and keeps the layout
-//! choice in step with the user's settings.
+//! Application entry point. Owns the view's lifecycle and keeps the face in
+//! step with the user's settings.
 class CrossoverApp extends Application.AppBase {
 
     function initialize() {

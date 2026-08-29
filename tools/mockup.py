@@ -81,16 +81,13 @@ def over_colour(ring: int):
     return mix(MARKER, THEME[ring % len(THEME)], OVER_TINT)
 
 
-def marker_half(ring: int, variant: str) -> float:
+def marker_half(ring: int) -> float:
     """Half-width of a mark's window on this ring. Mirrors DotGrid.markerWidths.
 
-    One constant cannot serve every layout: a lattice row is 0.026 of a band's
-    position but 0.076 of a turn on the innermost ring, where a band-tuned
+    One constant cannot serve every ring: a lattice row is 0.026 of a turn on
+    the outermost but 0.076 of one on the innermost, where an outer-tuned
     window falls between dots and the mark disappears.
     """
-    if variant != "rings":
-        scale = RADIUS if variant == "bands-centre" else 2 * RADIUS
-        return (PITCH / scale) / 2.0
     thickness = (RADIUS - HUB) / RINGS
     inner = RADIUS - (ring + 1) * thickness
     return PITCH / (2.0 * 2.0 * math.pi * inner)
@@ -109,19 +106,14 @@ def marked(position: float, mark: float, half: float) -> bool:
         else (lo <= position <= hi)
 
 
-def mark_middle(ring: int, variant: str) -> float:
+def mark_middle(ring: int) -> float:
     """The across-the-ring middle. Mirrors DotGrid.markMiddles."""
-    if variant == "rings":
-        thickness = (RADIUS - HUB) / RINGS
-        mid = RADIUS - (ring + 0.5) * thickness
-        return mid * mid
-    cols = [c for c in range(COLS) if c * RINGS // COLS == ring]
-    first, last = cols[0], cols[-1]
-    return ((2 * first - (COLS - 1)) * (PITCH // 2)
-            + (2 * last - (COLS - 1)) * (PITCH // 2)) / 2
+    thickness = (RADIUS - HUB) / RINGS
+    mid = RADIUS - (ring + 0.5) * thickness
+    return mid * mid
 
 
-def marked_dot(ring: int, mark: float, variant: str):
+def marked_dot(ring: int, mark: float):
     """The single dot a mark lands on, as (dx, dy), or None.
 
     Mirrors DotGrid.markedDot: of the dots inside the mark's window, the one
@@ -131,8 +123,7 @@ def marked_dot(ring: int, mark: float, variant: str):
     """
     if mark is None or mark < 0.0:
         return None
-    half, middle = marker_half(ring, variant), mark_middle(ring, variant)
-    mapper = VARIANTS[variant]
+    half, middle = marker_half(ring), mark_middle(ring)
     best, best_off = None, None
     for row in range(ROWS):
         dy = (2 * row - (ROWS - 1)) * (PITCH // 2)
@@ -141,10 +132,10 @@ def marked_dot(ring: int, mark: float, variant: str):
             d = dx * dx + dy * dy
             if d > RADIUS * RADIUS or d < HUB * HUB:
                 continue
-            r, position = mapper(col, dx, dy)
+            r, position = ring_map(dx, dy)
             if r != ring or not marked(position, mark, half):
                 continue
-            off = abs(d - middle) if variant == "rings" else abs(dx - middle)
+            off = abs(d - middle)
             if best_off is None or off < best_off:
                 best, best_off = (dx, dy), off
     return best
@@ -183,36 +174,19 @@ def scale(rgb: tuple[int, int, int], factor: float) -> tuple[int, int, int]:
 
 
 # --- dot -> stat mapping -----------------------------------------------------
-# The seam. Every layout shares the lattice; only this mapping differs, which
-# is why switching layouts in Monkey C is one branch in StatMap.
+# The seam. Mirrors StatMap.ringFor and StatMap.positionOf: a dot's radius
+# picks its ring, and its angle is its position along it.
 
 
 RINGS = 4
 
 
-def band_map(col: int, dx: int, dy: int):
-    """Bands, filling upward — column picks the ring, y gives the position."""
-    return min(RINGS - 1, col * RINGS // COLS), (RADIUS - dy) / (2 * RADIUS)
-
-
-def band_centre_map(col: int, dx: int, dy: int):
-    """Bands, position measured out from the midline."""
-    return min(RINGS - 1, col * RINGS // COLS), abs(dy) / RADIUS
-
-
-def ring_map(col: int, dx: int, dy: int):
-    """Rings — radius picks the ring, position runs clockwise from 12."""
+def ring_map(dx: int, dy: int):
+    """Radius picks the ring, position runs clockwise from 12."""
     dist = math.hypot(dx, dy)
     thickness = (RADIUS - HUB) / RINGS
     ring = min(RINGS - 1, max(0, int((RADIUS - dist) / thickness)))
     return ring, ((math.degrees(math.atan2(dx, -dy)) + 360) % 360) / 360.0
-
-
-VARIANTS = {
-    "bands": band_map,
-    "bands-centre": band_centre_map,
-    "rings": ring_map,
-}
 
 
 # --- analogue hands ----------------------------------------------------------
@@ -247,20 +221,19 @@ def hand_covers(dx: float, dy: float, axes) -> bool:
 # --- rendering ---------------------------------------------------------------
 
 
-def render(variant: str, spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
+def render(spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
            held_back: bool = False,
            backing: tuple[int, int, int] | None = None,
            at_time: tuple[int, int] = (10, 9),
            drift: tuple[int, int] = (0, 0), marks=None,
-           overs=None) -> Image.Image:
+           overs=None, rotate: bool = True) -> Image.Image:
     img = Image.new("RGB", (SIZE, SIZE), (0, 0, 0))
     draw = ImageDraw.Draw(img)
-    mapper = VARIANTS[variant]
     # Which dot each ring marks, worked out once rather than per dot.
     mark_dots = {}
     if marks is not None and not always_on:
         for r in range(RINGS):
-            at = marked_dot(r, marks[r], variant)
+            at = marked_dot(r, marks[r])
             if at is not None:
                 mark_dots[r] = at
     axes = hand_axes(*at_time) if backing else None
@@ -280,7 +253,7 @@ def render(variant: str, spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
             if axes is not None and hand_covers(dx, dy, axes):
                 colour = backing
             else:
-                ring, position = mapper(col, dx, dy)
+                ring, position = ring_map(dx, dy)
                 # Awake only, and it outranks the fill: the mark has to be
                 # legible whether or not now falls inside today's range.
                 if not always_on and mark_dots.get(ring) == (dx, dy):
@@ -325,7 +298,8 @@ def render(variant: str, spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
                 draw.rectangle([left, top, left + DOT - 1, top + DOT - 1],
                                fill=colour)
                 continue
-            arm = ARMS[orientation_at(dx, dy)] if variant == "rings" else ARMS[0]
+            # Mirrors StatMap.Rotation: turned to follow the ring, or upright.
+            arm = ARMS[orientation_at(dx, dy)] if rotate else ARMS[0]
             draw_dot(draw, left, top, colour, arm)
     return img
 
@@ -459,99 +433,90 @@ def main(outdir: str = "build/mockups") -> int:
     values = [(0.0, 0.68), (0.0, 0.55), (0.0, 0.82), (0.0, 0.40)]
     written = []
 
-    # 1. Layout comparison, hands on, identical palette and values.
+    # 1. Dot rotation: the same face with its crosses turned and upright.
     panels = []
-    for variant in VARIANTS:
-        face = render(variant, values)
-        lum = measure(face) * 100
-        panels.append((f"{variant.upper()}   luminance {lum:.2f}%", composite(face)))
-    path = os.path.join(outdir, "01-layouts.png")
-    sheet(panels, "Layout options — same palette, same values, hands overlaid").save(path)
+    for label, rotate in (("FOLLOW THE RINGS", True), ("UPRIGHT", False)):
+        face = render(values, rotate=rotate)
+        panels.append((f"{label}   luminance {measure(face) * 100:.2f}%",
+                       composite(face)))
+    path = os.path.join(outdir, "01-rotation.png")
+    sheet(panels, "Dot rotation — each cross turned to follow its ring, "
+                  "or left upright").save(path)
     written.append(path)
 
-    # 2. Weak-tier sweep on each layout: how dark before the hues stop reading.
+    # 2. Weak-tier sweep: how dark before the hues stop reading.
     global WEAK_ACTIVE
     original = WEAK_ACTIVE
-    for variant in VARIANTS:
-        panels = []
-        for factor in (0.10, 0.18, 0.30):
-            globals()['WEAK_ACTIVE'] = factor
-            face = render(variant, values)
-            panels.append((f"weak {factor:.2f}   lum {measure(face) * 100:.2f}%",
-                           composite(face)))
-        WEAK_ACTIVE = original
-        path = os.path.join(outdir, f"02-weak-tier-{variant}.png")
-        sheet(panels, f"{variant.upper()} — unfilled-tier strength").save(path)
-        written.append(path)
-
-    # 3. Active vs always-on: proof the modes read as the same image.
-    for variant in VARIANTS:
-        panels = []
-        for label, always_on in (("ACTIVE", False), ("ALWAYS-ON", True)):
-            face = render(variant, values, always_on=always_on)
-            panels.append((f"{label}   luminance {measure(face) * 100:.2f}%",
-                           composite(face)))
-        path = os.path.join(outdir, f"03-modes-{variant}.png")
-        sheet(panels, f"{variant.upper()} — active vs always-on").save(path)
-        written.append(path)
-
-    # 3b. Always-on with the fills held back: the data appears when you look.
-    #     A span of (2, 2) can never contain a position, which is how the face
-    #     itself hides them — no branch in the render loop, just a span that
-    #     nothing falls inside.
-    nothing = [(2.0, 2.0)] * 4
-    for variant in VARIANTS:
-        panels = []
-        for label, spans in (("ALWAYS-ON, data shown", values),
-                             ("ALWAYS-ON, data hidden", nothing)):
-            held = spans is nothing
-            face = render(variant, spans, always_on=True, held_back=held)
-            panels.append((f"{label}   lum {measure(face) * 100:.2f}%",
-                           composite(face)))
-        path = os.path.join(outdir, f"06-always-on-fill-{variant}.png")
-        sheet(panels, f"{variant.upper()} — always-on with and without the fills").save(path)
-        written.append(path)
-
-    # 4. Worst case: every stat at 100%, the frame the luminance test guards.
     panels = []
-    for variant in VARIANTS:
-        face = render(variant, [(0.0, 1.0)] * 4, always_on=True)
-        panels.append((f"{variant.upper()} always-on   lum {measure(face) * 100:.2f}%",
+    for factor in (0.10, 0.18, 0.30):
+        globals()['WEAK_ACTIVE'] = factor
+        face = render(values)
+        panels.append((f"weak {factor:.2f}   lum {measure(face) * 100:.2f}%",
                        composite(face)))
-    path = os.path.join(outdir, "04-worst-case.png")
-    sheet(panels, "Worst case — every stat 100%, always-on").save(path)
+    WEAK_ACTIVE = original
+    path = os.path.join(outdir, "02-weak-tier.png")
+    sheet(panels, "Unfilled-tier strength").save(path)
     written.append(path)
 
-    # 5. Hand backing — the awake-only option, hands drawn at system time.
+    # 3. Active vs always-on: proof the modes read as the same image.
+    panels = []
+    for label, always_on in (("ACTIVE", False), ("ALWAYS-ON", True)):
+        face = render(values, always_on=always_on)
+        panels.append((f"{label}   luminance {measure(face) * 100:.2f}%",
+                       composite(face)))
+    path = os.path.join(outdir, "03-modes.png")
+    sheet(panels, "Active vs always-on").save(path)
+    written.append(path)
+
+    # 4. Always-on with the fills held back: the data appears when you look.
+    #    A span of (2, 2) can never contain a position, which is how the face
+    #    itself hides them — no branch in the render loop, just a span that
+    #    nothing falls inside.
+    nothing = [(2.0, 2.0)] * 4
+    panels = []
+    for label, spans in (("ALWAYS-ON, data shown", values),
+                         ("ALWAYS-ON, data hidden", nothing)):
+        held = spans is nothing
+        face = render(spans, always_on=True, held_back=held)
+        panels.append((f"{label}   lum {measure(face) * 100:.2f}%",
+                       composite(face)))
+    path = os.path.join(outdir, "06-always-on-fill.png")
+    sheet(panels, "Always-on with and without the fills").save(path)
+    written.append(path)
+
+    # 5. Worst case: every stat at 100%, the frame the luminance test guards.
+    face = render([(0.0, 1.0)] * 4, always_on=True)
+    path = os.path.join(outdir, "04-worst-case.png")
+    sheet([(f"ALWAYS-ON   lum {measure(face) * 100:.2f}%", composite(face))],
+          "Worst case — every stat 100%, always-on").save(path)
+    written.append(path)
+
+    # 6. Hand backing — the awake-only option, hands drawn at system time.
     when = (10, 9)
     panels = []
     for label, backing in (("OFF", None), ("WHITE", (255, 255, 255)),
                            ("DARK", (16, 16, 16))):
-        face = render("bands", values, backing=backing, at_time=when)
+        face = render(values, backing=backing, at_time=when)
         panels.append((f"{label}   luminance {measure(face) * 100:.2f}%",
                        composite(face, at_time=when)))
     path = os.path.join(outdir, "05-hand-backing.png")
     sheet(panels, "Behind hands — awake only, hands held at system time").save(path)
     written.append(path)
 
-    # 6. Rings assigned to weather — temperature is a range, not a level, and
+    # 7. Rings assigned to weather — temperature is a range, not a level, and
     #    the mark says where in that range now falls.
     weather_assign = (4, 5, 2, 0)          # temperature, rain, battery, steps
     weather_spans = [(11 / 60, 22 / 60), (0.0, 0.35), (0.0, 0.82), (0.0, 0.68)]
     NO_MARK = -1.0
     weather_marks = [17 / 60, NO_MARK, NO_MARK, NO_MARK]   # 17C right now
-    panels = []
-    for variant in ("bands", "bands-centre", "rings"):
-        face = render(variant, weather_spans, assign=weather_assign,
-                      marks=weather_marks)
-        panels.append((f"{variant.upper()}   lum {measure(face) * 100:.2f}%",
-                       composite(face)))
+    face = render(weather_spans, assign=weather_assign, marks=weather_marks)
     path = os.path.join(outdir, "07-weather-assignment.png")
-    sheet(panels, "Ring 1 = temperature 11-22C on a 0-60 scale, "
-                  "white mark = 17C now").save(path)
+    sheet([(f"WEATHER   lum {measure(face) * 100:.2f}%", composite(face))],
+          "Ring 1 = temperature 11-22C on a 0-60 scale, "
+          "white mark = 17C now").save(path)
     written.append(path)
 
-    # 7. Past the goal — steps on ring 1, read as a second lap. Mirrors
+    # 8. Past the goal — steps on ring 1, read as a second lap. Mirrors
     #    Source.goal()/over() and StatMap.markers(): the span stops describing
     #    the fill and describes the overflow, the ring's two tiers become
     #    "goal met" and "gone past it", and the solid dot is the lap's
@@ -564,15 +529,15 @@ def main(outdir: str = "build/mockups") -> int:
         end = 1.0 if reading >= 2.0 else reading - 1.0
         return (0.0, end), True, (NO_MARK if end >= 1.0 else end)
 
-    def goal_face(variant: str, reading: float):
+    def goal_face(reading: float):
         span, over, mark = goal_lap(reading)
-        return render(variant, [span] + values[1:],
+        return render([span] + values[1:],
                       marks=[mark, NO_MARK, NO_MARK, NO_MARK],
                       overs=[over, False, False, False])
 
     panels = []
     for reading in (0.34, 1.0, 1.34, 2.5):
-        face = goal_face("bands", reading)
+        face = goal_face(reading)
         panels.append((f"steps {reading * 100:.0f}%   "
                        f"lum {measure(face) * 100:.2f}%", composite(face)))
     path = os.path.join(outdir, "08-over-goal.png")
@@ -580,20 +545,11 @@ def main(outdir: str = "build/mockups") -> int:
                   "lap, dot = the waterline").save(path)
     written.append(path)
 
-    panels = []
-    for variant in VARIANTS:
-        face = goal_face(variant, 1.34)
-        panels.append((f"{variant.upper()}   lum {measure(face) * 100:.2f}%",
-                       composite(face)))
-    path = os.path.join(outdir, "09-over-goal-layouts.png")
-    sheet(panels, "Steps at 134% — the second lap in every layout").save(path)
-    written.append(path)
-
-    # 8. Burn-in drift: how long any one pixel stays lit over a full cycle.
+    # 9. Burn-in drift: how long any one pixel stays lit over a full cycle.
     phases = [(-2, -2), (3, 3), (3, -2), (-2, 3)]
     duty = {}
     for dx, dy in phases:
-        img = render("bands", [(0.0, 1.0)] * 4, drift=(dx, dy))
+        img = render([(0.0, 1.0)] * 4, drift=(dx, dy))
         px = img.load()
         for y in range(SIZE):
             for x in range(SIZE):
