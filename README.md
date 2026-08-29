@@ -1,9 +1,9 @@
 # Crossover Face
 
 A Connect IQ watch face for the **Garmin Instinct Crossover AMOLED** — a dot-matrix field
-where the data *is* the background. Each dot carries its stat's colour top to bottom; the
-fill level changes intensity rather than presence, so the face never restructures itself,
-it just saturates through the day. Nothing floats above the dots, which is why the watch's
+where the data *is* the background. Four concentric rings of dots, each carrying its stat's
+colour and filling clockwise from twelve; the fill changes intensity rather than presence,
+so the face never restructures itself, it just saturates through the day. Nothing floats above the dots, which is why the watch's
 physical analogue hands sweep over it without ever obscuring anything.
 
 ## Quick start
@@ -144,7 +144,7 @@ Tightening the arithmetic was not enough. In order, and each still tripping:
 The work is simply too much for one synchronous pass on this hardware. So the cache is
 **built in chunks across frames** (`DotGrid.CHUNK`): the face draws the dots it has and
 fills in the rest over the next few updates, taking about eight frames from cold. The
-layout rarely changes, so it is paid once.
+lattice never changes, so it is paid once.
 
 `DotGrid.buildAll()` exists for tests and tooling. The face must never call it.
 
@@ -155,10 +155,10 @@ every frame in interpreted bytecode. Working out each dot's ring and position in
 loop **tripped the watchdog outright** — `Code Executed Too Long`, thrown from
 `StatMap.classify()`. The face would not load at all.
 
-None of that work depends on the data, only on the geometry and the layout. So `DotGrid`
-computes it once and caches parallel arrays of dx, dy, ring and position; `Config.reload()`
-rebuilds them whenever the layout changes. `MatrixRenderer` is then a flat walk with no
-calls in the inner loop, and `setColor` is only issued when the colour actually differs.
+None of that work depends on the data — it is all geometry. So `DotGrid` computes it once
+and caches parallel arrays of dx, dy, ring, position and cross orientation.
+`MatrixRenderer` is then a flat walk with no calls in the inner loop, and `setColor` is only
+issued when the colour actually differs.
 
 Measured in the simulator with `System.getTimer()` around `onUpdate`:
 
@@ -179,11 +179,10 @@ the same extent lights 25. That buys density: at a 10px pitch the face carries ~
 against ~570 of squares, *and* costs less light. The finer grain reads as instrument
 texture rather than a chunky LED panel.
 
-In the **rings layout each cross is turned to follow the circle it sits on** — one stroke
-pointing out from the centre, the other across it. Crosses read as `+` on the axes and `×`
-on the diagonals, which gives the field a radial structure matching what the layout is
-actually showing. The band layouts have no circular structure to follow, so their crosses
-stay upright.
+**Each cross is turned to follow the circle it sits on** — one stroke pointing out from the
+centre, the other across it. Crosses read as `+` on the axes and `×` on the diagonals, which
+gives the field a radial grain matching the rings it is drawing. It is a setting (see
+**Dot rotation**); upright, the field reads as a plain lattice with the rings drawn on it.
 
 A cross has 90° rotational symmetry, so four orientations at 22.5° apart cover every
 distinct one — and at 5px that is about all the resolution there is anyway. Each dot's
@@ -196,8 +195,7 @@ Strokes are drawn with `drawLine`, which **measured faster than the two `fillRec
 calls it replaced** — 33.5ms against 39.7ms a frame. Rotation cost nothing; it saved time.
 
 The renderer only calls `setColor` when the colour actually changes. Runs of dots share a
-colour, especially in the band layouts, so with ~1,100 dots a frame this saves far more
-calls than it costs.
+colour, so with ~1,100 dots a frame this saves far more calls than it costs.
 
 ## Burn-in drift
 
@@ -378,16 +376,15 @@ The face has four rings, and **each one is independently assigned to a source**:
 
 Every source reports a **span** — a start and an end, both 0.0–1.0 — rather than a single
 level. Levels are just spans that start at zero. That one shape is why temperature, which
-is a genuine range, works in every layout without the layouts knowing anything about it: a
-level fills from the origin, a range floats between its ends. In bands a range reads as a
-slab; in rings, as an arc.
+is a genuine range, needs no special case anywhere: a level fills from the origin, a range
+floats between its ends and reads as an arc.
 
 Temperature is the one source drawn on a ramp rather than a flat hue — ice through orchid to
-rust — so the band reads as a temperature rather than just a length.
+rust — so the ring reads as a temperature rather than just a length.
 
 **Seconds is the one source that goes quiet.** It fills its ring from the origin and resets on
-the minute — in the rings layout the leading edge of that fill is where a second hand would
-point — but only while the watch is awake. Always-on is asked for one frame a minute, so a
+the minute — the leading edge of that fill is where a second hand would point — but only
+while the watch is awake. Always-on is asked for one frame a minute, so a
 per-second reading could only ever be stale there, and it is the mode the burn-in and
 luminance rules are written against. Asleep the ring keeps its colour and shows no fill.
 
@@ -398,7 +395,7 @@ roughly nothing. That is the rate the face drew at before the gate existed, comf
 the watchdog — but it is real battery, and it is the price of a second hand.
 
 Its **0–60°C scale is deliberately far wider than any weather needs**: it puts one degree on
-every minute mark, so the band can be read off the dial exactly the way you read the minute
+every minute mark, so the range can be read off the dial exactly the way you read the minute
 hand. 18°C sits where :18 does. A tighter scale would use the ring better and be harder to
 read.
 
@@ -413,9 +410,9 @@ thing the face can draw, always-on is the mode measured against the burn-in budg
 not the mode anyone is reading closely. It returns on a wrist raise.
 
 **It is one dot, not a row of them.** A row was tried first and does not work: drawn out of
-crosses it reads as a bumpy dotted band rather than a line, and in the rings layout the dots
-inside the mark's window span three degrees of angle on a square lattice, so a radial run of
-them staggers instead of lining up. Nothing made of lattice dots can be a straight line at an
+crosses it reads as a bumpy dotted band rather than a line, and the dots inside the mark's
+window span three degrees of angle on a square lattice, so a radial run of them staggers
+instead of lining up. Nothing made of lattice dots can be a straight line at an
 arbitrary angle. One dot cannot be crooked.
 
 That dot is **filled, not a cross**. Every other dot on the face is two thin strokes, so a
@@ -425,17 +422,14 @@ that, rather than the colour, is what makes it read as a mark. It costs nine lit
 becoming twenty-five, once.
 
 Which dot is decided by `DotGrid.markedDot()`: of the dots inside a window around the marked
-position, the one nearest the middle of its ring — the middle column of a band, the mid
-radius of a ring — so the mark sits in the body of its ring rather than trailing off at the
-rim. The window's half-width is **sized per ring**, because a lattice row is 0.026 of a
-band's position but 0.076 of a turn on the innermost ring; one constant would fall clean
-between dots there and the mark would not be drawn at all.
+position, the one nearest the mid radius of its ring, so the mark sits in the body of the
+ring rather than trailing off at either edge. The window's half-width is **sized per ring**,
+because a lattice row is 0.026 of a turn on the outermost ring but 0.076 of one on the
+innermost; a single constant would fall clean between dots there and the mark would not be
+drawn at all.
 
-Two consequences worth knowing. The mark snaps to a dot, so it carries up to about half a
-degree of rounding — the dial has 38 rows across 60°C. And in the band layouts the outer
-bands do not reach the top and bottom of a round screen, so the lowest few degrees of the
-leftmost band have no dots to mark, exactly as its fill has none; the rings layout has no
-such gap.
+One consequence worth knowing: the mark snaps to a dot, so it carries up to about half a
+degree of rounding — the dial has 38 rows across 60°C.
 
 The scale **wraps rather than clamps**, which the minute-mark mapping implies: −5°C belongs
 at :55, five degrees anticlockwise of twelve, exactly where minute 55 sits. Clamping instead
@@ -445,13 +439,18 @@ and `StatMap.isLit()` handles that case: a span whose end precedes its start wra
 origin. (−5°C and 55°C share a position; nothing confuses them in practice, and the scale
 already wraps 60 onto 0 the same way.)
 
-### Layout
+### Dot rotation
 
-| Layout | Ring index | Position runs |
-|---|---|---|
-| **Bands — fill upward** (default) | column, left to right | up from the rim |
-| **Bands — fill from centre** | column, left to right | out from the midline |
-| **Rings — fill clockwise** | radius, outer to inner | clockwise from twelve |
+Follow the rings (default), or Upright. Turned, each cross points one stroke out from the
+centre and lays the other across it, so the field carries the same radial grain the rings do.
+Upright, every cross is the same `+` and the dots read as a plain lattice the rings are drawn
+on.
+
+It is **free either way**. Which way a cross would point is pure geometry, so `DotGrid` caches
+it whatever the setting says and the renderer simply stops reading it — the setting never
+touches the cache, and `rotationDoesNotReachTheCache` pins that. Upright is if anything the
+cheaper frame, because the orientation lookup hoists out of the dot loop. Every orientation
+lights the same nine pixels, so the luminance is identical: the mockup measures both at 4.82%.
 
 ### Behind hands
 
@@ -527,11 +526,9 @@ the same extent lights 25. That buys density: at a 10px pitch the face carries ~
 against ~570 of squares, *and* costs less light. The finer grain reads as instrument
 texture rather than a chunky LED panel.
 
-In the **rings layout each cross is turned to follow the circle it sits on** — one stroke
-pointing out from the centre, the other across it. Crosses read as `+` on the axes and `×`
-on the diagonals, which gives the field a radial structure matching what the layout is
-actually showing. The band layouts have no circular structure to follow, so their crosses
-stay upright.
+**Each cross is turned to follow the circle it sits on** — one stroke pointing out from the
+centre, the other across it. Crosses read as `+` on the axes and `×` on the diagonals, which
+gives the field a radial grain matching the rings it is drawing.
 
 A cross has 90° rotational symmetry, so four orientations at 22.5° apart cover every
 distinct one — and at 5px that is about all the resolution there is anyway. Each dot's
@@ -544,8 +541,7 @@ Strokes are drawn with `drawLine`, which **measured faster than the two `fillRec
 calls it replaced** — 33.5ms against 39.7ms a frame. Rotation cost nothing; it saved time.
 
 The renderer only calls `setColor` when the colour actually changes. Runs of dots share a
-colour, especially in the band layouts, so with ~1,100 dots a frame this saves far more
-calls than it costs.
+colour, so with ~1,100 dots a frame this saves far more calls than it costs.
 
 ## Burn-in drift
 
@@ -754,19 +750,19 @@ source/
   CrossoverView.mc    picks a renderer based on power mode — no drawing
   data/WatchData.mc   device state, formatted. Pure queries, no drawing
   matrix/DotGrid.mc   lattice geometry: pitch, circle clip, hub
-  matrix/StatMap.mc   dot -> ring mapping and span test; the layout seam
+  matrix/StatMap.mc   dot -> ring mapping and span test; the settings
   matrix/Drift.mc     burn-in mitigation cycle
   matrix/HandBacking.mc  which dots sit under the analogue hands
   data/Source.mc      what a ring can be assigned to; spans and hues
   data/WeatherData.mc today's temperature range and rain chance
   render/Config.mc    reloads settings and palette together
-  settings/           on-device layout picker
+  settings/           on-device settings menu
   render/Palette.mc   four hues, two tiers, two power modes
   render/MatrixRenderer.mc  draws the field with a given palette
   tests/              geometry, mapping and luminance-budget tests
 resources/
   drawables/          launcher icon
-  properties.xml      the layout setting's stored value
+  properties.xml      the settings' stored values
   settings/           how that setting is presented in Garmin Connect
   strings/            app name and setting labels
 tools/

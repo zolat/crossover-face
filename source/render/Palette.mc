@@ -29,7 +29,7 @@ module Palette {
     //! 78 for the worst arrangement. Neighbours blurring together, not the set
     //! average, is what decides whether two rings can be told apart.
     //!
-    //! Ring 1 is outermost, or leftmost in the band layouts.
+    //! Ring 1 is the outermost.
     const THEME = [
         0xE879F9,   //! orchid
         0xB8D64B,   //! moss

@@ -5,8 +5,8 @@ import Toybox.Lang;
 //! Every source reports a *span* — a start and end position, both 0.0-1.0 —
 //! rather than a single level. Most are levels and simply return [0, value],
 //! filling from the origin. Temperature is a genuine range: today's low to
-//! today's high. One shape covers both, so the layouts do not care which is
-//! which and a range works in bands and rings alike.
+//! today's high. One shape covers both, so nothing downstream has to care
+//! which is which — a range fills the same way a level does.
 //!
 //! A source may also decline to report while the watch is in always-on, which
 //! is what `awake` is for. Only seconds uses it: everything else is worth the
@@ -54,9 +54,9 @@ module Source {
     //! this is called four times per draw, not once per dot.
     //!
     //! `awake` is false in always-on. A source that has nothing to say there
-    //! reports EMPTY, which lights nothing: no dot sits at position 0.0 in any
-    //! layout, so a zero-length span at the origin is genuinely dark rather
-    //! than a hairline of lit dots.
+    //! reports EMPTY, which lights nothing: no dot sits exactly at twelve, so
+    //! a zero-length span at the origin is genuinely dark rather than a
+    //! hairline of lit dots.
     function span(source as Number, awake as Boolean) as Array<Float> {
         switch (source) {
             case SOURCE_STEPS:
@@ -100,8 +100,8 @@ module Source {
     //! A single position on the ring to mark, on top of the span.
     //!
     //! Kept apart from span() rather than folded into it: that a span is
-    //! exactly two numbers is what lets every layout treat a range and a level
-    //! alike, and the tests lean on it throughout. A marker is a different
+    //! exactly two numbers is what lets a range and a level be treated alike,
+    //! and the tests lean on it throughout. A marker is a different
     //! thing — one point rather than an interval — so it travels beside the
     //! span, not inside it.
     //!

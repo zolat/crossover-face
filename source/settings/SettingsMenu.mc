@@ -25,11 +25,11 @@ class SettingsMenu extends WatchUi.Menu2 {
     function initialize() {
         Menu2.initialize({:title => Rez.Strings.SettingsTitle});
         addItem(new WatchUi.MenuItem(
-            Rez.Strings.LayoutTitle, layoutLabel(), :layout, null));
-        addItem(new WatchUi.MenuItem(
             Rez.Strings.BackingTitle, backingLabel(), :backing, null));
         addItem(new WatchUi.MenuItem(Rez.Strings.AlwaysOnFillTitle,
             alwaysOnFillLabel(), :alwaysOnFill, null));
+        addItem(new WatchUi.MenuItem(
+            Rez.Strings.RotationTitle, rotationLabel(), :rotation, null));
         addItem(new WatchUi.MenuItem(Rez.Strings.RingsTitle, null, :rings, null));
         addItem(new WatchUi.MenuItem(
             Rez.Strings.DiagnosticsTitle, Diagnostics.summary(),
@@ -42,9 +42,9 @@ class SettingsMenu extends WatchUi.Menu2 {
     //! the values can be refreshed — the menu itself is not rebuilt.
     function onShow() as Void {
         Menu2.onShow();
-        setSubLabelOf(0, layoutLabel());
-        setSubLabelOf(1, backingLabel());
-        setSubLabelOf(2, alwaysOnFillLabel());
+        setSubLabelOf(0, backingLabel());
+        setSubLabelOf(1, alwaysOnFillLabel());
+        setSubLabelOf(2, rotationLabel());
         setSubLabelOf(4, Diagnostics.summary());
     }
 
@@ -56,17 +56,16 @@ class SettingsMenu extends WatchUi.Menu2 {
         }
     }
 
-    private function layoutLabel() as ResourceId {
-        var labels = [Rez.Strings.LayoutBandsBottom,
-                      Rez.Strings.LayoutBandsCentre,
-                      Rez.Strings.LayoutRings] as Array<ResourceId>;
-        return labels[StatMap.layout];
-    }
-
     private function alwaysOnFillLabel() as ResourceId {
         var labels = [Rez.Strings.AlwaysOnFillShown,
                       Rez.Strings.AlwaysOnFillHidden] as Array<ResourceId>;
         return labels[StatMap.alwaysOnFill];
+    }
+
+    private function rotationLabel() as ResourceId {
+        var labels = [Rez.Strings.RotationRadial,
+                      Rez.Strings.RotationUpright] as Array<ResourceId>;
+        return labels[StatMap.rotation];
     }
 
     private function backingLabel() as ResourceId {
@@ -86,13 +85,7 @@ class SettingsMenuDelegate extends WatchUi.Menu2InputDelegate {
 
     function onSelect(item as WatchUi.MenuItem) as Void {
         var id = item.getId();
-        if (id == :layout) {
-            push(new ChoiceMenu(Rez.Strings.LayoutTitle, StatMap.PROPERTY_LAYOUT,
-                [Rez.Strings.LayoutBandsBottom,
-                 Rez.Strings.LayoutBandsCentre,
-                 Rez.Strings.LayoutRings] as Array<ResourceId>,
-                StatMap.layout));
-        } else if (id == :rings) {
+        if (id == :rings) {
             WatchUi.pushView(new RingMenu(), new RingMenuDelegate(),
                              WatchUi.SLIDE_LEFT);
         } else if (id == :backing) {
@@ -107,6 +100,12 @@ class SettingsMenuDelegate extends WatchUi.Menu2InputDelegate {
                 [Rez.Strings.AlwaysOnFillShown,
                  Rez.Strings.AlwaysOnFillHidden] as Array<ResourceId>,
                 StatMap.alwaysOnFill));
+        } else if (id == :rotation) {
+            push(new ChoiceMenu(Rez.Strings.RotationTitle,
+                StatMap.PROPERTY_ROTATION,
+                [Rez.Strings.RotationRadial,
+                 Rez.Strings.RotationUpright] as Array<ResourceId>,
+                StatMap.rotation));
         } else if (id == :diagnostics) {
             // Nothing to open — re-reading it is the useful action, since the
             // figure moves while you are looking at it.
@@ -124,7 +123,8 @@ class SettingsMenuDelegate extends WatchUi.Menu2InputDelegate {
     }
 }
 
-//! Lists the four rings, each showing what it is currently assigned to.
+//! Lists the four rings, outermost first, each showing what it is currently
+//! assigned to.
 class RingMenu extends WatchUi.Menu2 {
 
     function initialize() {
