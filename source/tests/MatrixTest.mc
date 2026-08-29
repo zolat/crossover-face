@@ -394,6 +394,11 @@ module MatrixTest {
     //! are the brightest thing on the face and they barely move, which is
     //! exactly what burns an AMOLED in. Holding them back has to actually cut
     //! the light, or the option is cosmetic.
+    //!
+    //! This is now measured against the *lifted* held-back table, which is the
+    //! bound on how bright that tier may go: the saving is what the option is
+    //! for, so the mode has to stay clearly darker than showing the data no
+    //! matter how far the field is lifted to make it readable.
     (:test)
     function heldBackFillsCutAlwaysOnLuminance(logger as Logger) as Boolean {
         Config.reload();
@@ -401,13 +406,79 @@ module MatrixTest {
         for (var l = 0; l < ALL_LAYOUTS.size(); l++) {
             StatMap.layout = ALL_LAYOUTS[l];
             var withFills = frameLuminance(busy, Palette.alwaysOn);
-            var heldBack = frameLuminance(StatMap.noSpans(), Palette.alwaysOn);
+            var heldBack = frameLuminance(StatMap.noSpans(), Palette.heldBack);
             logger.debug("layout " + StatMap.layout + ": with fills " +
                          withFills + ", held back " + heldBack);
             Test.assertMessage(heldBack < withFills,
                 "holding the fills back must lower always-on luminance");
             Test.assertMessage(heldBack < BUDGET,
                 "and must still sit inside the burn-in budget");
+        }
+        StatMap.layout = StatMap.LAYOUT_BANDS_BOTTOM;
+        return true;
+    }
+
+    //! What the lifted tier is for. Held back, the unfilled dots are not a
+    //! backdrop to the data — they are the whole image — so the field has to
+    //! read on its own. It must also be brighter than the tier it replaced, or
+    //! the lift is a no-op and nothing here would notice.
+    (:test)
+    function theHeldBackFieldIsBrighterThanPlainAlwaysOn(logger as Logger) as Boolean {
+        Config.reload();
+        Test.assertMessage(Palette.WEAK_HELD_BACK > Palette.WEAK_ALWAYS_ON,
+            "the held-back tier must be brighter than the ordinary always-on one");
+        for (var ring = 0; ring < StatMap.RINGS; ring++) {
+            Test.assertMessage(
+                Palette.heldBack[ring * 2] != Palette.alwaysOn[ring * 2],
+                "ring " + ring + " was not actually lifted");
+        }
+
+        var nothing = StatMap.noSpans();
+        for (var l = 0; l < ALL_LAYOUTS.size(); l++) {
+            StatMap.layout = ALL_LAYOUTS[l];
+            var before = frameLuminance(nothing, Palette.alwaysOn);
+            var lifted = frameLuminance(nothing, Palette.heldBack);
+            logger.debug("layout " + StatMap.layout + ": " + before +
+                         " -> " + lifted);
+            Test.assertMessage(lifted > before,
+                "the held-back field must be brighter than it was");
+            Test.assertMessage(lifted < BUDGET,
+                "and must still sit inside the burn-in budget");
+        }
+        StatMap.layout = StatMap.LAYOUT_BANDS_BOTTOM;
+        return true;
+    }
+
+    //! How far it was lifted, and why that number. The held-back field matches
+    //! the awake one exactly, so the background does not change brightness when
+    //! the wrist comes up — a raise purely adds the filled dots, with nothing
+    //! shifting underneath them.
+    //!
+    //! The constant is asserted as well as the colours, because writing it as a
+    //! bare 0.55 would pass every check here today and silently stop tracking
+    //! the awake tier the moment that one is retuned.
+    (:test)
+    function theHeldBackFieldMatchesTheAwakeField(logger as Logger) as Boolean {
+        Config.reload();
+        Test.assertEqualMessage(Palette.WEAK_HELD_BACK, Palette.WEAK_ACTIVE,
+            "the held-back tier must be defined as the awake one, not as a value");
+        for (var ring = 0; ring < StatMap.RINGS; ring++) {
+            Test.assertEqualMessage(
+                Palette.heldBack[ring * 2], Palette.active[ring * 2],
+                "ring " + ring + " changes brightness on a raise");
+        }
+
+        // A span of zero length lights nothing in any layout — spanEndpoints
+        // pins that — so this measures the unfilled tier and nothing else.
+        var empty = everySpan(0.0, 0.0);
+        for (var l = 0; l < ALL_LAYOUTS.size(); l++) {
+            StatMap.layout = ALL_LAYOUTS[l];
+            var held = frameLuminance(empty, Palette.heldBack);
+            var awake = frameLuminance(empty, Palette.active);
+            logger.debug("layout " + StatMap.layout + ": held back " + held +
+                         " / awake " + awake);
+            Test.assertEqualMessage(held, awake,
+                "the held-back and awake fields must measure the same");
         }
         StatMap.layout = StatMap.LAYOUT_BANDS_BOTTOM;
         return true;

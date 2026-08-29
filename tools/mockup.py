@@ -113,6 +113,11 @@ WEAK_ACTIVE = 0.55
 WEAK_ALWAYS_ON = 0.45
 LIFT = 1.0
 
+# Always-on with the fills held back draws nothing lit at all, so the unfilled
+# tier is the whole image rather than a backdrop to it. It matches the awake
+# field deliberately, so the background does not change brightness on a raise.
+WEAK_HELD_BACK = WEAK_ACTIVE
+
 
 def scale(rgb: tuple[int, int, int], factor: float) -> tuple[int, int, int]:
     return tuple(max(0, min(255, round(c * factor))) for c in rgb)
@@ -184,6 +189,7 @@ def hand_covers(dx: float, dy: float, axes) -> bool:
 
 
 def render(variant: str, spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
+           held_back: bool = False,
            backing: tuple[int, int, int] | None = None,
            at_time: tuple[int, int] = (10, 9),
            drift: tuple[int, int] = (0, 0), marks=None) -> Image.Image:
@@ -224,8 +230,13 @@ def render(variant: str, spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
                     if always_on:
                         colour = scale(colour, LIFT)
                     if not lit:
-                        colour = scale(
-                            colour, WEAK_ALWAYS_ON if always_on else WEAK_ACTIVE)
+                        if held_back:
+                            weak = WEAK_HELD_BACK
+                        elif always_on:
+                            weak = WEAK_ALWAYS_ON
+                        else:
+                            weak = WEAK_ACTIVE
+                        colour = scale(colour, weak)
 
             # PIL's rectangle() includes both endpoints, so the far corner is
             # +DOT-1, not +DOT. Getting this wrong drew 6x6 dots against the
@@ -410,7 +421,8 @@ def main(outdir: str = "build/mockups") -> int:
         panels = []
         for label, spans in (("ALWAYS-ON, data shown", values),
                              ("ALWAYS-ON, data hidden", nothing)):
-            face = render(variant, spans, always_on=True)
+            held = spans is nothing
+            face = render(variant, spans, always_on=True, held_back=held)
             panels.append((f"{label}   lum {measure(face) * 100:.2f}%",
                            composite(face)))
         path = os.path.join(outdir, f"06-always-on-fill-{variant}.png")
