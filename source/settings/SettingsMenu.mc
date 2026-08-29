@@ -2,10 +2,12 @@ import Toybox.Application;
 import Toybox.Lang;
 import Toybox.WatchUi;
 
-//! Source names, in Source.Kind order.
+//! Source names, in Source.Kind order — every value, including the retired
+//! one, so this stays indexable by the enum. What the picker *offers* is
+//! Source.OFFERED, which is a different and shorter list.
 const SOURCE_LABELS = [
     Rez.Strings.SourceSteps,
-    Rez.Strings.SourceHeartRate,
+    Rez.Strings.SourceRetired,
     Rez.Strings.SourceBattery,
     Rez.Strings.SourceBodyBattery,
     Rez.Strings.SourceTemperature,
@@ -93,19 +95,19 @@ class SettingsMenuDelegate extends WatchUi.Menu2InputDelegate {
                 [Rez.Strings.BackingOff,
                  Rez.Strings.BackingWhite,
                  Rez.Strings.BackingDark] as Array<ResourceId>,
-                StatMap.backing));
+                sequential(3), StatMap.backing));
         } else if (id == :alwaysOnFill) {
             push(new ChoiceMenu(Rez.Strings.AlwaysOnFillTitle,
                 StatMap.PROPERTY_ALWAYS_ON_FILL,
                 [Rez.Strings.AlwaysOnFillShown,
                  Rez.Strings.AlwaysOnFillHidden] as Array<ResourceId>,
-                StatMap.alwaysOnFill));
+                sequential(2), StatMap.alwaysOnFill));
         } else if (id == :rotation) {
             push(new ChoiceMenu(Rez.Strings.RotationTitle,
                 StatMap.PROPERTY_ROTATION,
                 [Rez.Strings.RotationRadial,
                  Rez.Strings.RotationUpright] as Array<ResourceId>,
-                StatMap.rotation));
+                sequential(2), StatMap.rotation));
         } else if (id == :diagnostics) {
             // Nothing to open — re-reading it is the useful action, since the
             // figure moves while you are looking at it.
@@ -164,7 +166,8 @@ class RingMenuDelegate extends WatchUi.Menu2InputDelegate {
             WatchUi.pushView(
                 new ChoiceMenu(Rez.Strings.RingsTitle,
                                StatMap.PROPERTY_RINGS[index],
-                               SOURCE_LABELS, StatMap.rings[index]),
+                               offeredLabels(), Source.OFFERED,
+                               StatMap.rings[index]),
                 new ChoiceMenuDelegate(), WatchUi.SLIDE_LEFT);
         }
     }
@@ -174,20 +177,45 @@ class RingMenuDelegate extends WatchUi.Menu2InputDelegate {
     }
 }
 
-//! A list of mutually exclusive values for one numeric property. The value
-//! stored is the item's index, which is why StatMap's enums start at zero and
-//! stay in step with resources/settings/settings.xml.
+//! Values 0..count-1, for the settings whose every value is still offered.
+//! Only the ring picker has a gap in it.
+function sequential(count as Number) as Array<Number> {
+    var out = new [count] as Array<Number>;
+    for (var i = 0; i < count; i++) {
+        out[i] = i;
+    }
+    return out;
+}
+
+//! The labels for the sources a ring may be assigned to, in picker order.
+function offeredLabels() as Array<ResourceId> {
+    var out = new [Source.OFFERED.size()] as Array<ResourceId>;
+    for (var i = 0; i < Source.OFFERED.size(); i++) {
+        out[i] = SOURCE_LABELS[Source.OFFERED[i]];
+    }
+    return out;
+}
+
+//! A list of mutually exclusive values for one numeric property.
+//!
+//! The stored value used to be the item's position, which held for as long as
+//! every enum value was offered. It stopped holding when a source was retired:
+//! a picker that skips a value can no longer use its own indices, or every
+//! source after the gap would be stored as its neighbour. So the values travel
+//! beside the labels, and the position is nothing but a position.
 class ChoiceMenu extends WatchUi.Menu2 {
 
     private var _property as String;
 
     function initialize(title as ResourceId, property as String,
-                        labels as Array<ResourceId>, current as Number) {
+                        labels as Array<ResourceId>, values as Array<Number>,
+                        current as Number) {
         Menu2.initialize({:title => title});
         _property = property;
         for (var i = 0; i < labels.size(); i++) {
-            var subLabel = (i == current) ? Rez.Strings.InUse : null;
-            addItem(new WatchUi.MenuItem(labels[i], subLabel, i, null));
+            var value = values[i];
+            var subLabel = (value == current) ? Rez.Strings.InUse : null;
+            addItem(new WatchUi.MenuItem(labels[i], subLabel, value, null));
         }
     }
 

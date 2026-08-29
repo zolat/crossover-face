@@ -21,7 +21,6 @@
     <setting propertyKey="@Properties.ring1" title="@Strings.Ring1Title" prompt="@Strings.RingPrompt">
         <settingConfig type="list">
             <listEntry value="0">@Strings.SourceSteps</listEntry>
-            <listEntry value="1">@Strings.SourceHeartRate</listEntry>
             <listEntry value="2">@Strings.SourceBattery</listEntry>
             <listEntry value="3">@Strings.SourceBodyBattery</listEntry>
             <listEntry value="4">@Strings.SourceTemperature</listEntry>
@@ -34,7 +33,6 @@
     <setting propertyKey="@Properties.ring2" title="@Strings.Ring2Title" prompt="@Strings.RingPrompt">
         <settingConfig type="list">
             <listEntry value="0">@Strings.SourceSteps</listEntry>
-            <listEntry value="1">@Strings.SourceHeartRate</listEntry>
             <listEntry value="2">@Strings.SourceBattery</listEntry>
             <listEntry value="3">@Strings.SourceBodyBattery</listEntry>
             <listEntry value="4">@Strings.SourceTemperature</listEntry>
@@ -47,7 +45,6 @@
     <setting propertyKey="@Properties.ring3" title="@Strings.Ring3Title" prompt="@Strings.RingPrompt">
         <settingConfig type="list">
             <listEntry value="0">@Strings.SourceSteps</listEntry>
-            <listEntry value="1">@Strings.SourceHeartRate</listEntry>
             <listEntry value="2">@Strings.SourceBattery</listEntry>
             <listEntry value="3">@Strings.SourceBodyBattery</listEntry>
             <listEntry value="4">@Strings.SourceTemperature</listEntry>
@@ -60,7 +57,6 @@
     <setting propertyKey="@Properties.ring4" title="@Strings.Ring4Title" prompt="@Strings.RingPrompt">
         <settingConfig type="list">
             <listEntry value="0">@Strings.SourceSteps</listEntry>
-            <listEntry value="1">@Strings.SourceHeartRate</listEntry>
             <listEntry value="2">@Strings.SourceBattery</listEntry>
             <listEntry value="3">@Strings.SourceBodyBattery</listEntry>
             <listEntry value="4">@Strings.SourceTemperature</listEntry>

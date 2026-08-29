@@ -52,7 +52,7 @@ module StatMap {
     //! Which source each ring shows. Index 0 is the outermost ring.
     var rings as Array<Number> = [
         Source.SOURCE_STEPS,
-        Source.SOURCE_HEART_RATE,
+        Source.SOURCE_INTENSITY_MINUTES,
         Source.SOURCE_BATTERY,
         Source.SOURCE_BODY_BATTERY
     ] as Array<Number>;
@@ -67,13 +67,21 @@ module StatMap {
         rotation = readNumber(PROPERTY_ROTATION, ROTATION_RADIAL,
                               ROTATION_RADIAL, ROTATION_UPRIGHT);
 
-        var defaults = [Source.SOURCE_STEPS, Source.SOURCE_HEART_RATE,
+        var defaults = [Source.SOURCE_STEPS, Source.SOURCE_INTENSITY_MINUTES,
                         Source.SOURCE_BATTERY, Source.SOURCE_BODY_BATTERY]
                        as Array<Number>;
         var loaded = new [RINGS] as Array<Number>;
         for (var i = 0; i < RINGS; i++) {
-            loaded[i] = readNumber(PROPERTY_RINGS[i], defaults[i],
-                                   0, Source.COUNT - 1);
+            var stored = readNumber(PROPERTY_RINGS[i], defaults[i],
+                                    0, Source.COUNT - 1);
+            // A ring still set to the retired source reads as Off. The slot is
+            // kept so no *other* setting changes meaning, but a ring pointed at
+            // it has nothing left to show, and saying so is better than drawing
+            // an empty band the menu cannot name.
+            if (stored == Source.SOURCE_RETIRED) {
+                stored = Source.SOURCE_OFF;
+            }
+            loaded[i] = stored;
         }
         rings = loaded;
     }

@@ -1,9 +1,7 @@
-import Toybox.Activity;
 import Toybox.ActivityMonitor;
 import Toybox.Lang;
 import Toybox.SensorHistory;
 import Toybox.System;
-import Toybox.UserProfile;
 
 //! Reads device state and normalises it for drawing, which is all the face
 //! needs: the design shows no numbers, only fill levels. Pure queries — nothing
@@ -15,16 +13,76 @@ import Toybox.UserProfile;
 //! goal is exactly the thing the face wants to show. Source turns the excess
 //! into a second lap; capping it here would throw the reading away before
 //! anything could.
+//!
+//! **One sample a minute, all of it from one pass.** None of these move faster
+//! than that in a way the face can show: a step ring resolves about 36 steps to
+//! a dot, intensity minutes are counted by the minute, battery moves over
+//! hours, and body battery updates every few minutes at best. See Sample for
+//! why a minute and why it is timed the way it is.
+//!
+//! It also removes a duplicate read that was there from the start. Source asks
+//! for steps twice a frame — once for the span, once to decide whether the goal
+//! is beaten — and each ask used to be its own ActivityMonitor.getInfo(). Worse
+//! than the cost, the two could disagree: a step landing between them would put
+//! a span and its over flag one reading apart, which is the pair whose
+//! disagreement draws a lap of 0.05 as a fill of 0.05.
 module WatchData {
 
-    //! Heart rate is mapped between the user's resting rate and this ceiling.
-    //! A fixed ceiling beats a 220-minus-age estimate here: the face wants a
-    //! stable visual range, not a training-zone calculation.
-    const HR_FLOOR = 50;
-    const HR_CEILING = 180;
+    //! The last sample, and when it was taken.
+    var takenAt as Number = 0;
+    var sampled as Boolean = false;
+    var stepRatio as Float = 0.0;
+    var intensityRatio as Float = 0.0;
+    var batteryLevel as Float = 0.0;
+    var bodyBatteryLevel as Float = 0.0;
+
+    //! Take a fresh sample if the last one has expired.
+    function refresh() as Void {
+        if (!Sample.due(takenAt, sampled)) {
+            return;
+        }
+        takenAt = Sample.now();
+        sampled = true;
+
+        var info = ActivityMonitor.getInfo();
+        stepRatio = readSteps(info);
+        intensityRatio = readIntensity(info);
+        batteryLevel = clamp(System.getSystemStats().battery / 100.0);
+        bodyBatteryLevel = readBodyBattery();
+    }
+
+    //! Drop the sample, so the next read goes to the watch. For the tests, and
+    //! for anything that needs to prove it is seeing a fresh reading.
+    function forget() as Void {
+        sampled = false;
+    }
 
     function steps() as Float {
-        var info = ActivityMonitor.getInfo();
+        refresh();
+        return stepRatio;
+    }
+
+    //! Weekly intensity minutes against the weekly goal. Garmin counts a
+    //! vigorous minute twice, which `ActiveMinutes.total` already does, so this
+    //! is the same figure the watch's own widget shows.
+    function intensityMinutes() as Float {
+        refresh();
+        return intensityRatio;
+    }
+
+    function battery() as Float {
+        refresh();
+        return batteryLevel;
+    }
+
+    function bodyBattery() as Float {
+        refresh();
+        return bodyBatteryLevel;
+    }
+
+    // -- the readings themselves --------------------------------------------
+
+    function readSteps(info as ActivityMonitor.Info) as Float {
         var count = info.steps;
         var goal = info.stepGoal;
         if (count == null || goal == null || goal <= 0) {
@@ -33,11 +91,7 @@ module WatchData {
         return ratio(count.toFloat() / goal);
     }
 
-    //! Weekly intensity minutes against the weekly goal. Garmin counts a
-    //! vigorous minute twice, which `ActiveMinutes.total` already does, so this
-    //! is the same figure the watch's own widget shows.
-    function intensityMinutes() as Float {
-        var info = ActivityMonitor.getInfo();
+    function readIntensity(info as ActivityMonitor.Info) as Float {
         var minutes = info.activeMinutesWeek;
         var goal = info.activeMinutesWeekGoal;
         if (minutes == null || goal == null || goal <= 0) {
@@ -46,38 +100,18 @@ module WatchData {
         return ratio(minutes.total.toFloat() / goal);
     }
 
-    function heartRate() as Float {
-        var rate = Activity.getActivityInfo().currentHeartRate;
-        if (rate == null) {
-            return 0.0;
-        }
-        var floor = HR_FLOOR;
-        var resting = UserProfile.getProfile().restingHeartRate;
-        if (resting != null && resting > 0) {
-            floor = resting;
-        }
-        if (floor >= HR_CEILING) {
-            return 0.0;
-        }
-        return clamp((rate - floor).toFloat() / (HR_CEILING - floor));
-    }
-
-    function battery() as Float {
-        return clamp(System.getSystemStats().battery / 100.0);
-    }
-
-    function bodyBattery() as Float {
+    function readBodyBattery() as Float {
         if (!(Toybox has :SensorHistory) ||
             !(SensorHistory has :getBodyBatteryHistory)) {
             return 0.0;
         }
         var history = SensorHistory.getBodyBatteryHistory(
             {:period => 1, :order => SensorHistory.ORDER_NEWEST_FIRST});
-        var sample = history.next();
-        if (sample == null) {
+        var entry = history.next();
+        if (entry == null) {
             return 0.0;
         }
-        var level = sample.data;
+        var level = entry.data;
         if (level == null) {
             return 0.0;
         }
@@ -85,7 +119,7 @@ module WatchData {
     }
 
     //! A goal ratio. Floored at zero, and deliberately *not* capped at one:
-    //! past the goal the excess is the reading, and Source.lap() is what turns
+    //! past the goal the excess is the reading, and Source.goal() is what turns
     //! it into a second lap round the ring.
     function ratio(value as Float) as Float {
         if (value < 0.0) { return 0.0; }
