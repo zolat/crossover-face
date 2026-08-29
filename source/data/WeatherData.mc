@@ -34,9 +34,6 @@ module WeatherData {
     const SCALE_MIN_C = 0.0;
     const SCALE_MAX_C = 60.0;
 
-    //! How long a sample is reused before the watch is asked again.
-    const REFRESH_MS = 60000;
-
     //! The last sample, and when it was taken. Nulls are cached like any other
     //! answer: a watch that has never synced has no weather, and rediscovering
     //! that every second is the same wasted question.
@@ -47,20 +44,13 @@ module WeatherData {
     var nowC as Float? = null;
     var rain as Float? = null;
 
-    //! Take a fresh sample if the last one has expired.
-    //!
-    //! `System.getTimer()` and not the clock: it is monotonic, where the wall
-    //! clock can jump under a time-zone change or a sync and would then either
-    //! freeze the sample or expire it every frame. It does wrap — it is a
-    //! 32-bit millisecond count, so about every 25 days — and a sample that
-    //! appears to have been taken in the future is that wrap rather than a
-    //! fresh reading, so it is treated as stale.
+    //! Take a fresh sample if the last one has expired. Sample owns when that
+    //! is, and why it is timed on a monotonic counter rather than the clock.
     function refresh() as Void {
-        var now = System.getTimer();
-        if (sampled && now >= takenAt && (now - takenAt) < REFRESH_MS) {
+        if (!Sample.due(takenAt, sampled)) {
             return;
         }
-        takenAt = now;
+        takenAt = Sample.now();
         sampled = true;
         lowC = null;
         highC = null;

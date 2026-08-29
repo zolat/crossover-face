@@ -312,6 +312,17 @@ Stored values are **list indices**, so `resources/properties.xml`, `resources/se
 `source/settings/SettingsMenu.mc` all have to agree. Seven properties today: `handBacking`,
 `alwaysOnFill`, `dotRotation`, `ring1`–`ring4`.
 
+**A source is retired, never deleted.** Because the stored value is an index, removing an
+enum entry does not remove a source — it renames every source above it, on every watch
+already carrying a setting, with nothing to report that it happened. `SOURCE_RETIRED = 1`
+was heart rate and holds its number for that reason. Three things follow and have to move
+together: `Source.OFFERED` is what the picker walks, and it skips the gap;
+`StatMap.load()` maps a stored retired value to `SOURCE_OFF`, so a ring left on it reads as
+something the menu can name; and `ChoiceMenu` takes an explicit `values` array beside its
+labels, because a picker with a gap can no longer use its own positions as values.
+`retiringASourceLeavesEveryOtherIndexAlone` pins every index outright — if that test starts
+failing, the field's settings are about to change meaning.
+
 `SettingsMenu.onShow()` refreshes sub-labels **by row index**, and `getItem()` on a wrong
 index returns null rather than throwing — so adding or removing a row silently stops
 refreshing the ones after it. `MatrixTest.MENU_VALUE_ROWS` is the guard; move it in the same

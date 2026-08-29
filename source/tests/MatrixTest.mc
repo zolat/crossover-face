@@ -385,12 +385,12 @@ module MatrixTest {
             "the mark inside it cannot come from different ones");
 
         // Past the minute, the watch is asked again.
-        WeatherData.takenAt = System.getTimer() - WeatherData.REFRESH_MS - 1;
+        WeatherData.takenAt = System.getTimer() - Sample.INTERVAL_MS - 1;
         var stale = WeatherData.takenAt;
         WeatherData.dayRange();
         Test.assertMessage(WeatherData.takenAt != stale,
             "a sample older than REFRESH_MS must be replaced");
-        logger.debug("sample refreshed after " + WeatherData.REFRESH_MS + "ms");
+        logger.debug("sample refreshed after " + Sample.INTERVAL_MS + "ms");
 
         // getTimer wraps about every 25 days. A sample that looks like it was
         // taken in the future is that wrap, not a fresh reading — treating it
@@ -408,6 +408,139 @@ module MatrixTest {
             "caching must not have reached the scale");
 
         WeatherData.forget();
+        return true;
+    }
+
+    //! Retiring a source must not renumber the ones after it.
+    //!
+    //! Stored settings are list indices. Heart rate came off the face, and the
+    //! tempting change — delete the enum entry — would not have removed a
+    //! source, it would have silently renamed every source above it: a watch
+    //! with Battery on ring 3 would come back showing Body Battery, with
+    //! nothing to say it had happened. So the slot stays and the picker skips
+    //! it, and this is what holds that line.
+    (:test)
+    function retiringASourceLeavesEveryOtherIndexAlone(logger as Logger) as Boolean {
+        // The numbering below the gap, pinned outright. If any of these move,
+        // every watch in the field re-reads its rings as something else.
+        Test.assertEqualMessage(Source.SOURCE_STEPS, 0, "steps must stay 0");
+        Test.assertEqualMessage(Source.SOURCE_RETIRED, 1, "the gap must stay 1");
+        Test.assertEqualMessage(Source.SOURCE_BATTERY, 2, "battery must stay 2");
+        Test.assertEqualMessage(Source.SOURCE_BODY_BATTERY, 3,
+            "body battery must stay 3");
+        Test.assertEqualMessage(Source.SOURCE_TEMPERATURE, 4,
+            "temperature must stay 4");
+        Test.assertEqualMessage(Source.SOURCE_RAIN, 5, "rain must stay 5");
+        Test.assertEqualMessage(Source.SOURCE_INTENSITY_MINUTES, 6,
+            "intensity minutes must stay 6");
+        Test.assertEqualMessage(Source.SOURCE_SECONDS, 7, "seconds must stay 7");
+        Test.assertEqualMessage(Source.SOURCE_OFF, 8, "off must stay 8");
+        Test.assertEqualMessage(Source.COUNT, 9,
+            "COUNT counts slots, not offers — the tables are indexed by it");
+
+        // The retired slot is never offered.
+        Test.assertEqualMessage(Source.OFFERED.size(), Source.COUNT - 1,
+            "the picker must offer every source but the retired one");
+        for (var i = 0; i < Source.OFFERED.size(); i++) {
+            Test.assertMessage(Source.OFFERED[i] != Source.SOURCE_RETIRED,
+                "the picker must not offer the retired source");
+            Test.assertMessage(Source.OFFERED[i] >= 0 &&
+                               Source.OFFERED[i] < Source.COUNT,
+                "every offered source must be a real one");
+        }
+
+        // It lights nothing if something does hold it.
+        var span = Source.span(Source.SOURCE_RETIRED, true);
+        Test.assertEqualMessage(span.size(), 2,
+            "even a retired source must report a span shape");
+        Test.assertMessage(span[0] == span[1],
+            "a retired source must light nothing");
+
+        // And a ring still set to it reads as Off, which the menu can name.
+        Properties.setValue(StatMap.PROPERTY_RINGS[1], Source.SOURCE_RETIRED);
+        Config.reload();
+        Test.assertEqualMessage(StatMap.rings[1], Source.SOURCE_OFF,
+            "a ring left on the retired source must read as Off, not as a " +
+            "band the menu has no name for");
+        logger.debug("retired slot " + Source.SOURCE_RETIRED +
+                     " reads back as Off (" + Source.SOURCE_OFF + ")");
+
+        Properties.setValue(StatMap.PROPERTY_RINGS[1],
+                            Source.SOURCE_INTENSITY_MINUTES);
+        Config.reload();
+        return true;
+    }
+
+    //! The watch's own readings are sampled once a minute, from one pass.
+    //!
+    //! None of them move faster than that in a way the face can show — a step
+    //! ring resolves about 36 steps to a dot — and the duplicate this removes
+    //! was a correctness problem as much as a cost: Source asks for steps
+    //! twice a frame, once for the span and once for the over flag, and each
+    //! ask used to be its own getInfo(). A step landing between them put the
+    //! span and its flag one reading apart, which is exactly the pair whose
+    //! disagreement draws a lap of 0.05 as a fill of 0.05.
+    (:test)
+    function theWatchIsSampledOnceAMinute(logger as Logger) as Boolean {
+        WatchData.forget();
+        Test.assertMessage(!WatchData.sampled, "forget() must drop the sample");
+        WatchData.steps();
+        Test.assertMessage(WatchData.sampled,
+            "reading must take a sample when there is none");
+
+        // Every reading inside the minute comes from that one sample.
+        var taken = WatchData.takenAt;
+        WatchData.steps();
+        WatchData.intensityMinutes();
+        WatchData.battery();
+        WatchData.bodyBattery();
+        Test.assertEqualMessage(WatchData.takenAt, taken,
+            "four reads inside the minute must share one sample");
+
+        // The span and the over flag must be the same reading, always.
+        var steps = WatchData.steps();
+        Test.assertEqualMessage(WatchData.steps(), steps,
+            "a span and its over flag ask separately and must not be able " +
+            "to disagree");
+
+        // Past the minute, the watch is asked again.
+        WatchData.takenAt = System.getTimer() - Sample.INTERVAL_MS - 1;
+        var stale = WatchData.takenAt;
+        WatchData.steps();
+        Test.assertMessage(WatchData.takenAt != stale,
+            "a sample older than the interval must be replaced");
+
+        // Seconds is the one thing that must never be sampled: a second hand
+        // read once a minute is a stopped one.
+        var first = ClockData.fraction(10);
+        var second = ClockData.fraction(40);
+        Test.assertMessage(first != second,
+            "ClockData must stay live — it is the one source a minute would " +
+            "ruin");
+        logger.debug("sample interval " + Sample.INTERVAL_MS + "ms, seconds live");
+
+        WatchData.forget();
+        return true;
+    }
+
+    //! The wrap is why Sample.due is a function and not a subtraction.
+    (:test)
+    function aWrappedTimerDoesNotFreezeTheData(logger as Logger) as Boolean {
+        Test.assertMessage(Sample.due(0, false),
+            "with no sample taken, one is always due");
+        Test.assertMessage(!Sample.due(System.getTimer(), true),
+            "a sample just taken is not due");
+        Test.assertMessage(
+            Sample.due(System.getTimer() - Sample.INTERVAL_MS - 1, true),
+            "a sample past the interval is due");
+
+        // getTimer wraps about every 25 days. A stamp in the future is that
+        // wrap, and calling it fresh would freeze every reading the face has
+        // until the counter caught up — up to 25 days of a still face.
+        Test.assertMessage(Sample.due(System.getTimer() + 1000000, true),
+            "a sample stamped in the future is a wrapped counter and must be " +
+            "retaken, not trusted");
+        logger.debug("wrap handled; interval " + Sample.INTERVAL_MS + "ms");
         return true;
     }
 

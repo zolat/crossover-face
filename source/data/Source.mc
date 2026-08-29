@@ -20,7 +20,17 @@ module Source {
 
     enum Kind {
         SOURCE_STEPS = 0,
-        SOURCE_HEART_RATE = 1,
+        //! Retired. Was heart rate, taken off the face as not worth a ring.
+        //!
+        //! The slot stays rather than the ones after it shifting down. Stored
+        //! settings are **list indices**, so renumbering would not remove a
+        //! source, it would silently rename every source above it — a watch
+        //! with Battery on ring 3 would come back showing Body Battery, and
+        //! nothing would report that it had happened. StatMap.load() maps a
+        //! stored 1 to SOURCE_OFF, which is the honest reading of "the source
+        //! this ring had is gone", and Source.OFFERED is what keeps it out of
+        //! the picker.
+        SOURCE_RETIRED = 1,
         SOURCE_BATTERY = 2,
         SOURCE_BODY_BATTERY = 3,
         SOURCE_TEMPERATURE = 4,
@@ -32,13 +42,30 @@ module Source {
 
     const COUNT = 9;
 
+    //! The sources a ring may actually be assigned to, in picker order.
+    //!
+    //! Not "every value below COUNT" any more: SOURCE_RETIRED is a number that
+    //! still has to mean what it always meant to a stored setting, but must
+    //! never be offered again. The picker walks this; the tables above stay
+    //! indexed by the enum, so the two cannot drift.
+    const OFFERED = [
+        SOURCE_STEPS,
+        SOURCE_BATTERY,
+        SOURCE_BODY_BATTERY,
+        SOURCE_TEMPERATURE,
+        SOURCE_RAIN,
+        SOURCE_INTENSITY_MINUTES,
+        SOURCE_SECONDS,
+        SOURCE_OFF
+    ] as Array<Number>;
+
     const EMPTY = [0.0, 0.0] as Array<Float>;
 
     //! Colour for each source. Temperature is drawn on a cold-to-hot ramp
     //! instead, so its entry here is only the fallback tint.
     const HUES = [
         0xFF6600,   // steps
-        0xFF3322,   // heart rate
+        0xFF3322,   // retired (was heart rate)
         0x33CC55,   // battery
         0x3388FF,   // body battery
         0xFFAA00,   // temperature
@@ -66,8 +93,6 @@ module Source {
         switch (source) {
             case SOURCE_STEPS:
                 return goal(WatchData.steps(), awake);
-            case SOURCE_HEART_RATE:
-                return level(WatchData.heartRate());
             case SOURCE_BATTERY:
                 return level(WatchData.battery());
             case SOURCE_BODY_BATTERY:

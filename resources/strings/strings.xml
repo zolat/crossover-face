@@ -27,7 +27,7 @@
     <string id="Ring4Title">Ring 4 — inner</string>
 
     <string id="SourceSteps">Steps</string>
-    <string id="SourceHeartRate">Heart rate</string>
+    <string id="SourceRetired">Unavailable</string>
     <string id="SourceBattery">Battery</string>
     <string id="SourceBodyBattery">Body Battery</string>
     <string id="SourceTemperature">Temperature range</string>
