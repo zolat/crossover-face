@@ -120,6 +120,44 @@ module StatMap {
         return out;
     }
 
+    //! The position each ring marks, or Source.NO_MARKER. Read once per frame.
+    function markers() as Array<Float> {
+        var out = new [RINGS] as Array<Float>;
+        for (var i = 0; i < RINGS; i++) {
+            out[i] = Source.marker(rings[i]);
+        }
+        return out;
+    }
+
+    //! Every ring unmarked, for always-on when the fills are held back. The
+    //! mark is part of the data, so it goes when the data does.
+    function noMarkers() as Array<Float> {
+        var out = new [RINGS] as Array<Float>;
+        for (var i = 0; i < RINGS; i++) {
+            out[i] = Source.NO_MARKER;
+        }
+        return out;
+    }
+
+    //! The span a mark occupies: a window of the given half-width around a
+    //! position, normalised onto the ring.
+    //!
+    //! Returned as an ordinary span so the renderer lights it with litBetween()
+    //! rather than a second lit test of its own. That also means it wraps for
+    //! free, which it must: a current temperature of half a degree sits just
+    //! past twelve and its window straddles the origin, exactly as a sub-zero
+    //! day range does.
+    function windowAround(centre as Float, half as Float) as Array<Float> {
+        var lo = centre - half;
+        var hi = centre + half;
+        if (hi - lo >= 1.0) {
+            return [0.0, 1.0] as Array<Float>;      //! wider than the ring
+        }
+        if (lo < 0.0) { lo += 1.0; }
+        if (hi >= 1.0) { hi -= 1.0; }
+        return [lo, hi] as Array<Float>;
+    }
+
     //! Which ring this dot belongs to.
     function ringFor(col as Number, dx as Number, dy as Number) as Number {
         var ring;

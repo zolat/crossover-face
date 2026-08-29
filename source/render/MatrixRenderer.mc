@@ -21,6 +21,12 @@ import Toybox.Lang;
 //! same obligation: StatMap keeps the readable definition, and a test asserts
 //! the two agree at the span boundaries, where a copied comparison drifts.
 //!
+//! A ring may also carry a *mark* — one position called out on top of the span,
+//! which is how the temperature ring shows where the current reading falls
+//! inside today's low-to-high. The mark is handed here as a position and turned
+//! into an ordinary span once per ring, so it is lit by the same two
+//! comparisons rather than by a lit test of its own.
+//!
 //! Grouping also keeps the pen still. The renderer only calls setColor when the
 //! colour actually changes, and because each ring keeps the lattice's scan
 //! order, a band layout's ring draws as two long runs — unfilled, then filled —
@@ -31,6 +37,7 @@ import Toybox.Lang;
 module MatrixRenderer {
 
     function draw(dc as Dc, spans as Array<Array<Float> >,
+                  markers as Array<Float>,
                   palette as Array<Number>, ramp as Array<Number>,
                   backing as Number?) as Void {
         // Normally a no-op: onLayout has already built the cache. This is the
@@ -61,8 +68,10 @@ module MatrixRenderer {
         var arms = DotGrid.ARMS;
         var positionOf = DotGrid.positionOf;
         var ringStart = DotGrid.ringStart;
+        var markerHalf = DotGrid.markerHalf;
         var rings = StatMap.rings;
         var rampTop = Palette.RAMP_STEPS - 1;
+        var markerColour = Palette.MARKER;
 
         // Unpack the hand axes once. With the backing on, covers() is the only
         // call left in the dot loop; reading its four floats out of an array
@@ -101,6 +110,21 @@ module MatrixRenderer {
             var isRamp = (rings[ring] == Source.SOURCE_TEMPERATURE);
             var last = ringStart[ring + 1];
 
+            // The mark, hoisted the same way the span is. Rings with nothing to
+            // mark leave `marked` false, and their dots pay one local read.
+            var mark = markers[ring];
+            var marked = (mark >= 0.0);
+            var markFrom = 0.0;
+            var markTo = 0.0;
+            var markWraps = false;
+            if (marked) {
+                // An ordinary span, so the same two comparisons light it.
+                var window = StatMap.windowAround(mark, markerHalf[ring]);
+                markFrom = window[0];
+                markTo = window[1];
+                markWraps = (markFrom > markTo);
+            }
+
             for (var i = ringStart[ring]; i < last; i++) {
                 var dx = xs[i];
                 var dy = ys[i];
@@ -112,16 +136,27 @@ module MatrixRenderer {
                 } else {
                     var position = positionOf[i];
                     // StatMap.litBetween()'s body, inlined. This is the
-                    // innermost statement in the whole face.
-                    var lit = wraps
-                        ? ((position >= from) || (position <= to))
-                        : ((position >= from) && (position <= to));
-                    if (lit) {
-                        colour = isRamp
-                            ? ramp[(position * rampTop).toNumber()]
-                            : strong;
+                    // innermost statement in the whole face, and it appears
+                    // twice here: once for the ring's span, once for the mark's
+                    // window. litTestsAgreeAtTheBoundaries pins both to the
+                    // readable definition.
+                    if (marked && (markWraps
+                            ? ((position >= markFrom) || (position <= markTo))
+                            : ((position >= markFrom) && (position <= markTo)))) {
+                        // The mark outranks the fill: it has to be legible
+                        // whether or not now falls inside today's range.
+                        colour = markerColour;
                     } else {
-                        colour = weak;
+                        var lit = wraps
+                            ? ((position >= from) || (position <= to))
+                            : ((position >= from) && (position <= to));
+                        if (lit) {
+                            colour = isRamp
+                                ? ramp[(position * rampTop).toNumber()]
+                                : strong;
+                        } else {
+                            colour = weak;
+                        }
                     }
                 }
 

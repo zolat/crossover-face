@@ -39,9 +39,14 @@ class CrossoverView extends WatchUi.WatchFace {
         var lowPower = isLowPower();
         // Held back in always-on when asked: the field keeps its colour but
         // loses its waterlines, and the data comes back on a wrist raise.
-        var spans = (lowPower &&
-                     StatMap.alwaysOnFill == StatMap.ALWAYS_ON_FILL_HIDDEN)
-            ? StatMap.noSpans() : StatMap.spans();
+        var hideFills = lowPower &&
+                        StatMap.alwaysOnFill == StatMap.ALWAYS_ON_FILL_HIDDEN;
+        var spans = hideFills ? StatMap.noSpans() : StatMap.spans();
+        // Awake-only, for the same reason the hand backing is: the mark is a
+        // dozen white dots, which is the most expensive thing per dot the face
+        // can draw, in the mode that is measured against the burn-in budget and
+        // the mode nobody is reading closely. It comes back on a wrist raise.
+        var markers = lowPower ? StatMap.noMarkers() : StatMap.markers();
         // Backing is awake-only: in always-on it would cost luminance for a
         // detail nobody is looking at.
         var backing = lowPower ? null : backingColour();
@@ -51,34 +56,44 @@ class CrossoverView extends WatchUi.WatchFace {
         // the face has. Always-on is never skipped: a frame comes once a
         // minute there, so there is nothing to save and its compositing is
         // the least predictable.
-        if (!lowPower && !FrameGate.shouldDraw(fingerprint(spans, backing))) {
+        if (!lowPower &&
+            !FrameGate.shouldDraw(fingerprint(spans, markers, backing))) {
             Diagnostics.recordSkip();
             return;
         }
 
         var palette = lowPower ? Palette.alwaysOn : Palette.active;
-        MatrixRenderer.draw(dc, spans, palette,
+        MatrixRenderer.draw(dc, spans, markers, palette,
                             lowPower ? Palette.rampAlwaysOn : Palette.rampActive,
                             backing);
         Diagnostics.record(System.getTimer() - started);
     }
 
     //! Everything that can change what the face looks like: the burn-in drift,
-    //! whether the hands are being backed, and every ring's span. The minute is
-    //! in there only when the backing is on, because that is the only time the
-    //! hands' own position decides which dots are lit.
-    private function fingerprint(spans as Array<Array<Float> >,
-                                 backing as Number?) as Array<Float> {
+    //! whether the hands are being backed, and every ring's span and mark. The
+    //! minute is in there only when the backing is on, because that is the only
+    //! time the hands' own position decides which dots are lit.
+    //!
+    //! The marks have to be in here. The current temperature moves while the
+    //! day's low and high sit still, so a fingerprint of spans alone would call
+    //! that frame identical and freeze the mark until the skip cap fired.
+    //! Not private so markMovesForceARedraw can call it. What this function
+    //! leaves out is invisible from anywhere else: the face simply stops
+    //! updating, which looks like nothing at all going wrong.
+    function fingerprint(spans as Array<Array<Float> >,
+                         markers as Array<Float>,
+                         backing as Number?) as Array<Float> {
         var drift = Drift.current();
-        var out = new [4 + (StatMap.RINGS * 2)] as Array<Float>;
+        var out = new [4 + (StatMap.RINGS * 3)] as Array<Float>;
         out[0] = drift[0].toFloat();
         out[1] = drift[1].toFloat();
         out[2] = (backing == null) ? -1.0 : backing.toFloat();
         out[3] = (backing == null) ? 0.0
                                    : System.getClockTime().min.toFloat();
         for (var i = 0; i < StatMap.RINGS; i++) {
-            out[4 + (i * 2)] = spans[i][0];
-            out[5 + (i * 2)] = spans[i][1];
+            out[4 + (i * 3)] = spans[i][0];
+            out[5 + (i * 3)] = spans[i][1];
+            out[6 + (i * 3)] = markers[i];
         }
         return out;
     }

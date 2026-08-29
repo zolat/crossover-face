@@ -88,6 +88,17 @@ module DotGrid {
     var positionOf as Array<Float> = [] as Array<Float>;//! 0.0-1.0 along it
     var armOf as Array<Number> = [] as Array<Number>;   //! offset into ARMS
 
+    //! Half the width, in position units, of the window a mark occupies on
+    //! each ring. Geometry, so it is cached here with everything else.
+    //!
+    //! One constant cannot serve all three layouts. A lattice row is 0.026 of a
+    //! band's position but 0.076 of a turn on the innermost ring, so a window
+    //! tuned to a band falls clean between dots there and the mark disappears.
+    //! Sized per ring from its *inner* edge — where its dots are furthest apart
+    //! in position — the window always catches at least one dot, and widens
+    //! outward into the few-dot tick a radial mark should be.
+    var markerHalf as Array<Float> = [] as Array<Float>;
+
     //! Where each ring's dots begin, with a final entry holding the total.
     //! The dots are stored grouped by ring, so the renderer can walk one ring
     //! at a time and hoist that ring's span, colours and lit test out of its
@@ -196,6 +207,34 @@ module DotGrid {
         return bounds;
     }
 
+    //! Half-widths for the marker window, one per ring. See markerHalf.
+    //!
+    //! In the band layouts a dot's position depends only on its row, so every
+    //! ring shares half a row's spacing. In the rings layout the spacing is
+    //! angular and grows as the radius shrinks, so each ring is sized from the
+    //! radius at its inner edge.
+    function markerWidths(ringCount as Number, radial as Boolean,
+                          centreFill as Boolean) as Array<Float> {
+        var out = new [ringCount] as Array<Float>;
+        if (!radial) {
+            // Rows are PITCH apart; a band's scale is BAND_SPAN, and the
+            // centre layout's is RADIUS because it measures out from the
+            // midline rather than across the whole face.
+            var scale = centreFill ? RADIUS : BAND_SPAN;
+            var half = (PITCH.toFloat() / scale) / 2.0;
+            for (var k = 0; k < ringCount; k++) {
+                out[k] = half;
+            }
+            return out;
+        }
+        var thickness = (RADIUS - HUB).toFloat() / ringCount;
+        for (var k = 0; k < ringCount; k++) {
+            var inner = RADIUS - (k + 1) * thickness;
+            out[k] = PITCH.toFloat() / (2.0 * FULL_TURN * inner);
+        }
+        return out;
+    }
+
     //! Work out every dot's ring, position and orientation, and store them
     //! grouped by ring.
     //!
@@ -250,6 +289,7 @@ module DotGrid {
         var ringCount = StatMap.RINGS;
         var lastRing = ringCount - 1;
         var bounds = ringBounds(ringCount);
+        markerHalf = markerWidths(ringCount, radial, centreFill);
 
         // --- which ring every dot belongs to, and how many per ring per row --
         //

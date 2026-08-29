@@ -35,6 +35,30 @@ module WeatherData {
         return [fraction(low.toFloat()), fraction(high.toFloat())] as Array<Float>;
     }
 
+    //! Where the temperature right now sits on the same scale, or null when
+    //! there is no forecast.
+    //!
+    //! This is what turns the band from a slab into a reading: a day of 11C to
+    //! 22C looks the same at dawn and at noon until something says where in it
+    //! you are. It is deliberately not clamped to the day's range — an
+    //! overnight low or a stale forecast routinely puts the current
+    //! temperature outside it, and the honest answer is to draw it where it
+    //! actually falls.
+    function currentFraction() as Float? {
+        if (!(Toybox has :Weather)) {
+            return null;
+        }
+        var conditions = Weather.getCurrentConditions();
+        if (conditions == null) {
+            return null;
+        }
+        var now = conditions.temperature;
+        if (now == null) {
+            return null;
+        }
+        return fraction(now.toFloat());
+    }
+
     //! Chance of precipitation, 0.0-1.0, or null when unknown.
     function rainChance() as Float? {
         if (!(Toybox has :Weather)) {

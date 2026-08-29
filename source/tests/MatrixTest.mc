@@ -865,6 +865,190 @@ module MatrixTest {
         return true;
     }
 
+    //! The mark's window is centred on the position it marks, and wraps.
+    (:test)
+    function markWindowSurroundsItsPosition(logger as Logger) as Boolean {
+        var centres = [0.0, 0.001, 0.25, 0.5, 0.75, 0.999] as Array<Float>;
+        var half = 0.02;
+        for (var i = 0; i < centres.size(); i++) {
+            var centre = centres[i];
+            var window = StatMap.windowAround(centre, half);
+            Test.assertMessage(StatMap.isLit(centre, window),
+                "the window must contain the position it marks, at " + centre);
+            // Normalised, because a probe past 1.0 is not a position at all
+            // and a wrapping window would happily contain it.
+            var past = centre + half + 0.01;
+            if (past >= 1.0) { past -= 1.0; }
+            Test.assertMessage(!StatMap.isLit(past, window),
+                "and must not reach past its half-width, at " + centre);
+            Test.assertMessage(window[0] >= 0.0 && window[0] < 1.0 &&
+                               window[1] >= 0.0 && window[1] <= 1.0,
+                "the window must be normalised onto the ring, at " + centre);
+        }
+
+        // Either end crossing the origin turns it into a wrapping span, which
+        // is the same shape a sub-zero day range already takes.
+        var low = StatMap.windowAround(0.005, 0.02);
+        Test.assertMessage(low[0] > low[1], "a window over twelve must wrap");
+        Test.assertMessage(StatMap.isLit(0.995, low),
+            "and must light the dots before twelve");
+
+        // A half-width wider than the ring cannot be allowed to wrap onto
+        // itself and light nothing.
+        var huge = StatMap.windowAround(0.5, 0.9);
+        Test.assertEqualMessage(huge[0], 0.0, "an oversized window must open");
+        Test.assertEqualMessage(huge[1], 1.0, "an oversized window must fill");
+        return true;
+    }
+
+    //! The mark must actually land on dots.
+    //!
+    //! This is the assertion the per-ring half-width exists for. A single
+    //! constant looks fine in the band layouts and then falls clean between
+    //! dots on the inner rings, where the same position units are three times
+    //! coarser — and the mark simply is not there, with nothing else failing.
+    //!
+    //! The bands cannot represent every position on every ring: the leftmost
+    //! band does not reach the bottom of a round screen, so its lowest few
+    //! degrees have no dots to light and neither does the fill. Each ring is
+    //! therefore probed across the range it can represent, and that range is
+    //! logged so a regression that narrows it shows up.
+    (:test)
+    function markLandsOnDotsOnEveryRing(logger as Logger) as Boolean {
+        var worst = 9999;
+        var fattest = 0;
+        for (var l = 0; l < ALL_LAYOUTS.size(); l++) {
+            Properties.setValue(StatMap.PROPERTY_LAYOUT, ALL_LAYOUTS[l]);
+            Config.reload();
+            DotGrid.ensureBuilt();
+
+            for (var ring = 0; ring < StatMap.RINGS; ring++) {
+                var from = DotGrid.ringStart[ring];
+                var to = DotGrid.ringStart[ring + 1];
+                var half = DotGrid.markerHalf[ring];
+
+                var lowest = 1.0;
+                var highest = 0.0;
+                for (var i = from; i < to; i++) {
+                    var p = DotGrid.positionOf[i];
+                    if (p < lowest) { lowest = p; }
+                    if (p > highest) { highest = p; }
+                }
+
+                for (var step = 0; step <= 20; step++) {
+                    var mark = lowest + (highest - lowest) * step / 20.0;
+                    var window = StatMap.windowAround(mark, half);
+                    var hits = 0;
+                    for (var i = from; i < to; i++) {
+                        if (StatMap.isLit(DotGrid.positionOf[i], window)) {
+                            hits++;
+                        }
+                    }
+                    Test.assertMessage(hits > 0,
+                        "layout " + StatMap.layout + " ring " + ring +
+                        ": the mark at " + mark + " lit no dots");
+                    // A line, not a slab. Proportional rather than a dot count,
+                    // because the layouts disagree about how many dots a line
+                    // is: bands-centre measures out from the midline, so one
+                    // mark draws twice, once either side of it.
+                    Test.assertMessage(hits * 5 <= (to - from),
+                        "layout " + StatMap.layout + " ring " + ring +
+                        ": the mark at " + mark + " covers " + hits +
+                        " of " + (to - from) + " dots — that is a block");
+                    if (hits < worst) { worst = hits; }
+                    if (hits > fattest) { fattest = hits; }
+                }
+                logger.debug("layout " + StatMap.layout + " ring " + ring +
+                             ": positions " + lowest + ".." + highest +
+                             ", half " + half);
+            }
+        }
+        logger.debug("thinnest mark " + worst + " dots, fattest " + fattest);
+        Properties.setValue(StatMap.PROPERTY_LAYOUT, StatMap.LAYOUT_BANDS_BOTTOM);
+        Config.reload();
+        return true;
+    }
+
+    //! The current temperature moves while today's low and high sit still, so
+    //! a fingerprint built from the spans alone calls that frame identical and
+    //! the mark freezes on screen until the skip cap fires seconds later.
+    //! Nothing else would report that: the face just stops telling the truth.
+    (:test)
+    function markMovesForceARedraw(logger as Logger) as Boolean {
+        var view = new CrossoverView();
+        var spans = everySpan(0.2, 0.8);
+
+        var at12 = new [StatMap.RINGS] as Array<Float>;
+        var at18 = new [StatMap.RINGS] as Array<Float>;
+        for (var i = 0; i < StatMap.RINGS; i++) {
+            at12[i] = Source.NO_MARKER;
+            at18[i] = Source.NO_MARKER;
+        }
+        at12[0] = 12.0 / 60.0;
+        at18[0] = 18.0 / 60.0;
+
+        var before = view.fingerprint(spans, at12, null);
+        var after = view.fingerprint(spans, at18, null);
+        logger.debug("fingerprint is " + before.size() + " values");
+        Test.assertMessage(!FrameGate.same(before, after),
+            "a mark that moved must change the fingerprint");
+        Test.assertMessage(
+            FrameGate.same(before, view.fingerprint(spans, at12, null)),
+            "an unchanged mark must leave the fingerprint alone");
+        return true;
+    }
+
+    //! Always-on never marks. White is the most luminous thing the face can
+    //! draw and always-on is the mode measured against the burn-in budget, so
+    //! the mark is awake-only the way the hand backing already is.
+    (:test)
+    function alwaysOnCarriesNoMark(logger as Logger) as Boolean {
+        var none = StatMap.noMarkers();
+        Test.assertEqualMessage(none.size(), StatMap.RINGS,
+            "every ring needs an entry, or the renderer reads past the end");
+        for (var i = 0; i < StatMap.RINGS; i++) {
+            Test.assertEqualMessage(none[i], Source.NO_MARKER,
+                "ring " + i + " still carries a mark");
+        }
+        // The renderer's test is `mark >= 0.0`, and positions never are.
+        Test.assertMessage(Source.NO_MARKER < 0.0,
+            "the empty marker must sit outside every position, or it draws");
+
+        // Nothing but temperature marks anything at all.
+        for (var kind = 0; kind < Source.COUNT; kind++) {
+            if (kind == Source.SOURCE_TEMPERATURE) {
+                continue;
+            }
+            Test.assertEqualMessage(Source.marker(kind), Source.NO_MARKER,
+                "source " + kind + " marks a position it should not");
+        }
+        return true;
+    }
+
+    //! The mark trades a ring-coloured dot for a white one, which is the
+    //! largest luminance step a single dot can make. Awake has no budget, but
+    //! the fattest mark measured above is worth pricing anyway.
+    (:test)
+    function markCostsLittleLuminance(logger as Logger) as Boolean {
+        Config.reload();
+        var full = everySpan(0.0, 1.0);
+        var base = frameLuminance(full, Palette.active);
+        var area = Math.PI * DotGrid.RADIUS * DotGrid.RADIUS;
+        // Comfortably past the fattest mark the test above tolerates, every
+        // dot of it swapped from the dimmest theme colour to white.
+        var dimmest = 1.0;
+        for (var ring = 0; ring < StatMap.RINGS; ring++) {
+            var lum = relativeLuminance(Palette.active[ring * 2 + 1]);
+            if (lum < dimmest) { dimmest = lum; }
+        }
+        var step = (relativeLuminance(Palette.MARKER) - dimmest) *
+                   LIT_PIXELS_PER_DOT * 64 / area;
+        logger.debug("awake full field " + base + " plus at most " + step);
+        Test.assertMessage(base + step < BUDGET,
+            "even awake, the mark must not push the field past the budget");
+        return true;
+    }
+
     //! Recover a dot's column from its x offset — build() knows it, the cache
     //! does not store it, and ringFor needs it for the band layouts.
     function columnOf(dx as Number) as Number {

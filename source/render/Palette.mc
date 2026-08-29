@@ -45,6 +45,18 @@ module Palette {
     //! "minimal change between modes" wanted in the first place.
     const LIFT = 1.0;
 
+    //! The colour of a mark called out on a ring — today, the current
+    //! temperature against the day's range.
+    //!
+    //! White because every stop of the ramp is saturated, so only an
+    //! unsaturated colour reads as a marker rather than as more data.
+    //!
+    //! There is no always-on tier because there is no always-on mark: white is
+    //! the most luminous thing the face can draw, and always-on is the mode
+    //! measured against the burn-in budget. CrossoverView holds the mark back
+    //! there the same way it holds back the hand backing.
+    const MARKER = 0xFFFFFF;
+
     //! Backing drawn under the analogue hands when that option is on.
     const BACKING_WHITE = 0xFFFFFF;
     const BACKING_DARK = 0x101010;
