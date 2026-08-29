@@ -16,6 +16,7 @@ make build      # debug .prg for the simulator
 make sim        # build, start the simulator if needed, sideload, stream println
 make test       # build with -t, run the 48-test suite (takes the simulator lock)
 make test-lock  # self-test tools/sim_lock.sh
+make test-simctl # tests for tools/simctl (no simulator, no build needed)
 make package    # signed .iq for the store
 make install    # build, verify MTP mode, push straight to the watch
 make push       # build and push, skipping the checks
@@ -62,6 +63,11 @@ an attached `monkeydo` owns the simulator and would otherwise silently kill test
 > The lock only covers the make targets. A hand-rolled `monkeydo` slips past it — so run the
 > simulator through `make`, and never `pkill -f monkeydo`, which kills every session's.
 
+Taking turns is now avoidable: a session can run **its own** simulator instance instead of
+queueing for the shared one — see *The simulator can be driven from an MCP server* below.
+The lock still governs the shared simulator, which is what plain `make sim` and `make test`
+use, so both worlds coexist.
+
 If a run does die, `make test` now says so rather than blaming the tests: no `Ran N tests`
 line means contention, and it names whatever is still attached. **Re-run before believing a
 bare failure.**
@@ -72,6 +78,82 @@ only one process may hold it. Nothing serialises that yet — coordinate by hand
 Editing `Makefile`, `monkey.jungle` or `CLAUDE.md` changes them under every session
 immediately, worktrees included. That is usually what you want for a fix like the ones above,
 but say so rather than letting another agent discover it mid-run.
+
+## The simulator can be driven from an MCP server
+
+`tools/sim_mcp.py` exposes the simulator as typed tools — `sim_status`, `sim_screenshot`,
+`sim_settings_get/set/reset`, `sim_load`, `sim_release`, `sim_test` — registered project-wide
+in `.mcp.json`. The logic lives in `tools/simctl/`, and every module is also a CLI, which is
+how it is tested without an MCP client:
+
+```sh
+PYTHONPATH=tools python3 -m simctl.settings get          # what is actually persisted
+PYTHONPATH=tools python3 -m simctl.settings set ring1=2  # no GUI, no Reset All App Data
+PYTHONPATH=tools python3 -m simctl.window shot face.png --crop face
+PYTHONPATH=tools python3 -m simctl.window list           # simulator windows, by instance
+```
+
+**Each checkout gets its own simulator, so sessions no longer take turns.** The singleton
+is a habit, not a constraint: `TMPDIR` moves the simulated device filesystem, `HOME` moves
+the `Sim-$USER` file that refuses a second instance, and `SHELL_SERVER_PORT` moves the
+control channel. `simctl/instance.py` sets all three, symlinking `~/.Garmin/ConnectIQ` back
+so devices and the signing key stay shared. Two checkouts have run the full suite
+concurrently, both green, neither touching the other or the lock.
+
+Pass `instance="shared"` to drive the machine's normal simulator instead. That path still
+takes `tools/sim_lock.sh`, so it queues properly with plain `make sim` and `make test` in
+sessions that never use the server.
+
+> **`monkeydo` cannot be told which simulator to talk to.** `ShellUtils.findSimulatorPort`
+> hardcodes a scan of ports 1234-1238 and takes the first that answers, and the class
+> contains no `getenv` at all. `tools/simctl/shell_pinned.sh` stands in for the SDK's
+> `shell` binary — monkeydo passes its path with `-s` — and rewrites the transport
+> arguments to one port. Isolated instances also sit above 13000, outside that scan, so an
+> unaware `make sim` in another worktree can never find one by accident.
+
+Isolated runs reuse the real Makefile through command-line overrides, so there is nothing
+to keep in step: `make test SIM_LOCK=true MONKEYDO=tools/simctl/monkeydo_pinned.sh`, plus
+`SDK=` and `KEY=` because `connect-iq-sdk-manager` keeps its licence agreement outside
+`~/.Garmin` and reports *agreement is not accepted* under a sandboxed `HOME`.
+
+### Settings are a real file, not just a menu
+
+Persisted properties live at
+`$(getconf DARWIN_USER_TEMP_DIR)com.garmin.connectiq/GARMIN/APPS/SETTINGS/CROSSOVERFACE.SET`
+— per-user, per-boot, so resolve it, never hard-code it. The format is decoded in
+`simctl/setfile.py` (magic `abcdabcd`, a key table, `da7ada7a`, then 10-byte entries) and
+`tools/testdata/CROSSOVERFACE.SET` pins it with a **byte-exact** round-trip test.
+
+Two traps the tools handle and a human editing by hand would not:
+
+- **Stop the app before writing.** A running app flushes its in-memory properties over the
+  file when it terminates, silently reverting the write. `sim_settings_set` kills the
+  sideload first.
+- **The face and the test build share one file.** Both carry manifest id `d711a1ab-…`, so
+  any `make test` run overwrites settings. Set settings *after* testing, never before.
+
+`bin/<App>-settings.json`, which `monkeyc` generates, is used to validate values and resolve
+labels — so a new setting needs no change here. It is build output, so `sim_settings_set`
+fails with *run `make build` first* rather than writing something unvalidated.
+
+### A screenshot is the only way to see the face, and its luminance lies
+
+The SDK has **no** screenshot command and **no** input injection — confirmed absent from the
+simulator binary and its shell command table. So capture goes through macOS:
+`simctl/window.py` finds the window with CoreGraphics via `ctypes` (no pyobjc, so stock
+`python3` runs it), matched by owning pid so each instance screenshots its own, and shells
+out to `screencapture -l`, which works on an off-screen window without stealing focus.
+
+**The reported luminance is not the 10% budget figure.** A capture includes the simulator's
+drawing of the two *physical* analogue hands, which emit no light on the real watch: measured
+11.17% as captured against 5.43% with the neutral-grey pixels removed. `MatrixTest`
+and `tools/mockup.py` remain the authorities — both measure the dot field before hands.
+
+> **An all-black capture means the Mac display slept**, which stops the Monkey C VM and
+> makes a healthy face look like a hung test run. Worse, window capture then fails outright
+> with *could not create image from window*, which reads as a missing Screen Recording
+> permission. `window.display_is_asleep()` tests for it and `capture()` retries once after
+> `caffeinate -u -t 5`. A locked screen cannot be woken from the shell.
 
 ### Command gotchas
 

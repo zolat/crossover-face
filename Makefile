@@ -22,7 +22,7 @@ MONKEYC  := $(SDK)bin/monkeyc
 MONKEYDO := $(SDK)bin/monkeydo
 SIMULATOR := $(SDK)bin/connectiq
 
-.PHONY: all build test test-lock sim simulator-up install push push-built \
+.PHONY: all build test test-lock test-simctl sim simulator-up install push push-built \
         reveal package clean sdk-info
 
 all: build
@@ -66,6 +66,11 @@ test:
 ## Prove the lock still behaves. Cheap, and it caught a real bug once.
 test-lock:
 	@tools/sim_lock_test.sh
+
+## Tests for the Python simulator-control modules (tools/simctl). No simulator and no
+## build needed - the settings codec is checked against a committed real .SET file.
+test-simctl:
+	@python3 tools/simctl_test.py
 
 ## Start the simulator unless it is already running.
 simulator-up:

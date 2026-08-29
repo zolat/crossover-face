@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "crossover-simulator": {
+      "command": "tools/sim_mcp.sh"
+    }
+  }
+}
