@@ -49,10 +49,12 @@ module Palette {
     //! temperature against the day's range.
     //!
     //! White because every stop of the ramp is saturated, so only an
-    //! unsaturated colour reads as a marker rather than as more data. Awake and
-    //! always-on share it, as they already share their filled colours. It is a
-    //! dozen or so dots, so the luminance budget barely notices;
-    //! alwaysOnWorstCaseFitsBudget keeps that honest.
+    //! unsaturated colour reads as a marker rather than as more data.
+    //!
+    //! There is no always-on tier because there is no always-on mark: white is
+    //! the most luminous thing the face can draw, and always-on is the mode
+    //! measured against the burn-in budget. CrossoverView holds the mark back
+    //! there the same way it holds back the hand backing.
     const MARKER = 0xFFFFFF;
 
     //! Backing drawn under the analogue hands when that option is on.

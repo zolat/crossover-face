@@ -42,8 +42,11 @@ class CrossoverView extends WatchUi.WatchFace {
         var hideFills = lowPower &&
                         StatMap.alwaysOnFill == StatMap.ALWAYS_ON_FILL_HIDDEN;
         var spans = hideFills ? StatMap.noSpans() : StatMap.spans();
-        // The mark is data too, so it goes when the fills go.
-        var markers = hideFills ? StatMap.noMarkers() : StatMap.markers();
+        // Awake-only, for the same reason the hand backing is: the mark is a
+        // dozen white dots, which is the most expensive thing per dot the face
+        // can draw, in the mode that is measured against the burn-in budget and
+        // the mode nobody is reading closely. It comes back on a wrist raise.
+        var markers = lowPower ? StatMap.noMarkers() : StatMap.markers();
         // Backing is awake-only: in always-on it would cost luminance for a
         // detail nobody is looking at.
         var backing = lowPower ? null : backingColour();
@@ -74,9 +77,12 @@ class CrossoverView extends WatchUi.WatchFace {
     //! The marks have to be in here. The current temperature moves while the
     //! day's low and high sit still, so a fingerprint of spans alone would call
     //! that frame identical and freeze the mark until the skip cap fired.
-    private function fingerprint(spans as Array<Array<Float> >,
-                                 markers as Array<Float>,
-                                 backing as Number?) as Array<Float> {
+    //! Not private so markMovesForceARedraw can call it. What this function
+    //! leaves out is invisible from anywhere else: the face simply stops
+    //! updating, which looks like nothing at all going wrong.
+    function fingerprint(spans as Array<Array<Float> >,
+                         markers as Array<Float>,
+                         backing as Number?) as Array<Float> {
         var drift = Drift.current();
         var out = new [4 + (StatMap.RINGS * 3)] as Array<Float>;
         out[0] = drift[0].toFloat();

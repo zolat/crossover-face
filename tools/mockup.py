@@ -57,6 +57,39 @@ SOURCE_TEMPERATURE = 4
 # Palette.THEME in Monkey C.
 THEME = [(0xE8, 0x79, 0xF9), (0xB8, 0xD6, 0x4B), (0x7F, 0xD4, 0xFF), (0xFF, 0x6B, 0x5B)]
 
+# Mirrors Palette.MARKER: the current temperature called out on the range it
+# sits in. White because every ramp stop is saturated, so only an unsaturated
+# colour reads as a marker rather than as more data. Awake only.
+MARKER = (0xFF, 0xFF, 0xFF)
+
+
+def marker_half(ring: int, variant: str) -> float:
+    """Half-width of a mark's window on this ring. Mirrors DotGrid.markerWidths.
+
+    One constant cannot serve every layout: a lattice row is 0.026 of a band's
+    position but 0.076 of a turn on the innermost ring, where a band-tuned
+    window falls between dots and the mark disappears.
+    """
+    if variant != "rings":
+        scale = RADIUS if variant == "bands-centre" else 2 * RADIUS
+        return (PITCH / scale) / 2.0
+    thickness = (RADIUS - HUB) / RINGS
+    inner = RADIUS - (ring + 1) * thickness
+    return PITCH / (2.0 * 2.0 * math.pi * inner)
+
+
+def marked(position: float, mark: float, half: float) -> bool:
+    """Is this dot inside the mark's window? Wraps, as StatMap.isLit does."""
+    lo, hi = mark - half, mark + half
+    if hi - lo >= 1.0:
+        return True
+    if lo < 0.0:
+        lo += 1.0
+    if hi >= 1.0:
+        hi -= 1.0
+    return (position >= lo or position <= hi) if lo > hi \
+        else (lo <= position <= hi)
+
 
 def mix(a, b, t):
     return tuple(round(x + (y - x) * t) for x, y in zip(a, b))
@@ -153,7 +186,7 @@ def hand_covers(dx: float, dy: float, axes) -> bool:
 def render(variant: str, spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
            backing: tuple[int, int, int] | None = None,
            at_time: tuple[int, int] = (10, 9),
-           drift: tuple[int, int] = (0, 0)) -> Image.Image:
+           drift: tuple[int, int] = (0, 0), marks=None) -> Image.Image:
     img = Image.new("RGB", (SIZE, SIZE), (0, 0, 0))
     draw = ImageDraw.Draw(img)
     mapper = VARIANTS[variant]
@@ -174,18 +207,25 @@ def render(variant: str, spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
                 colour = backing
             else:
                 ring, position = mapper(col, dx, dy)
-                start, end = spans[ring]
-                lit = start <= position <= end
-                source = assign[ring]
-                if lit and source == SOURCE_TEMPERATURE:
-                    colour = temperature_colour(position)
+                mark = None if marks is None else marks[ring]
+                # Awake only, and it outranks the fill: the mark has to be
+                # legible whether or not now falls inside today's range.
+                if (mark is not None and mark >= 0.0 and not always_on
+                        and marked(position, mark, marker_half(ring, variant))):
+                    colour = MARKER
                 else:
-                    colour = THEME[ring % len(THEME)]
-                if always_on:
-                    colour = scale(colour, LIFT)
-                if not lit:
-                    colour = scale(
-                        colour, WEAK_ALWAYS_ON if always_on else WEAK_ACTIVE)
+                    start, end = spans[ring]
+                    lit = start <= position <= end
+                    source = assign[ring]
+                    if lit and source == SOURCE_TEMPERATURE:
+                        colour = temperature_colour(position)
+                    else:
+                        colour = THEME[ring % len(THEME)]
+                    if always_on:
+                        colour = scale(colour, LIFT)
+                    if not lit:
+                        colour = scale(
+                            colour, WEAK_ALWAYS_ON if always_on else WEAK_ACTIVE)
 
             # PIL's rectangle() includes both endpoints, so the far corner is
             # +DOT-1, not +DOT. Getting this wrong drew 6x6 dots against the
@@ -399,16 +439,21 @@ def main(outdir: str = "build/mockups") -> int:
     sheet(panels, "Behind hands — awake only, hands held at system time").save(path)
     written.append(path)
 
-    # 6. Rings assigned to weather — temperature is a range, not a level.
+    # 6. Rings assigned to weather — temperature is a range, not a level, and
+    #    the mark says where in that range now falls.
     weather_assign = (4, 5, 2, 0)          # temperature, rain, battery, steps
     weather_spans = [(11 / 60, 22 / 60), (0.0, 0.35), (0.0, 0.82), (0.0, 0.68)]
+    NO_MARK = -1.0
+    weather_marks = [17 / 60, NO_MARK, NO_MARK, NO_MARK]   # 17C right now
     panels = []
-    for variant in ("bands", "rings"):
-        face = render(variant, weather_spans, assign=weather_assign)
+    for variant in ("bands", "bands-centre", "rings"):
+        face = render(variant, weather_spans, assign=weather_assign,
+                      marks=weather_marks)
         panels.append((f"{variant.upper()}   lum {measure(face) * 100:.2f}%",
                        composite(face)))
     path = os.path.join(outdir, "07-weather-assignment.png")
-    sheet(panels, "Ring 1 = temperature 11-22C on a 0-60 scale, ring 2 = rain 35%").save(path)
+    sheet(panels, "Ring 1 = temperature 11-22C on a 0-60 scale, "
+                  "white mark = 17C now").save(path)
     written.append(path)
 
     # 7. Burn-in drift: how long any one pixel stays lit over a full cycle.
