@@ -252,7 +252,19 @@ The two modes now draw the **same filled colours** and differ only in their unfi
 (`WEAK_ACTIVE` 0.55 against `WEAK_ALWAYS_ON` 0.45). `Palette.LIFT` is 1.0: an earlier
 palette was dark enough that always-on needed lifting to survive the panel's own dimming,
 but green and yellow now sit at or near a full channel, so scaling up would clamp and shift
-the hue rather than brighten it. `tools/mockup.py` agrees
+the hue rather than brighten it.
+
+There is a **third tier for one mode only**: always-on with the fills held back. Nothing is
+lit there, so the unfilled dots are not a backdrop to the data, they *are* the image, and
+0.45 — chosen against a face that still had filled dots to carry it — read too dark on its
+own. `Palette.WEAK_HELD_BACK` is defined as `WEAK_ACTIVE` rather than as a value, because the
+decision is to **match the awake field**: the background then does not change brightness at
+all when the wrist comes up, and a raise purely adds the filled dots with nothing shifting
+underneath them. Measured on a real render that moves the frame from 2.6% to 3.2%, against
+4.6–5.0% for the same mode showing its data — so the option still buys what it exists for.
+The budget was never the constraint: every dot at full colour would still only reach 6.1%.
+
+`tools/mockup.py` agrees
 to within a tenth of a percent, and `make test` asserts the lattice matches it exactly, so
 the mockups stay an honest preview rather than drifting into wishful thinking.
 

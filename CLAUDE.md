@@ -133,6 +133,14 @@ Awake and always-on share their *filled* colours and differ only in the unfilled
 (`WEAK_ACTIVE` 0.55 vs `WEAK_ALWAYS_ON` 0.45). `Palette.LIFT` is 1.0 — scaling up would clamp
 channels and shift hue rather than brighten.
 
+There is a **third palette table**, `Palette.heldBack`, for always-on with the fills held back.
+Nothing is lit in that mode, so the unfilled tier is the whole image rather than a backdrop, and
+`WEAK_HELD_BACK` lifts it — written as `WEAK_ACTIVE`, not as a value, because the decision is to
+match the awake field so the background does not shift on a wrist raise. It moves that frame from
+~2.6% to ~3.2%, against ~4.6–5.0% for the same mode with its data shown. Staying clearly below
+that data-shown figure, not the 10% budget, is the real bound on how far this tier may be lifted,
+and `heldBackFillsCutAlwaysOnLuminance` is what holds the line.
+
 ### Device facts that constrain the design
 
 390×390 round AMOLED, buttons only (**no touch**), 131,072-byte watch-face memory. A 21px hub and

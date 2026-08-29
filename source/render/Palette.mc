@@ -8,7 +8,10 @@ import Toybox.Lang;
 //! filled colours and differ only in that unfilled tier, which is what keeps
 //! the two modes looking like the same image rather than two designs.
 //!
-//! Both tables are indexed by ring * 2, plus 1 when lit.
+//! There is a third table for the one mode where the unfilled tier is the
+//! whole picture: always-on with the fills held back. See WEAK_HELD_BACK.
+//!
+//! Every table is indexed by ring * 2, plus 1 when lit.
 module Palette {
 
     //! Terrain: orchid, moss, ice, rust. Bright and saturated, because tuned in
@@ -36,6 +39,24 @@ module Palette {
 
     const WEAK_ACTIVE = 0.55;
     const WEAK_ALWAYS_ON = 0.45;
+
+    //! The unfilled tier when always-on holds the fills back.
+    //!
+    //! In that mode nothing is ever lit, so this tier is not a backdrop to the
+    //! data — it *is* the image, and 0.45 was chosen against a face that also
+    //! had filled dots to carry it. On its own it read too dark.
+    //!
+    //! Written as WEAK_ACTIVE rather than as its value, because the decision is
+    //! "match the awake face", not "be 0.55". The field then does not change
+    //! brightness at all when the wrist comes up: the raise purely adds the
+    //! filled dots, with nothing shifting underneath them.
+    //!
+    //! The burn-in budget is nowhere near this: the held-back frame goes from
+    //! 2.8% to 3.4% of screen luminance against a limit of 10%, and even every
+    //! dot at full colour would only reach 6.1%. What bounds this tier is that
+    //! the mode has to stay visibly darker than showing the data, or the option
+    //! stops meaning anything — heldBackFillsCutAlwaysOnLuminance asserts it.
+    const WEAK_HELD_BACK = WEAK_ACTIVE;
 
     //! Always-on used to lift the colours to survive the panel's own dimming.
     //! With this palette there is nothing left to lift: ice and orchid are
@@ -69,12 +90,14 @@ module Palette {
 
     var active as Array<Number> = [] as Array<Number>;
     var alwaysOn as Array<Number> = [] as Array<Number>;
+    var heldBack as Array<Number> = [] as Array<Number>;
     var rampActive as Array<Number> = [] as Array<Number>;
     var rampAlwaysOn as Array<Number> = [] as Array<Number>;
 
     function build() as Void {
         var awake = [] as Array<Number>;
         var asleep = [] as Array<Number>;
+        var held = [] as Array<Number>;
         for (var ring = 0; ring < StatMap.RINGS; ring++) {
             var colour = THEME[ring % THEME.size()];
             var lifted = scale(colour, LIFT);
@@ -82,9 +105,17 @@ module Palette {
             awake.add(colour);
             asleep.add(scale(lifted, WEAK_ALWAYS_ON));
             asleep.add(lifted);
+            // Unfilled from the awake colour, because matching the awake field
+            // is the whole point of this tier and that must hold whatever LIFT
+            // does. Filled from the lifted one, because this table draws in
+            // always-on — no dot is lit while the fills are held back, but a
+            // table that is merely unreachable should still be right.
+            held.add(scale(colour, WEAK_HELD_BACK));
+            held.add(lifted);
         }
         active = awake;
         alwaysOn = asleep;
+        heldBack = held;
 
         var ramp = [] as Array<Number>;
         var rampLifted = [] as Array<Number>;

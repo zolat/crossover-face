@@ -62,7 +62,13 @@ class CrossoverView extends WatchUi.WatchFace {
             return;
         }
 
-        var palette = lowPower ? Palette.alwaysOn : Palette.active;
+        // Held back, the unfilled tier is the entire image rather than a
+        // backdrop to the fills, so it gets its own table — brighter than the
+        // ordinary always-on one, and matching the awake field exactly so the
+        // background does not shift when the wrist comes up.
+        var palette = hideFills
+            ? Palette.heldBack
+            : (lowPower ? Palette.alwaysOn : Palette.active);
         MatrixRenderer.draw(dc, spans, markers, palette,
                             lowPower ? Palette.rampAlwaysOn : Palette.rampActive,
                             backing);
