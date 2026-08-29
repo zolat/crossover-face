@@ -10,6 +10,12 @@ class CrossoverView extends WatchUi.WatchFace {
     //! Tracks sleep state for devices that predate System.getDisplayMode().
     private var _asleep as Boolean = false;
 
+    //! The two prints, allocated once and refilled every frame. FrameGate copies
+    //! the values it needs, so handing it the same buffer every frame is safe.
+    private var _fieldPrint as Array<Float> = new [4] as Array<Float>;
+    private var _ringPrint as Array<Float> =
+        new [StatMap.RINGS * FrameGate.PER_RING] as Array<Float>;
+
     function initialize() {
         WatchFace.initialize();
     }
@@ -61,15 +67,21 @@ class CrossoverView extends WatchUi.WatchFace {
         // detail nobody is looking at.
         var backing = lowPower ? null : backingColour();
 
-        // Awake, this frame is almost always identical to the last one, and
-        // redrawing ~1100 dots to reproduce it is the largest avoidable cost
-        // the face has. Always-on is never skipped: a frame comes once a
-        // minute there, so there is nothing to save and its compositing is
-        // the least predictable.
-        if (!lowPower &&
-            !FrameGate.shouldDraw(fingerprint(spans, markers, overs, backing))) {
-            Diagnostics.recordSkip();
-            return;
+        // What of this frame is worth drawing. Awake, most frames repeat the
+        // one before and are not drawn at all; of the rest, almost all move a
+        // single ring and only that ring is walked. Always-on never asks: a
+        // frame comes once a minute there, so there is nothing to save and its
+        // compositing is the least predictable.
+        var dirty;
+        if (lowPower) {
+            dirty = FrameGate.everything();
+        } else {
+            if (!FrameGate.plan(fieldPrint(backing),
+                                ringPrint(spans, markers, overs))) {
+                Diagnostics.recordSkip(System.getTimer() - started);
+                return;
+            }
+            dirty = FrameGate.dirty;
         }
 
         // Held back, the unfilled tier is the entire image rather than a
@@ -81,18 +93,41 @@ class CrossoverView extends WatchUi.WatchFace {
             : (lowPower ? Palette.alwaysOn : Palette.active);
         MatrixRenderer.draw(dc, spans, markers, overs, palette,
                             lowPower ? Palette.rampAlwaysOn : Palette.rampActive,
-                            backing);
+                            backing, dirty, FrameGate.clears);
         Diagnostics.record(System.getTimer() - started);
     }
 
-    //! Everything that can change what the face looks like: the burn-in drift,
-    //! whether the hands are being backed, and every ring's span and mark. The
-    //! minute is in there only when the backing is on, because that is the only
-    //! time the hands' own position decides which dots are lit.
+    //! What moves every dot at once: the burn-in drift, and the hands.
+    //!
+    //! Kept apart from the per-ring print because the consequences differ. A
+    //! ring whose span moved needs that ring redrawn; a drift step moves the
+    //! whole lattice, so there is nothing on screen worth keeping and the
+    //! frame starts from black.
+    //!
+    //! The minute is in here only when the backing is on, because that is the
+    //! only time the hands' own position decides which dots are lit — and when
+    //! it is on, the hands cross every ring, so a minute is a whole-field
+    //! change like the drift.
+    //!
+    //! Filled into a buffer this view owns rather than returned fresh: it is
+    //! built every frame, and FrameGate keeps values rather than the array.
+    function fieldPrint(backing as Number?) as Array<Float> {
+        var drift = Drift.current();
+        var out = _fieldPrint;
+        out[0] = drift[0].toFloat();
+        out[1] = drift[1].toFloat();
+        out[2] = (backing == null) ? -1.0 : backing.toFloat();
+        out[3] = (backing == null) ? 0.0
+                                   : System.getClockTime().min.toFloat();
+        return out;
+    }
+
+    //! Everything that can change one ring without touching the others: its
+    //! span, its mark and its over flag, four values each, laid out flat.
     //!
     //! The marks have to be in here. The current temperature moves while the
-    //! day's low and high sit still, so a fingerprint of spans alone would call
-    //! that frame identical and freeze the mark until the skip cap fired.
+    //! day's low and high sit still, so a print of spans alone would call that
+    //! ring unchanged and freeze the mark until the skip cap fired.
     //!
     //! So do the over flags, and for a sharper reason: a ring crossing its goal
     //! goes from a fill of 0.05 to a lap of 0.05, which is the *same span*. The
@@ -101,25 +136,19 @@ class CrossoverView extends WatchUi.WatchFace {
     //! today, but that leaves redrawing correct only for as long as the dot
     //! exists, so the flags are named here in their own right.
     //!
-    //! Not private so markMovesForceARedraw can call it. What this function
-    //! leaves out is invisible from anywhere else: the face simply stops
-    //! updating, which looks like nothing at all going wrong.
-    function fingerprint(spans as Array<Array<Float> >,
-                         markers as Array<Float>,
-                         overs as Array<Boolean>,
-                         backing as Number?) as Array<Float> {
-        var drift = Drift.current();
-        var out = new [4 + (StatMap.RINGS * 4)] as Array<Float>;
-        out[0] = drift[0].toFloat();
-        out[1] = drift[1].toFloat();
-        out[2] = (backing == null) ? -1.0 : backing.toFloat();
-        out[3] = (backing == null) ? 0.0
-                                   : System.getClockTime().min.toFloat();
+    //! Not private, so the redraw tests can call it. What either print leaves
+    //! out is invisible from anywhere else: the ring simply stops updating,
+    //! which looks like nothing at all going wrong.
+    function ringPrint(spans as Array<Array<Float> >,
+                       markers as Array<Float>,
+                       overs as Array<Boolean>) as Array<Float> {
+        var out = _ringPrint;
         for (var i = 0; i < StatMap.RINGS; i++) {
-            out[4 + (i * 4)] = spans[i][0];
-            out[5 + (i * 4)] = spans[i][1];
-            out[6 + (i * 4)] = markers[i];
-            out[7 + (i * 4)] = overs[i] ? 1.0 : 0.0;
+            var at = i * FrameGate.PER_RING;
+            out[at] = spans[i][0];
+            out[at + 1] = spans[i][1];
+            out[at + 2] = markers[i];
+            out[at + 3] = overs[i] ? 1.0 : 0.0;
         }
         return out;
     }

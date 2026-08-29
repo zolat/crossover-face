@@ -1085,6 +1085,67 @@ module MatrixTest {
         return (dx * dx + dy * dy - middle).abs();
     }
 
+    //! The mark is remembered between frames, and never past a rebuild.
+    //!
+    //! Placing a mark walks the whole ring, so a marked ring used to be walked
+    //! twice on every drawn frame. The mark moves with the current temperature
+    //! — hourly at best — while a seconds ring draws sixty times a minute, so
+    //! almost every one of those walks re-derived the answer it had just given.
+    //!
+    //! Two things have to hold for the memo to be safe, and both are asserted
+    //! here rather than argued: it agrees with the direct search at every
+    //! position, and it forgets on a rebuild. The second is the sharp one — a
+    //! cached mark is an *index* into arrays that build() rewrites, so a stale
+    //! one is not a stale answer but a wrong dot, possibly on the wrong ring.
+    (:test)
+    function theMarkedDotIsRememberedButNotPastARebuild(logger as Logger) as Boolean {
+        Config.reload();
+        DotGrid.ensureBuilt();
+
+        // The memo must agree with the search it replaces, everywhere.
+        var checked = 0;
+        for (var ring = 0; ring < StatMap.RINGS; ring++) {
+            for (var step = 0; step < 40; step++) {
+                var mark = step / 40.0;
+                var direct = DotGrid.markedDot(
+                    ring, StatMap.windowAround(mark, DotGrid.markerHalf[ring]));
+                Test.assertEqualMessage(DotGrid.markedDotFor(ring, mark), direct,
+                    "the remembered mark disagrees with the search on ring " +
+                    ring + " at " + mark);
+                // And again, now that it is cached, which is the path that
+                // actually runs on all but the first frame.
+                Test.assertEqualMessage(DotGrid.markedDotFor(ring, mark), direct,
+                    "the second ask must give the same answer as the first");
+                checked++;
+            }
+        }
+        logger.debug("agreed with the direct search on " + checked + " positions");
+
+        // An unmarked ring caches its nothing, rather than rediscovering it.
+        Test.assertEqualMessage(
+            DotGrid.markedDotFor(0, Source.NO_MARKER), -1,
+            "a ring with no mark must land on no dot");
+        Test.assertEqualMessage(
+            DotGrid.markedDotFor(0, Source.NO_MARKER), -1,
+            "and must still land on no dot when the answer is remembered");
+
+        // The empty key has to sit outside NO_MARKER, which is a real answer.
+        Test.assertMessage(DotGrid.NO_MARK_KEY < Source.NO_MARKER,
+            "the empty cache key must be a position no source can ever report");
+
+        // A rebuild rewrites the arrays a cached index points into, so the
+        // memo must not survive one.
+        var at = DotGrid.markedDotFor(1, 0.25);
+        Test.assertMessage(at >= 0, "0.25 must mark some dot on ring 1");
+        DotGrid.invalidate();
+        DotGrid.ensureBuilt();
+        Test.assertEqualMessage(DotGrid.markedFor[1], DotGrid.NO_MARK_KEY,
+            "a rebuild must forget every cached mark");
+        Test.assertEqualMessage(DotGrid.markedDotFor(1, 0.25), at,
+            "and then find the same dot again from scratch");
+        return true;
+    }
+
     //! An unmarked ring must not quietly mark dot zero.
     (:test)
     function anUnmarkedRingMarksNothing(logger as Logger) as Boolean {
@@ -1119,15 +1180,35 @@ module MatrixTest {
         at18[0] = 18.0 / 60.0;
 
         var none = noOvers();
-        var before = view.fingerprint(spans, at12, none, null);
-        var after = view.fingerprint(spans, at18, none, null);
-        logger.debug("fingerprint is " + before.size() + " values");
+        // The view refills one buffer every frame, so a copy has to be taken
+        // before asking for the next print — exactly as FrameGate does.
+        var before = copyOf(view.ringPrint(spans, at12, none));
+        var after = copyOf(view.ringPrint(spans, at18, none));
+        logger.debug("the ring print is " + before.size() + " values");
         Test.assertMessage(!FrameGate.same(before, after),
-            "a mark that moved must change the fingerprint");
+            "a mark that moved must change the ring print");
         Test.assertMessage(
-            FrameGate.same(before, view.fingerprint(spans, at12, none, null)),
-            "an unchanged mark must leave the fingerprint alone");
+            FrameGate.same(before, view.ringPrint(spans, at12, none)),
+            "an unchanged mark must leave the ring print alone");
+
+        // And it must move *that ring's* slice, not merely the frame: a mark
+        // on ring 0 that dirtied ring 3 as well would give back the saving.
+        Test.assertMessage(FrameGate.ringMoved(before, after, 0),
+            "the ring carrying the mark must read as moved");
+        for (var ring = 1; ring < StatMap.RINGS; ring++) {
+            Test.assertMessage(!FrameGate.ringMoved(before, after, ring),
+                "ring " + ring + " must not be dirtied by ring 0's mark");
+        }
         return true;
+    }
+
+    //! A copy, so two prints can be held at once.
+    function copyOf(values as Array<Float>) as Array<Float> {
+        var out = new [values.size()] as Array<Float>;
+        for (var i = 0; i < values.size(); i++) {
+            out[i] = values[i];
+        }
+        return out;
     }
 
     //! Always-on never marks. White is the most luminous thing the face can
@@ -1515,15 +1596,15 @@ module MatrixTest {
             marks[i] = Source.NO_MARKER;
         }
 
-        var under = view.fingerprint(spans, marks, noOvers(), null);
-        var over = view.fingerprint(spans, marks, allOvers(), null);
-        logger.debug("fingerprint is " + under.size() + " values");
+        var under = copyOf(view.ringPrint(spans, marks, noOvers()));
+        var over = copyOf(view.ringPrint(spans, marks, allOvers()));
+        logger.debug("the ring print is " + under.size() + " values");
         Test.assertMessage(!FrameGate.same(under, over),
-            "crossing the goal must change the fingerprint — the span alone " +
+            "crossing the goal must change the ring print — the span alone " +
             "cannot tell a lap of 0.05 from a fill of 0.05");
         Test.assertMessage(
-            FrameGate.same(under, view.fingerprint(spans, marks, noOvers(), null)),
-            "an unchanged flag must leave the fingerprint alone");
+            FrameGate.same(under, view.ringPrint(spans, marks, noOvers())),
+            "an unchanged flag must leave the ring print alone");
         return true;
     }
 
@@ -1574,14 +1655,138 @@ module MatrixTest {
         for (var r = 0; r < rotations.size(); r++) {
             StatMap.rotation = rotations[r];
             MatrixRenderer.draw(dc, spans, marks, overs, Palette.active,
-                                Palette.rampActive, null);
+                                Palette.rampActive, null,
+                                FrameGate.everything(), true);
             MatrixRenderer.draw(dc, spans, marks, overs, Palette.active,
-                                Palette.rampActive, Palette.BACKING_WHITE);
+                                Palette.rampActive, Palette.BACKING_WHITE,
+                                FrameGate.everything(), true);
+            // And again drawing one ring into what is already there, which is
+            // the path a moved span actually takes.
+            MatrixRenderer.draw(dc, spans, marks, overs, Palette.active,
+                                Palette.rampActive, null,
+                                onlyRingDirty(1), false);
             logger.debug("rotation " + StatMap.rotation + " drew an over field");
         }
 
         StatMap.rings[1] = was;
         StatMap.rotation = turning;
+        return true;
+    }
+
+    //! A clean ring is not walked, and a moved mark leaves no ghost.
+    //!
+    //! This is the claim the whole per-ring gate rests on, driven through the
+    //! real renderer into a real Dc rather than argued about. The screen cannot
+    //! be read back — Dc has no getPixel — so the renderer reports which rings
+    //! it walked and how many stale marks it rubbed out, and this holds it to
+    //! the dirty set it was handed.
+    //!
+    //! The erase is the subtle half. A mark is a solid block and a dot is a
+    //! cross, so repainting a ring covers 9 of the 25 pixels a mark occupies.
+    //! Without rubbing the cell out first, the other 16 survive as a ghost of
+    //! the previous reading — and on the temperature ring, which is the only
+    //! one that marks, that ghost would sit there until the next full clear.
+    (:test)
+    function aCleanRingIsNotWalkedAndAMovedMarkLeavesNoGhost(logger as Logger) as Boolean {
+        Config.reload();
+        DotGrid.ensureBuilt();
+        // Same 64x64 buffer theRendererDrawsAnOverGoalRing uses, and for the
+        // same reason: a full-screen one is ~304KB and takes the runner out.
+        var bitmap = Graphics.createBufferedBitmap(
+            {:width => 64, :height => 64}).get();
+        if (!(bitmap instanceof Graphics.BufferedBitmap)) {
+            logger.debug("no buffered bitmap available; draw not exercised");
+            return true;
+        }
+        var dc = bitmap.getDc();
+
+        var spans = everySpan(0.0, 0.5);
+        var overs = noOvers();
+        var marks = new [StatMap.RINGS] as Array<Float>;
+        for (var i = 0; i < StatMap.RINGS; i++) {
+            marks[i] = Source.NO_MARKER;
+        }
+
+        // A full frame first, so there is something on screen to preserve.
+        MatrixRenderer.draw(dc, spans, marks, overs, Palette.active,
+                            Palette.rampActive, null,
+                            FrameGate.everything(), true);
+        for (var ring = 0; ring < StatMap.RINGS; ring++) {
+            Test.assertMessage(MatrixRenderer.walked[ring],
+                "a cleared frame must redraw every ring, including " + ring);
+        }
+
+        // Now one ring only. The other three must not be touched at all.
+        MatrixRenderer.draw(dc, spans, marks, overs, Palette.active,
+                            Palette.rampActive, null,
+                            onlyRingDirty(2), false);
+        Test.assertMessage(MatrixRenderer.walked[2],
+            "the dirty ring must be drawn");
+        for (var ring = 0; ring < StatMap.RINGS; ring++) {
+            if (ring != 2) {
+                Test.assertMessage(!MatrixRenderer.walked[ring],
+                    "ring " + ring + " was clean and must not have been " +
+                    "walked — walking it is exactly the cost this removes");
+            }
+        }
+
+        // A mark appears on ring 1. Nothing was there before, so nothing to rub out.
+        marks[1] = 0.25;
+        MatrixRenderer.draw(dc, spans, marks, overs, Palette.active,
+                            Palette.rampActive, null,
+                            onlyRingDirty(1), false);
+        var first = DotGrid.markedDotFor(1, 0.25);
+        Test.assertMessage(first >= 0, "0.25 must mark a dot on ring 1");
+        Test.assertEqualMessage(MatrixRenderer.drawnMark[1], first,
+            "the renderer must remember the mark it drew");
+
+        // The mark moves. The cell it left must be rubbed out, or 16 pixels of
+        // it survive under the cross that replaces it.
+        marks[1] = 0.75;
+        MatrixRenderer.draw(dc, spans, marks, overs, Palette.active,
+                            Palette.rampActive, null,
+                            onlyRingDirty(1), false);
+        Test.assertMessage(MatrixRenderer.erased >= 1,
+            "the mark moved and its old cell was never rubbed out — it would " +
+            "stay on screen as a ghost of the last reading");
+        Test.assertMessage(MatrixRenderer.drawnMark[1] != first,
+            "the remembered mark must follow the reading");
+        Test.assertEqualMessage(MatrixRenderer.previousMark[1], first,
+            "the cell the mark left must still be owed an erase");
+        logger.debug("moved a mark, rubbed out " + MatrixRenderer.erased +
+                     " stale cell(s)");
+
+        // The second of the HOLD draws is the one that used to be wrong. It is
+        // for the *other* buffer, which still shows the mark at its old cell —
+        // so it has to rub out that cell too, not just the current one. With a
+        // single slot it would rub out the new cell twice and leave sixteen
+        // stray pixels of the old mark under a nine-pixel cross.
+        var moved = DotGrid.markedDotFor(1, 0.75);
+        MatrixRenderer.draw(dc, spans, marks, overs, Palette.active,
+                            Palette.rampActive, null,
+                            onlyRingDirty(1), false);
+        Test.assertMessage(MatrixRenderer.erased >= 2,
+            "the repeat draw must rub out both the cell the mark is in and " +
+            "the one it came from — the other buffer still shows the old one");
+        Test.assertEqualMessage(MatrixRenderer.drawnMark[1], moved,
+            "and the mark itself must not move on the repeat");
+
+        // A ring that is not redrawn keeps the mark it has on screen: nothing
+        // rubbed it out, so the renderer must not forget it either.
+        var standing = MatrixRenderer.drawnMark[1];
+        MatrixRenderer.draw(dc, spans, marks, overs, Palette.active,
+                            Palette.rampActive, null,
+                            onlyRingDirty(3), false);
+        Test.assertEqualMessage(MatrixRenderer.drawnMark[1], standing,
+            "a ring left alone still has its mark on screen, so the renderer " +
+            "must not lose track of where it is");
+
+        // And a clear wipes the slate: nothing is on screen to rub out.
+        MatrixRenderer.draw(dc, spans, marks, overs, Palette.active,
+                            Palette.rampActive, null,
+                            FrameGate.everything(), true);
+        Test.assertEqualMessage(MatrixRenderer.erased, 0,
+            "a frame that starts from black has nothing to rub out");
         return true;
     }
 
@@ -1669,26 +1874,42 @@ module MatrixTest {
         FrameGate.drawn = 0;
         FrameGate.suppressed = 0;
 
-        var still = [1.0, 2.0, 3.0] as Array<Float>;
-        Test.assertMessage(FrameGate.shouldDraw(still),
-            "the first frame after forgetting must always be drawn");
-        Test.assertMessage(!FrameGate.shouldDraw([1.0, 2.0, 3.0] as Array<Float>),
-            "an identical frame must be skipped");
+        var field = stillField();
+        var still = stillRings();
+
+        // forget() asks for HOLD full draws, not one: on a double-buffered
+        // device the first lands in only one of the two buffers.
+        for (var i = 0; i < FrameGate.HOLD; i++) {
+            Test.assertMessage(FrameGate.plan(field, still),
+                "the frames after forgetting must all be drawn");
+            Test.assertMessage(FrameGate.clears,
+                "and drawn from black, since nothing vouches for the screen");
+        }
+        Test.assertMessage(!FrameGate.plan(field, still),
+            "an identical frame must then be skipped");
 
         // A change of any kind must draw, including one only in the last slot.
-        Test.assertMessage(FrameGate.shouldDraw([1.0, 2.0, 4.0] as Array<Float>),
-            "a changed fingerprint must be drawn");
-        Test.assertMessage(!FrameGate.shouldDraw([1.0, 2.0, 4.0] as Array<Float>),
+        var moved = stillRings();
+        moved[moved.size() - 1] = 1.0;
+        Test.assertMessage(FrameGate.plan(field, moved),
+            "a changed ring must be drawn");
+        settle(field, moved);
+        Test.assertMessage(!FrameGate.plan(field, moved),
             "and then settle back to skipping");
 
         // The cap: something drawn over the face from outside is only repaired
-        // by a draw, so skips must not run on forever.
+        // by a draw, so skips must not run on forever — and the repair has to
+        // start from black, or damage outside every ring's dots would survive.
         var run = 0;
+        var repaired = 0;
         for (var i = 0; i < 40; i++) {
-            if (FrameGate.shouldDraw([1.0, 2.0, 4.0] as Array<Float>)) {
+            if (FrameGate.plan(field, moved)) {
                 Test.assertMessage(run <= FrameGate.MAX_SKIPS,
                     "went " + run + " frames without drawing, cap is " +
                     FrameGate.MAX_SKIPS);
+                if (FrameGate.clears) {
+                    repaired++;
+                }
                 run = 0;
             } else {
                 run++;
@@ -1696,10 +1917,13 @@ module MatrixTest {
         }
         Test.assertMessage(run <= FrameGate.MAX_SKIPS,
             "the gate must never skip more than the cap in a row");
+        Test.assertMessage(repaired > 0,
+            "the periodic repair must clear the screen, or damage outside the " +
+            "dots is never rubbed out");
 
         // forget() is what onShow and waking use; it must always draw next.
         FrameGate.forget();
-        Test.assertMessage(FrameGate.shouldDraw([1.0, 2.0, 4.0] as Array<Float>),
+        Test.assertMessage(FrameGate.plan(field, moved),
             "forget() must force the next frame to be drawn");
 
         logger.debug("skipped " + FrameGate.skipPercent() + "% of frames");
@@ -1714,14 +1938,113 @@ module MatrixTest {
         return true;
     }
 
+    //! A field print with nothing happening: no drift, no backing.
+    function stillField() as Array<Float> {
+        return [0.0, 0.0, -1.0, 0.0] as Array<Float>;
+    }
+
+    //! A ring print with every ring empty and unmarked.
+    function stillRings() as Array<Float> {
+        var out = new [StatMap.RINGS * FrameGate.PER_RING] as Array<Float>;
+        for (var i = 0; i < out.size(); i++) {
+            out[i] = 0.0;
+        }
+        return out;
+    }
+
+    //! Draw the same frame until every hold has run out, so what follows is
+    //! testing the gate rather than the repeat a change is owed.
+    function settle(field as Array<Float>, rings as Array<Float>) as Void {
+        for (var i = 0; i < FrameGate.HOLD; i++) {
+            FrameGate.plan(field, rings);
+        }
+    }
+
+    //! Only this ring dirty, for driving the renderer down its partial path.
+    function onlyRingDirty(ring as Number) as Array<Boolean> {
+        var out = new [StatMap.RINGS] as Array<Boolean>;
+        for (var i = 0; i < StatMap.RINGS; i++) {
+            out[i] = (i == ring);
+        }
+        return out;
+    }
+
+    //! One ring moving must draw that ring and leave the others alone.
+    //!
+    //! This is the whole of Phase 3 in one assertion. A seconds ring moves its
+    //! span every tick, so the old whole-frame gate opened every second and
+    //! redrew all four rings because one of them had moved — which this
+    //! module's own comment used to accept as the price of a second hand.
+    //!
+    //! Three things have to hold, and the third is the one that bites: a moved
+    //! ring is dirty, an unmoved one is not, and a change is repeated into
+    //! HOLD consecutive *draws* rather than one. That last is what makes the
+    //! partial redraw safe if the device hands onUpdate an alternating buffer,
+    //! where the Dc being drawn into is the one from two draws ago.
+    (:test)
+    function onlyTheRingThatMovedIsDrawn(logger as Logger) as Boolean {
+        FrameGate.forget();
+        var field = stillField();
+        var rings = stillRings();
+        settle(field, rings);
+        Test.assertMessage(!FrameGate.plan(field, rings),
+            "a still face must skip");
+
+        // Move ring 2's span end and nothing else.
+        var moved = stillRings();
+        moved[2 * FrameGate.PER_RING + 1] = 0.5;
+
+        Test.assertMessage(FrameGate.plan(field, moved),
+            "a ring that moved must open the gate");
+        Test.assertMessage(!FrameGate.clears,
+            "one ring moving must not clear the whole screen — clearing it " +
+            "and redrawing three unchanged rings is what this replaces");
+        Test.assertMessage(FrameGate.dirty[2], "the moved ring must be drawn");
+        for (var ring = 0; ring < StatMap.RINGS; ring++) {
+            if (ring != 2) {
+                Test.assertMessage(!FrameGate.dirty[ring],
+                    "ring " + ring + " did not move and must not be drawn");
+            }
+        }
+
+        // The hold: the same change is drawn again, still only that ring.
+        Test.assertMessage(FrameGate.plan(field, moved),
+            "a change must be repeated into HOLD consecutive draws, for a " +
+            "device whose buffers alternate");
+        Test.assertMessage(FrameGate.dirty[2],
+            "and the repeat must be of the ring that moved");
+        Test.assertMessage(!FrameGate.dirty[0],
+            "the repeat must not spread to rings that never moved");
+
+        // And then it settles.
+        Test.assertMessage(!FrameGate.plan(field, moved),
+            "once the hold is spent an unmoved face skips again");
+        logger.debug("one ring moved, " + FrameGate.HOLD + " draws, no clear");
+
+        // The field is different in kind: drift moves every dot, so there is
+        // nothing on screen worth keeping.
+        var drifted = stillField();
+        drifted[0] = 3.0;
+        Test.assertMessage(FrameGate.plan(drifted, moved),
+            "a drift step must draw");
+        Test.assertMessage(FrameGate.clears,
+            "drift moves the whole lattice, so the frame starts from black");
+        for (var ring = 0; ring < StatMap.RINGS; ring++) {
+            Test.assertMessage(FrameGate.dirty[ring],
+                "a cleared screen leaves every ring to redraw, including " +
+                ring);
+        }
+
+        FrameGate.forget();
+        return true;
+    }
+
     //! The frame-cost readout is the only way to see what a frame costs on the
     //! watch, so it has to survive a long session without its average drifting
     //! into meaninglessness or its counters overflowing.
     (:test)
     function frameCostAveragesRecentFrames(logger as Logger) as Boolean {
-        Diagnostics.frames = 0;
-        Diagnostics.totalMs = 0;
-        Diagnostics.worstMs = 0;
+        resetDiagnostics();
         Test.assertMessage(Diagnostics.summary().equals("no frames yet"),
             "with no frames recorded there is nothing to average");
 
@@ -1747,9 +2070,74 @@ module MatrixTest {
             "the average must follow a sustained change, not average it away");
         logger.debug("after the change: " + Diagnostics.summary());
 
+        resetDiagnostics();
+        return true;
+    }
+
+    //! Both counters back to nothing. Skipped frames have their own totals, so
+    //! clearing only the drawn ones leaves summary() reporting a session that
+    //! was supposed to have been wiped.
+    function resetDiagnostics() as Void {
         Diagnostics.frames = 0;
         Diagnostics.totalMs = 0;
         Diagnostics.worstMs = 0;
+        Diagnostics.skips = 0;
+        Diagnostics.skipTotalMs = 0;
+        Diagnostics.skipWorstMs = 0;
+    }
+
+    //! What the face pays to decide it has nothing to draw.
+    //!
+    //! Awake, the gate skips most frames, so this preamble — four sources read,
+    //! their spans and marks built, a fingerprint compared — is the face's
+    //! most-executed code. It went unmeasured until now because the skip path
+    //! returns before Diagnostics.record() is ever reached, which meant the
+    //! readout described 17% of frames and stayed silent about the other 83%.
+    //!
+    //! Kept as its own average rather than folded in: a 3ms skip averaged
+    //! against a 27ms draw reports neither number, and the drawn figure is the
+    //! one the watchdog is judged against.
+    (:test)
+    function theSkippedFrameIsCostedSeparately(logger as Logger) as Boolean {
+        resetDiagnostics();
+
+        for (var i = 0; i < 10; i++) {
+            Diagnostics.record(30);
+        }
+        for (var i = 0; i < 90; i++) {
+            Diagnostics.recordSkip(3);
+        }
+
+        Test.assertEqualMessage(Diagnostics.averageMs(), 30,
+            "a skipped frame must not drag the drawn average down");
+        Test.assertEqualMessage(Diagnostics.skipAverageMs(), 3,
+            "the skipped frames must average their own cost");
+        Test.assertEqualMessage(Diagnostics.worstMs, 30,
+            "the worst drawn frame must not be a skipped one");
+        Test.assertEqualMessage(Diagnostics.skipWorstMs, 3,
+            "the worst skipped frame is tracked on its own");
+        logger.debug("both costs: " + Diagnostics.summary());
+
+        // The skip totals must window the same way the drawn ones do, or a long
+        // session's counters run away.
+        for (var i = 0; i < 5000; i++) {
+            Diagnostics.recordSkip(3);
+        }
+        Test.assertMessage(Diagnostics.skips <= Diagnostics.WINDOW,
+            "the skip window must stay bounded, or the counters run away");
+        for (var i = 0; i < Diagnostics.WINDOW; i++) {
+            Diagnostics.recordSkip(1);
+        }
+        Test.assertMessage(Diagnostics.skipAverageMs() < 3,
+            "the skip average must follow a sustained change too");
+
+        // Recording only skips must still read as a session with something in it.
+        resetDiagnostics();
+        Diagnostics.recordSkip(2);
+        Test.assertMessage(!Diagnostics.summary().equals("no frames yet"),
+            "a session that has only ever skipped has still done something");
+
+        resetDiagnostics();
         return true;
     }
 
@@ -1888,52 +2276,87 @@ module MatrixTest {
         return true;
     }
 
-    //! The view's fingerprint, laid out as CrossoverView.fingerprint() lays it:
-    //! the drift pair, the backing and its minute, then four values per ring —
-    //! its two span ends, its mark and its over flag. Only the first ring's
-    //! sweep moves here.
-    function fingerprintAtSecond(second as Number) as Array<Float> {
-        var out = new [4 + (StatMap.RINGS * 4)] as Array<Float>;
-        for (var i = 0; i < out.size(); i++) {
-            out[i] = 0.0;
-        }
-        out[2] = -1.0;                              //! no backing
-        out[5] = ClockData.fraction(second);        //! ring 1's span end
+    //! The ring print at a given second, laid out as CrossoverView lays it:
+    //! four values per ring — its two span ends, its mark and its over flag.
+    //! Only the first ring's sweep moves here.
+    function ringPrintAtSecond(second as Number) as Array<Float> {
+        var out = stillRings();
+        out[1] = ClockData.fraction(second);        //! ring 1's span end
         return out;
     }
 
-    //! The gate skips any frame whose fingerprint matches the last one drawn,
-    //! and caps that at MAX_SKIPS. A seconds ring has to move the fingerprint
-    //! every tick or the sweep would visibly stall for seconds at a time.
-    //! Nothing in the gate was changed to allow this — the span end is already
-    //! part of the fingerprint — so this test is what says so out loud.
+    //! A seconds ring must move its own ring every tick, and only its own.
+    //!
+    //! The sweep would visibly stall if a tick did not open the gate, so this
+    //! asserts all sixty do. What it now also asserts is the point of the
+    //! per-ring split: a tick draws **one** ring. The old whole-frame gate
+    //! opened on all sixty too, and redrew four rings each time — this module
+    //! used to call that the unavoidable cost of asking for a second hand.
     (:test)
-    function everySecondOpensTheFrameGate(logger as Logger) as Boolean {
+    function everySecondDrawsOnlyTheSweepingRing(logger as Logger) as Boolean {
         var drawn = FrameGate.drawn;
         var suppressed = FrameGate.suppressed;
         FrameGate.forget();
         FrameGate.drawn = 0;
         FrameGate.suppressed = 0;
 
+        var field = stillField();
+        // Settle first, so the holds forget() asked for are spent and what
+        // follows is the sweep's own doing.
+        settle(field, ringPrintAtSecond(0));
+
         var opened = 0;
-        for (var second = 0; second < 60; second++) {
-            if (FrameGate.shouldDraw(fingerprintAtSecond(second))) {
+        var wholeFrames = 0;
+        var otherRings = 0;
+        for (var second = 1; second < 60; second++) {
+            if (FrameGate.plan(field, ringPrintAtSecond(second))) {
                 opened++;
+                if (FrameGate.clears) {
+                    wholeFrames++;
+                } else {
+                    // On a frame that is not the periodic repair, the sweep
+                    // must cost its own ring and nothing else.
+                    for (var ring = 1; ring < StatMap.RINGS; ring++) {
+                        if (FrameGate.dirty[ring]) {
+                            otherRings++;
+                        }
+                    }
+                }
+                Test.assertMessage(FrameGate.dirty[0],
+                    "the sweeping ring must be drawn on tick " + second);
             }
         }
-        logger.debug("the gate opened on " + opened + " of 60 ticks");
-        Test.assertEqualMessage(opened, 60,
+        logger.debug("the gate opened on " + opened + " of 59 ticks, cleared " +
+                     wholeFrames + ", drew an unmoved ring outside the repair " +
+                     otherRings + " times");
+        Test.assertEqualMessage(opened, 59,
             "a moving sweep must never be skipped — it stalled on " +
-            (60 - opened) + " ticks");
+            (59 - opened) + " ticks");
+
+        // The point of the whole split: a tick draws one ring.
+        Test.assertEqualMessage(otherRings, 0,
+            "a second tick redrew a ring that had not moved " + otherRings +
+            " times — that is the cost this split exists to remove");
+
+        // The periodic repair still runs, and is still the minority. It has to
+        // exist: a face that only ever redraws one ring would never rub out
+        // damage lying between the dots, or on the three rings it is not
+        // drawing. It must not be most of the minute either, or the saving is
+        // spent on repairs.
+        Test.assertMessage(wholeFrames > 0,
+            "the screen must still be cleared periodically, or a notification " +
+            "drawn over the face would stay there");
+        Test.assertMessage(wholeFrames * 2 < opened,
+            "most ticks must draw one ring, but " + wholeFrames + " of " +
+            opened + " cleared and redrew all four");
 
         // And the gate is still a gate: a tick that does not move it is still
-        // skipped, so this is the fingerprint changing rather than the gate
-        // having been loosened.
+        // skipped, so this is the print changing rather than the gate having
+        // been loosened.
         FrameGate.forget();
-        Test.assertMessage(FrameGate.shouldDraw(fingerprintAtSecond(7)),
-            "the first frame after forgetting is always drawn");
-        Test.assertMessage(!FrameGate.shouldDraw(fingerprintAtSecond(7)),
-            "an unmoved fingerprint must still be skipped");
+        settle(field, ringPrintAtSecond(7));
+        Test.assertMessage(!FrameGate.plan(field, ringPrintAtSecond(7)),
+            "an unmoved print must still be skipped");
 
         FrameGate.forget();
         FrameGate.drawn = drawn;

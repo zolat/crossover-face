@@ -47,10 +47,46 @@ import Toybox.Lang;
 //! 390x390 buffer at 16bpp is ~304KB against a 128KB watch-face budget.
 module MatrixRenderer {
 
+    //! Which mark each ring currently has on screen, so a ring being
+    //! repainted can rub out the one it drew last time.
+    //!
+    //! A mark is a solid block and a dot is a cross, so repainting a ring
+    //! covers only 9 of the 25 pixels a mark occupies — the other 16 would
+    //! survive as a ghost of the previous reading. Blacking the cell first is
+    //! what stops that, and it is done whether or not the mark moved: the ring
+    //! is being fully repainted anyway, so erase-then-draw is the same picture
+    //! either way and needs no reasoning about which frame a move landed on.
+    var drawnMark as Array<Number> = [] as Array<Number>;
+
+    //! The cell each ring marked *before* that, still owed an erase.
+    //!
+    //! One slot is not enough once a change is repeated into HOLD draws. Say
+    //! the mark moves P to Q. The first draw rubs out P and lands in one
+    //! buffer; the second draw is for the *other* buffer, and with only
+    //! drawnMark to go on it would rub out Q — leaving P's sixteen stray
+    //! pixels in that buffer with nothing but a nine-pixel cross over them.
+    //! So both cells are rubbed out on every repaint, which costs one extra
+    //! fillRectangle on a marked ring and needs no reasoning about which
+    //! buffer this draw is for.
+    var previousMark as Array<Number> = [] as Array<Number>;
+
+    //! Which rings the last draw actually walked, and how many marks it rubbed
+    //! out. Four writes and an integer per frame.
+    //!
+    //! Here because the central claim of the per-ring gate — that a ring which
+    //! did not move is not walked — is otherwise unassertable. The screen
+    //! cannot be read back: Dc has no getPixel, and a simulator screenshot
+    //! needs a titled window, which is a permission away from being available.
+    //! So the renderer says what it did, and a test holds it to the dirty set
+    //! it was handed.
+    var walked as Array<Boolean> = new [StatMap.RINGS] as Array<Boolean>;
+    var erased as Number = 0;
+
     function draw(dc as Dc, spans as Array<Array<Float> >,
                   markers as Array<Float>, overs as Array<Boolean>,
                   palette as Array<Number>, ramp as Array<Number>,
-                  backing as Number?) as Void {
+                  backing as Number?,
+                  dirty as Array<Boolean>, clears as Boolean) as Void {
         // Normally a no-op: onLayout has already built the cache. This is the
         // safety net for a settings change, which comes back through onShow.
         DotGrid.ensureBuilt();
@@ -63,8 +99,27 @@ module MatrixRenderer {
         if (dc has :setAntiAlias) {
             dc.setAntiAlias(false);
         }
-        dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_BLACK);
-        dc.clear();
+        // Only when something moved every dot at once. A frame that repaints
+        // one ring must leave the other three where they are, which is the
+        // whole point of being told which are dirty.
+        if (clears) {
+            dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_BLACK);
+            dc.clear();
+        }
+        if (drawnMark.size() != StatMap.RINGS) {
+            drawnMark = new [StatMap.RINGS] as Array<Number>;
+            previousMark = new [StatMap.RINGS] as Array<Number>;
+            for (var ring = 0; ring < StatMap.RINGS; ring++) {
+                drawnMark[ring] = -1;
+                previousMark[ring] = -1;
+            }
+        } else if (clears) {
+            // The screen is black; nothing is on it to rub out.
+            for (var ring = 0; ring < StatMap.RINGS; ring++) {
+                drawnMark[ring] = -1;
+                previousMark[ring] = -1;
+            }
+        }
 
 
         // Drift shifts where dots are drawn, never which dots exist, so the
@@ -79,7 +134,6 @@ module MatrixRenderer {
         var arms = DotGrid.ARMS;
         var positionOf = DotGrid.positionOf;
         var ringStart = DotGrid.ringStart;
-        var markerHalf = DotGrid.markerHalf;
         var rings = StatMap.rings;
         var rampTop = Palette.RAMP_STEPS - 1;
         var markerColour = Palette.markerOf;
@@ -112,8 +166,33 @@ module MatrixRenderer {
 
         var markAt = new [StatMap.RINGS] as Array<Number>;
 
+        var half = DotGrid.DOT / 2;
         var lastColour = -1;
+        erased = 0;
         for (var ring = 0; ring < StatMap.RINGS; ring++) {
+            walked[ring] = dirty[ring];
+            if (!dirty[ring]) {
+                // Already on screen and still correct. Not walking it is the
+                // saving; note that its mark stays put too, which is why
+                // drawnMark is only touched for the rings being repainted.
+                markAt[ring] = -1;
+                continue;
+            }
+            // Rub out every cell this ring may still have a mark in, before
+            // its dots go back down over them. Both slots, every time — see
+            // previousMark for why one is not enough.
+            for (var slot = 0; slot < 2; slot++) {
+                var stale = (slot == 0) ? drawnMark[ring] : previousMark[ring];
+                if (stale < 0) {
+                    continue;
+                }
+                dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_TRANSPARENT);
+                dc.fillRectangle(centreX + xs[stale] - half,
+                                 centreY + ys[stale] - half,
+                                 DotGrid.DOT, DotGrid.DOT);
+                lastColour = Graphics.COLOR_BLACK;
+                erased++;
+            }
             // Everything this ring's dots share, read once instead of ~280
             // times: where its span starts and ends, whether it wraps past the
             // origin, its two colours, and whether it draws the ramp.
@@ -134,15 +213,13 @@ module MatrixRenderer {
             var isRamp = (rings[ring] == Source.SOURCE_TEMPERATURE);
             var last = ringStart[ring + 1];
 
-            // Which dot this ring marks, found once here. The dot loop below
-            // never learns about it: the mark is drawn afterwards, so the
-            // innermost statement in the face is exactly what it was before
-            // marks existed.
-            var mark = markers[ring];
-            markAt[ring] = (mark >= 0.0)
-                ? DotGrid.markedDot(
-                      ring, StatMap.windowAround(mark, markerHalf[ring]))
-                : -1;
+            // Which dot this ring marks. The dot loop below never learns
+            // about it: the mark is drawn afterwards, so the innermost
+            // statement in the face is exactly what it was before marks
+            // existed. DotGrid remembers the answer between frames — placing a
+            // mark walks the whole ring, and the mark moves with the
+            // temperature rather than with the frame.
+            markAt[ring] = DotGrid.markedDotFor(ring, markers[ring]);
 
             for (var i = ringStart[ring]; i < last; i++) {
                 var dx = xs[i];
@@ -201,9 +278,17 @@ module MatrixRenderer {
         // tried and it vanished. A solid block is the only shape on the field
         // that is not a cross, and that, rather than the colour, is what makes
         // it read as a mark. Nine lit pixels become twenty-five, on one dot.
-        var half = DotGrid.DOT / 2;
         for (var ring = 0; ring < StatMap.RINGS; ring++) {
+            if (!dirty[ring]) {
+                continue;
+            }
             var at = markAt[ring];
+            if (at != drawnMark[ring]) {
+                // The mark moved. The cell it left is owed an erase in the
+                // other buffer too, which the next held draw will do.
+                previousMark[ring] = drawnMark[ring];
+            }
+            drawnMark[ring] = at;
             if (at < 0) {
                 continue;
             }
