@@ -1181,19 +1181,75 @@ module MatrixTest {
         var base = frameLuminance(full, Palette.active);
         var area = Math.PI * DotGrid.RADIUS * DotGrid.RADIUS;
         // One dot per ring is the most the mark can ever cost, every one of
-        // them swapped from the dimmest theme colour to white.
+        // them swapped from the dimmest theme colour to the brightest mark.
+        // The mark is tinted per ring now, so this prices the brightest of
+        // them rather than the pure white it used to be.
         var dimmest = 1.0;
+        var brightestMark = 0.0;
         for (var ring = 0; ring < StatMap.RINGS; ring++) {
             var lum = relativeLuminance(Palette.active[ring * 2 + 1]);
             if (lum < dimmest) { dimmest = lum; }
+            var mark = relativeLuminance(Palette.markerOf[ring]);
+            if (mark > brightestMark) { brightestMark = mark; }
         }
         // A marked dot is filled rather than a cross, so it lights DOT squared
         // pixels where an ordinary dot lights 2*DOT-1.
-        var step = (relativeLuminance(Palette.MARKER) - dimmest) *
+        var step = (brightestMark - dimmest) *
                    DotGrid.DOT * DotGrid.DOT * StatMap.RINGS / area;
         logger.debug("awake full field " + base + " plus at most " + step);
         Test.assertMessage(base + step < BUDGET,
             "even awake, the mark must not push the field past the budget");
+        return true;
+    }
+
+    //! The mark carries a touch of the band it sits on, which is what stopped
+    //! it reading as a hole punched through the field rather than a point on
+    //! it. Three things keep that a tint rather than a repaint.
+    //!
+    //! It has to stay clearly brighter than the filled band, because once it
+    //! is not, only the solid-versus-cross shape is left carrying it. It has to
+    //! sit *between* white and the band on every channel — that is what "tinted
+    //! toward" means, and a mix that overshot would land outside them. And it
+    //! has to differ from ring to ring, or the per-ring table earns nothing
+    //! over the single constant it replaced.
+    (:test)
+    function theMarkCarriesATouchOfItsBand(logger as Logger) as Boolean {
+        Config.reload();
+        Test.assertEqualMessage(Palette.markerOf.size(), StatMap.RINGS,
+            "every ring needs a mark colour");
+        Test.assertMessage(
+            Palette.MARKER_TINT > 0.0 && Palette.MARKER_TINT < 1.0,
+            "a tint of 0 is the pure white this replaced, and 1 is the band");
+
+        for (var ring = 0; ring < StatMap.RINGS; ring++) {
+            var mark = Palette.markerOf[ring];
+            var band = Palette.active[ring * 2 + 1];
+            Test.assertMessage(mark != Palette.MARKER,
+                "ring " + ring + " kept the untinted white");
+            Test.assertMessage(
+                relativeLuminance(mark) > relativeLuminance(band),
+                "the mark on ring " + ring + " must outshine its own band");
+
+            for (var shift = 0; shift <= 16; shift += 8) {
+                var m = (mark >> shift) & 0xFF;
+                var b = (band >> shift) & 0xFF;
+                var w = (Palette.MARKER >> shift) & 0xFF;
+                var low = (b < w) ? b : w;
+                var high = (b < w) ? w : b;
+                Test.assertMessage(m >= low && m <= high,
+                    "ring " + ring + " channel " + shift + " landed outside " +
+                    "the band and white it is mixed from");
+            }
+            logger.debug("ring " + ring + " mark " + mark + " band " + band);
+        }
+
+        for (var a = 0; a < StatMap.RINGS; a++) {
+            for (var b = a + 1; b < StatMap.RINGS; b++) {
+                Test.assertMessage(Palette.markerOf[a] != Palette.markerOf[b],
+                    "rings " + a + " and " + b + " share a mark colour, so " +
+                    "the per-ring table is doing nothing");
+            }
+        }
         return true;
     }
 

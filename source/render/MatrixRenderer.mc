@@ -73,7 +73,7 @@ module MatrixRenderer {
         var markerHalf = DotGrid.markerHalf;
         var rings = StatMap.rings;
         var rampTop = Palette.RAMP_STEPS - 1;
-        var markerColour = Palette.MARKER;
+        var markerColour = Palette.markerOf;
 
         // Unpack the hand axes once. With the backing on, covers() is the only
         // call left in the dot loop; reading its four floats out of an array
@@ -194,7 +194,7 @@ module MatrixRenderer {
                                                  minuteX, minuteY)) {
                 continue;
             }
-            dc.setColor(markerColour, Graphics.COLOR_TRANSPARENT);
+            dc.setColor(markerColour[ring], Graphics.COLOR_TRANSPARENT);
             dc.fillRectangle(centreX + dx - half, centreY + dy - half,
                              DotGrid.DOT, DotGrid.DOT);
         }

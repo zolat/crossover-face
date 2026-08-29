@@ -60,9 +60,15 @@ SOURCE_TEMPERATURE = 4
 THEME = [(0xE8, 0x79, 0xF9), (0xB8, 0xD6, 0x4B), (0x7F, 0xD4, 0xFF), (0xFF, 0x6B, 0x5B)]
 
 # Mirrors Palette.MARKER: the current temperature called out on the range it
-# sits in. White because every ramp stop is saturated, so only an unsaturated
-# colour reads as a marker rather than as more data. Awake only.
+# sits in. Near-white, carrying a third of its own band's colour — what makes a
+# mark read is that it is the only solid dot on a field of crosses, not that it
+# is white, so the hue can settle into the palette. Awake only.
 MARKER = (0xFF, 0xFF, 0xFF)
+MARKER_TINT = 0.35
+
+
+def marker_colour(ring: int):
+    return mix(MARKER, THEME[ring % len(THEME)], MARKER_TINT)
 
 
 def marker_half(ring: int, variant: str) -> float:
@@ -267,7 +273,7 @@ def render(variant: str, spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
                 # Awake only, and it outranks the fill: the mark has to be
                 # legible whether or not now falls inside today's range.
                 if not always_on and mark_dots.get(ring) == (dx, dy):
-                    colour = MARKER
+                    colour = marker_colour(ring)
                     marked_here = True
                 else:
                     start, end = spans[ring]

@@ -69,14 +69,27 @@ module Palette {
     //! The colour of a mark called out on a ring — today, the current
     //! temperature against the day's range.
     //!
-    //! White because every stop of the ramp is saturated, so only an
-    //! unsaturated colour reads as a marker rather than as more data.
+    //! Near-white, carrying a third of the colour of the band it sits in. It
+    //! was pure white, on the reasoning that every ramp stop is saturated so
+    //! only an unsaturated colour reads as a marker rather than as more data.
+    //! That is true but it overshot: pure white read as a hole punched through
+    //! the field rather than a point on it.
     //!
-    //! There is no always-on tier because there is no always-on mark: white is
+    //! Tinting costs less legibility than it looks like it should, because
+    //! colour is not what carries the mark. MatrixRenderer makes the point from
+    //! the other side — a white *cross* among crosses was tried and vanished.
+    //! What reads is that the mark is the only solid dot on a field of crosses,
+    //! so the hue is free to settle into the palette.
+    //!
+    //! Tinted per ring rather than toward one fixed hue, so the mark still
+    //! belongs to its band if temperature is assigned to a different ring.
+    //!
+    //! There is no always-on tier because there is no always-on mark: this is
     //! the most luminous thing the face can draw, and always-on is the mode
     //! measured against the burn-in budget. CrossoverView holds the mark back
     //! there the same way it holds back the hand backing.
     const MARKER = 0xFFFFFF;
+    const MARKER_TINT = 0.35;
 
     //! Backing drawn under the analogue hands when that option is on.
     const BACKING_WHITE = 0xFFFFFF;
@@ -91,6 +104,9 @@ module Palette {
     var active as Array<Number> = [] as Array<Number>;
     var alwaysOn as Array<Number> = [] as Array<Number>;
     var heldBack as Array<Number> = [] as Array<Number>;
+
+    //! The mark's colour on each ring. One entry per ring, not per slot.
+    var markerOf as Array<Number> = [] as Array<Number>;
     var rampActive as Array<Number> = [] as Array<Number>;
     var rampAlwaysOn as Array<Number> = [] as Array<Number>;
 
@@ -98,8 +114,10 @@ module Palette {
         var awake = [] as Array<Number>;
         var asleep = [] as Array<Number>;
         var held = [] as Array<Number>;
+        var marks = [] as Array<Number>;
         for (var ring = 0; ring < StatMap.RINGS; ring++) {
             var colour = THEME[ring % THEME.size()];
+            marks.add(mix(MARKER, colour, MARKER_TINT));
             var lifted = scale(colour, LIFT);
             awake.add(scale(colour, WEAK_ACTIVE));
             awake.add(colour);
@@ -116,6 +134,7 @@ module Palette {
         active = awake;
         alwaysOn = asleep;
         heldBack = held;
+        markerOf = marks;
 
         var ramp = [] as Array<Number>;
         var rampLifted = [] as Array<Number>;
