@@ -454,7 +454,7 @@ every minute mark, so the range can be read off the dial exactly the way you rea
 hand. 18°C sits where :18 does. A tighter scale would use the ring better and be harder to
 read.
 
-A single near-white dot marks **where the current temperature falls** in that range. Without it a
+A single pale dot marks **where the current temperature falls** in that range. Without it a
 day of 11→22°C looks identical at dawn and at noon, and the reading is already in the
 conditions the low and high come from. The mark outranks the fill, so it stays legible when
 now sits *outside* today's range — an overnight low or a stale forecast puts it there
