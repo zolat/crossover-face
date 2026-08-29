@@ -27,7 +27,8 @@
             <listEntry value="3">@Strings.SourceBodyBattery</listEntry>
             <listEntry value="4">@Strings.SourceTemperature</listEntry>
             <listEntry value="5">@Strings.SourceRain</listEntry>
-            <listEntry value="6">@Strings.SourceOff</listEntry>
+            <listEntry value="6">@Strings.SourceIntensityMinutes</listEntry>
+            <listEntry value="7">@Strings.SourceOff</listEntry>
         </settingConfig>
     </setting>
     <setting propertyKey="@Properties.ring2" title="@Strings.Ring2Title" prompt="@Strings.RingPrompt">
@@ -38,7 +39,8 @@
             <listEntry value="3">@Strings.SourceBodyBattery</listEntry>
             <listEntry value="4">@Strings.SourceTemperature</listEntry>
             <listEntry value="5">@Strings.SourceRain</listEntry>
-            <listEntry value="6">@Strings.SourceOff</listEntry>
+            <listEntry value="6">@Strings.SourceIntensityMinutes</listEntry>
+            <listEntry value="7">@Strings.SourceOff</listEntry>
         </settingConfig>
     </setting>
     <setting propertyKey="@Properties.ring3" title="@Strings.Ring3Title" prompt="@Strings.RingPrompt">
@@ -49,7 +51,8 @@
             <listEntry value="3">@Strings.SourceBodyBattery</listEntry>
             <listEntry value="4">@Strings.SourceTemperature</listEntry>
             <listEntry value="5">@Strings.SourceRain</listEntry>
-            <listEntry value="6">@Strings.SourceOff</listEntry>
+            <listEntry value="6">@Strings.SourceIntensityMinutes</listEntry>
+            <listEntry value="7">@Strings.SourceOff</listEntry>
         </settingConfig>
     </setting>
     <setting propertyKey="@Properties.ring4" title="@Strings.Ring4Title" prompt="@Strings.RingPrompt">
@@ -60,7 +63,8 @@
             <listEntry value="3">@Strings.SourceBodyBattery</listEntry>
             <listEntry value="4">@Strings.SourceTemperature</listEntry>
             <listEntry value="5">@Strings.SourceRain</listEntry>
-            <listEntry value="6">@Strings.SourceOff</listEntry>
+            <listEntry value="6">@Strings.SourceIntensityMinutes</listEntry>
+            <listEntry value="7">@Strings.SourceOff</listEntry>
         </settingConfig>
     </setting>
 </settings>

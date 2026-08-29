@@ -278,6 +278,42 @@ module MatrixTest {
         return true;
     }
 
+    //! Every table indexed by Source.Kind covers every kind.
+    //!
+    //! Adding a source means touching four places that store or show a list
+    //! index — the enum, the hue table, the on-device labels, and the two XML
+    //! resource files. Nothing pinned the first three together, so a kind added
+    //! to the enum alone would leave a ring reading off the end of a table or,
+    //! worse, silently taking its neighbour's entry. The XML is out of reach
+    //! from here; COUNT is the number those files have to match.
+    (:test)
+    function sourceTablesCoverEveryKind(logger as Logger) as Boolean {
+        Test.assertEqualMessage(Source.HUES.size(), Source.COUNT,
+            "the hue table has drifted from Source.Kind");
+        Test.assertEqualMessage(SOURCE_LABELS.size(), Source.COUNT,
+            "the settings labels have drifted from Source.Kind");
+
+        for (var kind = 0; kind < Source.COUNT; kind++) {
+            var span = Source.span(kind);
+            Test.assertEqualMessage(span.size(), 2,
+                "source " + kind + " did not report a span");
+            Test.assertMessage(span[0] >= 0.0 && span[0] <= 1.0 &&
+                               span[1] >= 0.0 && span[1] <= 1.0,
+                "source " + kind + " reported a span outside 0-1");
+        }
+
+        // Intensity minutes is a level, so it fills from the origin whatever
+        // the week's activity happens to be.
+        var minutes = Source.span(Source.SOURCE_INTENSITY_MINUTES);
+        Test.assertEqualMessage(minutes[0], 0.0,
+            "a level must start at the origin");
+        logger.debug("intensity minutes span " + minutes[0] + " to " + minutes[1]);
+
+        Test.assertEqualMessage(Source.span(Source.SOURCE_OFF)[1], 0.0,
+            "Off must still be empty after the renumbering");
+        return true;
+    }
+
     //! The temperature scale runs 0C to 60C, which puts one degree on every
     //! minute mark: 18C sits exactly where :18 does. That correspondence is
     //! the whole reason for the range, so it is worth asserting directly.

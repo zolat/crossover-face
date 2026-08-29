@@ -372,6 +372,7 @@ The face has four rings, and **each one is independently assigned to a source**:
 | Body Battery | level | `SensorHistory` |
 | Temperature range | **range** + mark | `Weather` today's low → high, on a 0–60°C scale, with now marked |
 | Chance of rain | level | `Weather.precipitationChance` |
+| Intensity minutes | level | `ActivityMonitor` weekly active minutes ÷ your weekly goal |
 | Off | — | nothing |
 
 Every source reports a **span** — a start and an end, both 0.0–1.0 — rather than a single

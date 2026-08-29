@@ -10,6 +10,7 @@ const SOURCE_LABELS = [
     Rez.Strings.SourceBodyBattery,
     Rez.Strings.SourceTemperature,
     Rez.Strings.SourceRain,
+    Rez.Strings.SourceIntensityMinutes,
     Rez.Strings.SourceOff
 ] as Array<ResourceId>;
 
