@@ -972,22 +972,21 @@ module MatrixTest {
         return true;
     }
 
-    //! The mark must actually land on dots.
+    //! The mark must land on exactly one real dot, near the middle of its ring.
     //!
-    //! This is the assertion the per-ring half-width exists for. A single
-    //! constant looks fine in the band layouts and then falls clean between
-    //! dots on the inner rings, where the same position units are three times
-    //! coarser — and the mark simply is not there, with nothing else failing.
+    //! Two failures hide here. The window can fall clean between dots — the
+    //! reason it is sized per ring, since the same position units are three
+    //! times coarser on the inner rings than in a band — and markedDot can
+    //! pick a dot out at the ring's edge, where a single white dot reads as a
+    //! stray lit one rather than a marker.
     //!
     //! The bands cannot represent every position on every ring: the leftmost
     //! band does not reach the bottom of a round screen, so its lowest few
-    //! degrees have no dots to light and neither does the fill. Each ring is
-    //! therefore probed across the range it can represent, and that range is
-    //! logged so a regression that narrows it shows up.
+    //! degrees have no dots and neither does the fill. Each ring is therefore
+    //! probed across the range it can represent, and that range is logged so a
+    //! regression that narrows it shows up.
     (:test)
-    function markLandsOnDotsOnEveryRing(logger as Logger) as Boolean {
-        var worst = 9999;
-        var fattest = 0;
+    function markLandsOnOneCentralDot(logger as Logger) as Boolean {
         for (var l = 0; l < ALL_LAYOUTS.size(); l++) {
             Properties.setValue(StatMap.PROPERTY_LAYOUT, ALL_LAYOUTS[l]);
             Config.reload();
@@ -1006,37 +1005,69 @@ module MatrixTest {
                     if (p > highest) { highest = p; }
                 }
 
+                var worstOff = 0;
                 for (var step = 0; step <= 20; step++) {
                     var mark = lowest + (highest - lowest) * step / 20.0;
                     var window = StatMap.windowAround(mark, half);
-                    var hits = 0;
+                    var at = DotGrid.markedDot(ring, window);
+
+                    Test.assertMessage(at >= 0,
+                        "layout " + StatMap.layout + " ring " + ring +
+                        ": the mark at " + mark + " found no dot");
+                    Test.assertMessage(at >= from && at < to,
+                        "the marked dot must belong to the ring it marks");
+                    Test.assertMessage(
+                        StatMap.isLit(DotGrid.positionOf[at], window),
+                        "the marked dot must sit inside the mark's window");
+
+                    // Nothing else in the window may be nearer the middle.
+                    var middle = DotGrid.markMiddle[ring];
+                    var radial = (StatMap.layout == StatMap.LAYOUT_RINGS);
+                    var chosen = offFromMiddle(at, middle, radial);
                     for (var i = from; i < to; i++) {
                         if (StatMap.isLit(DotGrid.positionOf[i], window)) {
-                            hits++;
+                            Test.assertMessage(
+                                offFromMiddle(i, middle, radial) >= chosen,
+                                "layout " + StatMap.layout + " ring " + ring +
+                                ": dot " + i + " sits nearer the middle than " +
+                                "the one the mark chose");
                         }
                     }
-                    Test.assertMessage(hits > 0,
-                        "layout " + StatMap.layout + " ring " + ring +
-                        ": the mark at " + mark + " lit no dots");
-                    // A line, not a slab. Proportional rather than a dot count,
-                    // because the layouts disagree about how many dots a line
-                    // is: bands-centre measures out from the midline, so one
-                    // mark draws twice, once either side of it.
-                    Test.assertMessage(hits * 5 <= (to - from),
-                        "layout " + StatMap.layout + " ring " + ring +
-                        ": the mark at " + mark + " covers " + hits +
-                        " of " + (to - from) + " dots — that is a block");
-                    if (hits < worst) { worst = hits; }
-                    if (hits > fattest) { fattest = hits; }
+                    if (chosen > worstOff) { worstOff = chosen; }
                 }
                 logger.debug("layout " + StatMap.layout + " ring " + ring +
                              ": positions " + lowest + ".." + highest +
-                             ", half " + half);
+                             ", worst offset from middle " + worstOff);
             }
         }
-        logger.debug("thinnest mark " + worst + " dots, fattest " + fattest);
         Properties.setValue(StatMap.PROPERTY_LAYOUT, StatMap.LAYOUT_BANDS_BOTTOM);
         Config.reload();
+        return true;
+    }
+
+    //! How far a dot sits from the middle of its ring, in markedDot's terms.
+    function offFromMiddle(i as Number, middle as Number,
+                           radial as Boolean) as Number {
+        if (radial) {
+            var dx = DotGrid.xs[i];
+            var dy = DotGrid.ys[i];
+            return (dx * dx + dy * dy - middle).abs();
+        }
+        return (DotGrid.xs[i] - middle).abs();
+    }
+
+    //! An unmarked ring must not quietly mark dot zero.
+    (:test)
+    function anUnmarkedRingMarksNothing(logger as Logger) as Boolean {
+        Config.reload();
+        DotGrid.ensureBuilt();
+        // NEVER_LIT is the span nothing falls in; as a window it must find no
+        // dot at all, which is what -1 means to the renderer.
+        for (var ring = 0; ring < StatMap.RINGS; ring++) {
+            Test.assertEqualMessage(
+                DotGrid.markedDot(ring, StatMap.NEVER_LIT), -1,
+                "ring " + ring + " marked a dot with nothing to mark");
+        }
         return true;
     }
 
@@ -1105,15 +1136,17 @@ module MatrixTest {
         var full = everySpan(0.0, 1.0);
         var base = frameLuminance(full, Palette.active);
         var area = Math.PI * DotGrid.RADIUS * DotGrid.RADIUS;
-        // Comfortably past the fattest mark the test above tolerates, every
-        // dot of it swapped from the dimmest theme colour to white.
+        // One dot per ring is the most the mark can ever cost, every one of
+        // them swapped from the dimmest theme colour to white.
         var dimmest = 1.0;
         for (var ring = 0; ring < StatMap.RINGS; ring++) {
             var lum = relativeLuminance(Palette.active[ring * 2 + 1]);
             if (lum < dimmest) { dimmest = lum; }
         }
+        // A marked dot is filled rather than a cross, so it lights DOT squared
+        // pixels where an ordinary dot lights 2*DOT-1.
         var step = (relativeLuminance(Palette.MARKER) - dimmest) *
-                   LIT_PIXELS_PER_DOT * 64 / area;
+                   DotGrid.DOT * DotGrid.DOT * StatMap.RINGS / area;
         logger.debug("awake full field " + base + " plus at most " + step);
         Test.assertMessage(base + step < BUDGET,
             "even awake, the mark must not push the field past the budget");

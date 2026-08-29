@@ -23,9 +23,11 @@ import Toybox.Lang;
 //!
 //! A ring may also carry a *mark* — one position called out on top of the span,
 //! which is how the temperature ring shows where the current reading falls
-//! inside today's low-to-high. The mark is handed here as a position and turned
-//! into an ordinary span once per ring, so it is lit by the same two
-//! comparisons rather than by a lit test of its own.
+//! inside today's low-to-high. It is a single dot: a whole row of them, drawn
+//! out of crosses, reads as a bumpy dotted band rather than a line, and in the
+//! rings layout a radial run of dots on a square lattice staggers instead of
+//! lining up. The dot is chosen once per ring by DotGrid.markedDot() and drawn
+//! after the loop, so the loop itself never learns marks exist.
 //!
 //! Grouping also keeps the pen still. The renderer only calls setColor when the
 //! colour actually changes, and because each ring keeps the lattice's scan
@@ -96,6 +98,8 @@ module MatrixRenderer {
         var bx = arms[2];
         var by = arms[3];
 
+        var markAt = new [StatMap.RINGS] as Array<Number>;
+
         var lastColour = -1;
         for (var ring = 0; ring < StatMap.RINGS; ring++) {
             // Everything this ring's dots share, read once instead of ~280
@@ -110,20 +114,15 @@ module MatrixRenderer {
             var isRamp = (rings[ring] == Source.SOURCE_TEMPERATURE);
             var last = ringStart[ring + 1];
 
-            // The mark, hoisted the same way the span is. Rings with nothing to
-            // mark leave `marked` false, and their dots pay one local read.
+            // Which dot this ring marks, found once here. The dot loop below
+            // never learns about it: the mark is drawn afterwards, so the
+            // innermost statement in the face is exactly what it was before
+            // marks existed.
             var mark = markers[ring];
-            var marked = (mark >= 0.0);
-            var markFrom = 0.0;
-            var markTo = 0.0;
-            var markWraps = false;
-            if (marked) {
-                // An ordinary span, so the same two comparisons light it.
-                var window = StatMap.windowAround(mark, markerHalf[ring]);
-                markFrom = window[0];
-                markTo = window[1];
-                markWraps = (markFrom > markTo);
-            }
+            markAt[ring] = (mark >= 0.0)
+                ? DotGrid.markedDot(
+                      ring, StatMap.windowAround(mark, markerHalf[ring]))
+                : -1;
 
             for (var i = ringStart[ring]; i < last; i++) {
                 var dx = xs[i];
@@ -136,27 +135,16 @@ module MatrixRenderer {
                 } else {
                     var position = positionOf[i];
                     // StatMap.litBetween()'s body, inlined. This is the
-                    // innermost statement in the whole face, and it appears
-                    // twice here: once for the ring's span, once for the mark's
-                    // window. litTestsAgreeAtTheBoundaries pins both to the
-                    // readable definition.
-                    if (marked && (markWraps
-                            ? ((position >= markFrom) || (position <= markTo))
-                            : ((position >= markFrom) && (position <= markTo)))) {
-                        // The mark outranks the fill: it has to be legible
-                        // whether or not now falls inside today's range.
-                        colour = markerColour;
+                    // innermost statement in the whole face.
+                    var lit = wraps
+                        ? ((position >= from) || (position <= to))
+                        : ((position >= from) && (position <= to));
+                    if (lit) {
+                        colour = isRamp
+                            ? ramp[(position * rampTop).toNumber()]
+                            : strong;
                     } else {
-                        var lit = wraps
-                            ? ((position >= from) || (position <= to))
-                            : ((position >= from) && (position <= to));
-                        if (lit) {
-                            colour = isRamp
-                                ? ramp[(position * rampTop).toNumber()]
-                                : strong;
-                        } else {
-                            colour = weak;
-                        }
+                        colour = weak;
                     }
                 }
 
@@ -182,6 +170,33 @@ module MatrixRenderer {
                 dc.drawLine(x - ax, y - ay, x + ax, y + ay);
                 dc.drawLine(x - bx, y - by, x + bx, y + by);
             }
+        }
+
+        // The marks, last, so each covers whatever the loop drew there.
+        // At most one per ring, so this costs four tests a frame rather than
+        // anything per dot.
+        //
+        // Filled, not a cross. Every other dot on the face is two thin
+        // strokes, so a white cross among them is just another cross — it was
+        // tried and it vanished. A solid block is the only shape on the field
+        // that is not a cross, and that, rather than the colour, is what makes
+        // it read as a mark. Nine lit pixels become twenty-five, on one dot.
+        var half = DotGrid.DOT / 2;
+        for (var ring = 0; ring < StatMap.RINGS; ring++) {
+            var at = markAt[ring];
+            if (at < 0) {
+                continue;
+            }
+            var dx = xs[at];
+            var dy = ys[at];
+            // The hands still win: a marked dot under one stays backed.
+            if (hasBacking && HandBacking.covers(dx, dy, hourX, hourY,
+                                                 minuteX, minuteY)) {
+                continue;
+            }
+            dc.setColor(markerColour, Graphics.COLOR_TRANSPARENT);
+            dc.fillRectangle(centreX + dx - half, centreY + dy - half,
+                             DotGrid.DOT, DotGrid.DOT);
         }
     }
 }
