@@ -69,4 +69,27 @@ module Source {
     function level(value as Float) as Array<Float> {
         return [0.0, value] as Array<Float>;
     }
+
+    //! A position no ring can hold, meaning "this source has nothing to mark".
+    //!
+    //! Positions run 0.0 to below 1.0, so a negative one is unreachable. The
+    //! renderer tests for it once per ring rather than once per dot.
+    const NO_MARKER = -1.0;
+
+    //! A single position on the ring to mark, on top of the span.
+    //!
+    //! Kept apart from span() rather than folded into it: that a span is
+    //! exactly two numbers is what lets every layout treat a range and a level
+    //! alike, and the tests lean on it throughout. A marker is a different
+    //! thing — one point rather than an interval — so it travels beside the
+    //! span, not inside it.
+    //!
+    //! Read once per frame per ring, like span().
+    function marker(source as Number) as Float {
+        if (source == SOURCE_TEMPERATURE) {
+            var now = WeatherData.currentFraction();
+            return (now != null) ? now : NO_MARKER;
+        }
+        return NO_MARKER;
+    }
 }
