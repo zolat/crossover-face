@@ -34,6 +34,7 @@
     <string id="SourceTemperature">Temperature range</string>
     <string id="SourceRain">Chance of rain</string>
     <string id="SourceIntensityMinutes">Intensity minutes</string>
+    <string id="SourceSeconds">Seconds</string>
     <string id="SourceOff">Off</string>
 
 </strings>

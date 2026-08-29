@@ -268,7 +268,7 @@ module MatrixTest {
         Test.assertEqualMessage(StatMap.rings[0], Source.SOURCE_STEPS,
             "an out-of-range source must fall back to the default");
 
-        Test.assertEqualMessage(Source.span(Source.SOURCE_OFF)[1], 0.0,
+        Test.assertEqualMessage(Source.span(Source.SOURCE_OFF, true)[1], 0.0,
             "an off ring must have an empty span");
 
         for (var ring = 0; ring < StatMap.RINGS; ring++) {
@@ -292,25 +292,33 @@ module MatrixTest {
             "the hue table has drifted from Source.Kind");
         Test.assertEqualMessage(SOURCE_LABELS.size(), Source.COUNT,
             "the settings labels have drifted from Source.Kind");
+        Test.assertEqualMessage(Source.SOURCE_OFF, Source.COUNT - 1,
+            "Off is the picker's last entry, so it must be the last index");
 
+        // Every kind must answer in both power modes without throwing, and
+        // answer inside the ring. Off, and anything unavailable, report EMPTY;
+        // seconds reports EMPTY asleep, which is the reason for the two passes.
         for (var kind = 0; kind < Source.COUNT; kind++) {
-            var span = Source.span(kind);
-            Test.assertEqualMessage(span.size(), 2,
-                "source " + kind + " did not report a span");
-            Test.assertMessage(span[0] >= 0.0 && span[0] <= 1.0 &&
-                               span[1] >= 0.0 && span[1] <= 1.0,
-                "source " + kind + " reported a span outside 0-1");
+            for (var mode = 0; mode < 2; mode++) {
+                var span = Source.span(kind, mode == 0);
+                Test.assertEqualMessage(span.size(), 2,
+                    "source " + kind + " did not report a span");
+                Test.assertMessage(span[0] >= 0.0 && span[0] <= 1.0 &&
+                                   span[1] >= 0.0 && span[1] <= 1.0,
+                    "source " + kind + " reported a span outside 0-1");
+            }
         }
 
         // Intensity minutes is a level, so it fills from the origin whatever
         // the week's activity happens to be.
-        var minutes = Source.span(Source.SOURCE_INTENSITY_MINUTES);
+        var minutes = Source.span(Source.SOURCE_INTENSITY_MINUTES, true);
         Test.assertEqualMessage(minutes[0], 0.0,
             "a level must start at the origin");
         logger.debug("intensity minutes span " + minutes[0] + " to " + minutes[1]);
 
-        Test.assertEqualMessage(Source.span(Source.SOURCE_OFF)[1], 0.0,
+        Test.assertEqualMessage(Source.span(Source.SOURCE_OFF, true)[1], 0.0,
             "Off must still be empty after the renumbering");
+        logger.debug(Source.COUNT + " sources, all reporting in both modes");
         return true;
     }
 
@@ -1323,6 +1331,162 @@ module MatrixTest {
             HandBacking.covers(0, -HandBacking.HOUR_REACH - 20,
                                1.0, 0.0, 0.0, -1.0),
             "the minute hand does reach that far");
+        return true;
+    }
+
+    // --- the seconds source --------------------------------------------------
+
+    //! The sweep is the minute expressed as a level: 0.0 at :00, climbing to
+    //! 59/60, and back to zero on the next minute rather than past 1.0. A span
+    //! end above 1.0 would not simply saturate — it would light a ring's dots
+    //! in the wrong order — so the reset is asserted, not assumed.
+    (:test)
+    function theSweepFillsItsMinuteAndResets(logger as Logger) as Boolean {
+        Test.assertEqualMessage(ClockData.fraction(0), 0.0,
+            ":00 must sit at the ring's origin");
+        for (var second = 0; second < 60; second += 15) {
+            var expected = second / 60.0;
+            Test.assertMessage((ClockData.fraction(second) - expected).abs() < 0.001,
+                "each second must land on its own stop around the ring");
+        }
+        Test.assertMessage(ClockData.fraction(59) < 1.0,
+            "the sweep must never reach a full turn, or it would wrap");
+        Test.assertEqualMessage(ClockData.fraction(60), 0.0,
+            "the minute rolling over must put the sweep back at the origin");
+
+        // Whatever the clock says right now, the reading is a level pinned to
+        // the origin and landing on one of the sixty stops.
+        var live = Source.span(Source.SOURCE_SECONDS, true);
+        Test.assertEqualMessage(live[0], 0.0,
+            "seconds is a level, so its span must start at the origin");
+        var stop = live[1] * 60.0;
+        logger.debug("the sweep is at " + live[1] + ", stop " + stop);
+        Test.assertMessage((stop - (stop + 0.5).toNumber()).abs() < 0.001,
+            "the sweep must sit on a whole second, not between two");
+        Test.assertMessage(live[1] >= 0.0 && live[1] < 1.0,
+            "the sweep must stay inside the ring");
+        return true;
+    }
+
+    //! Always-on is asked for one frame a minute, so a per-second reading could
+    //! only ever be stale there — and it is the mode the burn-in and luminance
+    //! rules are written against. Asleep the ring must be genuinely dark, not
+    //! dark-looking: this walks every dot of every layout to say so.
+    (:test)
+    function secondsGoDarkInAlwaysOn(logger as Logger) as Boolean {
+        var asleep = Source.span(Source.SOURCE_SECONDS, false);
+        Test.assertEqualMessage(asleep[0], asleep[1],
+            "an asleep seconds ring must report a span of no length");
+
+        var spans = new [StatMap.RINGS] as Array<Array<Float> >;
+        for (var i = 0; i < StatMap.RINGS; i++) {
+            spans[i] = asleep;
+        }
+
+        var checked = 0;
+        for (var i = 0; i < ALL_LAYOUTS.size(); i++) {
+            StatMap.layout = ALL_LAYOUTS[i];
+            for (var row = 0; row < DotGrid.ROWS; row++) {
+                var dy = DotGrid.offsetAt(row);
+                for (var col = 0; col < DotGrid.COLS; col++) {
+                    var dx = DotGrid.offsetAt(col);
+                    if (!DotGrid.contains(dx, dy)) {
+                        continue;
+                    }
+                    checked++;
+                    Test.assertMessage(
+                        StatMap.classify(col, dx, dy, spans) % 2 == 0,
+                        "an asleep seconds ring lit a dot in layout " +
+                        StatMap.layout);
+                }
+            }
+        }
+        StatMap.layout = StatMap.LAYOUT_BANDS_BOTTOM;
+        logger.debug("checked " + checked + " dots across every layout");
+        Test.assertMessage(checked > 0, "the walk must actually visit dots");
+        return true;
+    }
+
+    //! Awake, the same source must not be inert — otherwise the test above
+    //! would pass just as well against a source that never reports anything.
+    (:test)
+    function secondsAreLiveWhileAwake(logger as Logger) as Boolean {
+        StatMap.layout = StatMap.LAYOUT_BANDS_BOTTOM;
+        // Half past the minute, chosen rather than read, so this cannot pass
+        // or fail depending on when the suite happens to run.
+        var half = [0.0, ClockData.fraction(30)] as Array<Float>;
+        var lit = 0;
+        var dark = 0;
+        for (var row = 0; row < DotGrid.ROWS; row++) {
+            var dy = DotGrid.offsetAt(row);
+            for (var col = 0; col < DotGrid.COLS; col++) {
+                var dx = DotGrid.offsetAt(col);
+                if (!DotGrid.contains(dx, dy)) {
+                    continue;
+                }
+                if (StatMap.isLit(StatMap.positionOf(dx, dy), half)) {
+                    lit++;
+                } else {
+                    dark++;
+                }
+            }
+        }
+        logger.debug("at :30 the sweep lights " + lit + " dots, " +
+                     dark + " still dark");
+        Test.assertMessage(lit > 0, "the sweep must light something at :30");
+        Test.assertMessage(dark > 0, "and must not have filled the ring yet");
+        return true;
+    }
+
+    //! The view's fingerprint, laid out as CrossoverView.fingerprint() lays it:
+    //! the drift pair, the backing and its minute, then every ring's two ends.
+    //! Only the first ring's sweep moves here.
+    function fingerprintAtSecond(second as Number) as Array<Float> {
+        var out = new [4 + (StatMap.RINGS * 2)] as Array<Float>;
+        for (var i = 0; i < out.size(); i++) {
+            out[i] = 0.0;
+        }
+        out[2] = -1.0;                              //! no backing
+        out[5] = ClockData.fraction(second);        //! ring 1's span end
+        return out;
+    }
+
+    //! The gate skips any frame whose fingerprint matches the last one drawn,
+    //! and caps that at MAX_SKIPS. A seconds ring has to move the fingerprint
+    //! every tick or the sweep would visibly stall for seconds at a time.
+    //! Nothing in the gate was changed to allow this — the span end is already
+    //! part of the fingerprint — so this test is what says so out loud.
+    (:test)
+    function everySecondOpensTheFrameGate(logger as Logger) as Boolean {
+        var drawn = FrameGate.drawn;
+        var suppressed = FrameGate.suppressed;
+        FrameGate.forget();
+        FrameGate.drawn = 0;
+        FrameGate.suppressed = 0;
+
+        var opened = 0;
+        for (var second = 0; second < 60; second++) {
+            if (FrameGate.shouldDraw(fingerprintAtSecond(second))) {
+                opened++;
+            }
+        }
+        logger.debug("the gate opened on " + opened + " of 60 ticks");
+        Test.assertEqualMessage(opened, 60,
+            "a moving sweep must never be skipped — it stalled on " +
+            (60 - opened) + " ticks");
+
+        // And the gate is still a gate: a tick that does not move it is still
+        // skipped, so this is the fingerprint changing rather than the gate
+        // having been loosened.
+        FrameGate.forget();
+        Test.assertMessage(FrameGate.shouldDraw(fingerprintAtSecond(7)),
+            "the first frame after forgetting is always drawn");
+        Test.assertMessage(!FrameGate.shouldDraw(fingerprintAtSecond(7)),
+            "an unmoved fingerprint must still be skipped");
+
+        FrameGate.forget();
+        FrameGate.drawn = drawn;
+        FrameGate.suppressed = suppressed;
         return true;
     }
 }

@@ -39,9 +39,13 @@ class CrossoverView extends WatchUi.WatchFace {
         var lowPower = isLowPower();
         // Held back in always-on when asked: the field keeps its colour but
         // loses its waterlines, and the data comes back on a wrist raise.
+        //
+        // The power mode also reaches the sources themselves, which is how a
+        // seconds ring goes quiet in always-on: there is one frame a minute
+        // there, so a per-second reading could only be stale.
         var hideFills = lowPower &&
                         StatMap.alwaysOnFill == StatMap.ALWAYS_ON_FILL_HIDDEN;
-        var spans = hideFills ? StatMap.noSpans() : StatMap.spans();
+        var spans = hideFills ? StatMap.noSpans() : StatMap.spans(!lowPower);
         // Awake-only, for the same reason the hand backing is: the mark is a
         // dozen white dots, which is the most expensive thing per dot the face
         // can draw, in the mode that is measured against the burn-in budget and
