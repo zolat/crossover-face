@@ -881,9 +881,9 @@ module MatrixTest {
     //! The renderer walks the dots ring by ring, and every hoist it makes out
     //! of its inner loop assumes this: each ring's dots are contiguous, and
     //! within a ring they are still in the lattice's scan order. Scan order is
-    //! not cosmetic — in the band layouts a dot's position depends only on its
-    //! row, so scan order is fill order, and it is what makes each ring draw as
-    //! two long runs of one colour instead of hundreds of short ones.
+    //! not cosmetic — it is what lets the renderer hold its pen, since a ring
+    //! arrives as whole rows and a run of dots on the same side of the fill's
+    //! leading edge shares a colour.
     (:test)
     function ringsAreContiguousAndInScanOrder(logger as Logger) as Boolean {
         Config.reload();
@@ -1001,15 +1001,14 @@ module MatrixTest {
     //!
     //! Two failures hide here. The window can fall clean between dots — the
     //! reason it is sized per ring, since the same position units are three
-    //! times coarser on the inner rings than in a band — and markedDot can
-    //! pick a dot out at the ring's edge, where a single white dot reads as a
-    //! stray lit one rather than a marker.
+    //! times coarser on the innermost ring than on the outermost — and
+    //! markedDot can pick a dot out at the ring's edge, where a single white
+    //! dot reads as a stray lit one rather than a marker.
     //!
-    //! The bands cannot represent every position on every ring: the leftmost
-    //! band does not reach the bottom of a round screen, so its lowest few
-    //! degrees have no dots and neither does the fill. Each ring is therefore
-    //! probed across the range it can represent, and that range is logged so a
-    //! regression that narrows it shows up.
+    //! Every ring carries a full turn, so there is no stretch of position it
+    //! cannot represent. Each is still probed across the range its own dots
+    //! actually span, and that range is logged, so a regression that narrows
+    //! it shows up.
     (:test)
     function markLandsOnOneCentralDot(logger as Logger) as Boolean {
         Config.reload();

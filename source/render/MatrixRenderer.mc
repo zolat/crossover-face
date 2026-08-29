@@ -49,9 +49,9 @@ module MatrixRenderer {
 
         // Anti-aliasing is sticky on the Dc, and it is ruinous here: measured,
         // the same frame costs about four times as much with it on, because a
-        // cross turned to follow its ring is mostly diagonal strokes. The dots are
-        // meant to be crisp anyway, so it is turned off explicitly rather than
-        // left to whatever the last drawer wanted.
+        // cross turned to follow its ring is mostly diagonal strokes. The dots
+        // are meant to be crisp anyway, so it is turned off explicitly rather
+        // than left to whatever the last drawer wanted.
         if (dc has :setAntiAlias) {
             dc.setAntiAlias(false);
         }
