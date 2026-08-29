@@ -360,6 +360,7 @@ The face has four rings, and **each one is independently assigned to a source**:
 | Body Battery | level | `SensorHistory` |
 | Temperature range | **range** | `Weather` today's low → high, on a 0–60°C scale |
 | Chance of rain | level | `Weather.precipitationChance` |
+| Seconds | level, **awake only** | `System.getClockTime()`, filling through each minute |
 | Off | — | nothing |
 
 Every source reports a **span** — a start and an end, both 0.0–1.0 — rather than a single
@@ -370,6 +371,18 @@ slab; in rings, as an arc.
 
 Temperature is the one source drawn on a ramp rather than a flat hue — ice through orchid to
 rust — so the band reads as a temperature rather than just a length.
+
+**Seconds is the one source that goes quiet.** It fills its ring from the origin and resets on
+the minute — in the rings layout the leading edge of that fill is where a second hand would
+point — but only while the watch is awake. Always-on is asked for one frame a minute, so a
+per-second reading could only ever be stale there, and it is the mode the burn-in and
+luminance rules are written against. Asleep the ring keeps its colour and shows no fill.
+
+It is also the one source that costs something. The frame gate skips a frame whose fingerprint
+matches the last one drawn, and a seconds span moves every tick, so with a seconds ring
+assigned the face draws every awake second and the skip figure in **Frame cost** falls to
+roughly nothing. That is the rate the face drew at before the gate existed, comfortably inside
+the watchdog — but it is real battery, and it is the price of a second hand.
 
 Its **0–60°C scale is deliberately far wider than any weather needs**: it puts one degree on
 every minute mark, so the band can be read off the dial exactly the way you read the minute
