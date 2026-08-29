@@ -3,8 +3,8 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 A Connect IQ watch face for the **Garmin Instinct Crossover AMOLED**, written in Monkey C. The
-face is a dot-matrix field where the data *is* the background: four rings/bands of ~1,100 dots,
-each dot coloured by the source its ring is assigned to.
+face is a dot-matrix field where the data *is* the background: four concentric rings of
+~1,100 dots, each dot coloured by the source its ring is assigned to.
 
 `README.md` is the authority on toolchain setup, MTP sideloading and design rationale. This file
 covers the working knowledge that spans files and is easy to break.
@@ -65,7 +65,7 @@ no drawing) → `MatrixRenderer.draw(dc, spans, palette, ramp, backing)`.
 Data path: `StatMap.spans()` → `Source.span()` → `WatchData` / `WeatherData`. Data modules are
 pure queries and never draw; the renderer never learns where a number came from.
 
-Geometry: `DotGrid` (the lattice, cached), `StatMap` (dot → ring + position — the layout seam),
+Geometry: `DotGrid` (the lattice, cached), `StatMap` (dot → ring + position — the mapping seam),
 `Drift` (burn-in cycle), `HandBacking` (which dots sit under the physical hands).
 
 ### The frame budget dominates every decision here
@@ -78,7 +78,7 @@ the face would not load. The rule:
 > calls out of the loop that could be an array lookup.
 
 `DotGrid` caches parallel arrays (`xs`, `ys`, `ringOf`, `positionOf`, `armOf`) built once per
-layout change; `MatrixRenderer` is a flat indexed walk. The single deliberate exception is
+rebuild; `MatrixRenderer` is a flat indexed walk. The single deliberate exception is
 `StatMap.isLit()`, called per dot (~6ms/frame) so the lit test has one definition shared with the
 tests. Current cost: avg 36ms, peak 44ms. **If you add per-dot work or raise the dot count,
 re-measure** — wrap `onUpdate` in `System.getTimer()` and read `make sim` output.
@@ -89,13 +89,15 @@ Caching the field to a `BufferedBitmap` is not an option: 390×390 at 16bpp is ~
 ### Config.reload() ordering is load-bearing
 
 `StatMap.load()` → `Palette.build()` → `DotGrid.build()`. Palette hues depend on the ring
-assignments, and DotGrid's cached ring/position/orientation depend on `StatMap.layout`. Anything
-that changes a setting must go through `Config.reload()`, not a partial refresh.
+assignments, so one without the other draws last session's colours. Anything that changes a
+setting must go through `Config.reload()`, not a partial refresh. Nothing settable moves the
+lattice any more, so `DotGrid.invalidate()` is now a safety net rather than a requirement —
+but the rebuild it schedules must still land in `onLayout`, never `onStart`.
 
 ### Every source reports a span, not a level
 
 `Source.span()` returns `[start, end]`, both 0.0–1.0. Levels are just `[0.0, value]`. This is why
-temperature — a genuine range — works in all three layouts without the layouts knowing about it.
+temperature — a genuine range — needs no special case anywhere downstream.
 
 `end < start` is **legal**: the temperature scale (0–60°C, one degree per minute mark) wraps
 rather than clamps, so a sub-zero range runs from e.g. :55 round past twelve to :03.
@@ -104,16 +106,22 @@ rather than clamps, so a sub-zero range runs from e.g. :55 round past twelve to 
 
 ### tools/mockup.py mirrors the Monkey C by hand
 
-The Python mockup duplicates the lattice constants, `THEME`, `WEAK_*`/`LIFT`, `ARMS`, the three
-layout mappings and the hand geometry. It is not generated. **Any change to geometry or palette
+The Python mockup duplicates the lattice constants, `THEME`, `WEAK_*`/`LIFT`, `ARMS`, the
+ring mapping and the hand geometry. It is not generated. **Any change to geometry or palette
 must land in both**, and `MatrixTest.EXPECTED_DOTS` (1112) plus the luminance tests pin the two
 implementations together so they cannot drift silently.
 
-### Settings live in four places that must stay in step
+### Settings live in five places that must stay in step
 
 Stored values are **list indices**, so `resources/properties.xml`, `resources/settings/settings.xml`,
-the enums in `StatMap`/`Source`, and the label arrays in `source/settings/SettingsMenu.mc` all
-have to agree. Six properties today: `layout`, `handBacking`, `ring1`–`ring4`.
+`resources/strings/strings.xml`, the enums in `StatMap`/`Source`, and the label arrays in
+`source/settings/SettingsMenu.mc` all have to agree. Six properties today: `handBacking`,
+`alwaysOnFill`, `ring1`–`ring4`.
+
+`SettingsMenu.onShow()` refreshes sub-labels **by row index**, and `getItem()` on a wrong
+index returns null rather than throwing — so adding or removing a row silently stops
+refreshing the ones after it. `MatrixTest.MENU_VALUE_ROWS` is the guard; move it in the same
+commit.
 
 On-device settings exist because phone-side settings are unreliable for a sideloaded face;
 `AppBase.getSettingsView()` is the sanctioned exception to "watch faces cannot take input".
@@ -121,7 +129,9 @@ On-device settings exist because phone-side settings are unreliable for a sidelo
 throwing. Menu sub-labels are refreshed in `onShow()` — Menu2 does not rebuild itself when a
 sub-menu pops.
 
-To switch layouts in the simulator: **File → Edit Persistent Storage → Edit Application.Properties**.
+To change a setting in the simulator: **File → Edit Persistent Storage → Edit
+Application.Properties**. Persisted values beat `properties.xml`, so a stale one survives a
+rebuild until **Reset All App Data**.
 
 ### The 10% luminance budget
 

@@ -28,12 +28,6 @@ module MatrixTest {
     const LUMA_G = 0.7152;
     const LUMA_B = 0.0722;
 
-    const ALL_LAYOUTS = [
-        StatMap.LAYOUT_BANDS_BOTTOM,
-        StatMap.LAYOUT_BANDS_CENTRE,
-        StatMap.LAYOUT_RINGS
-    ] as Array<Number>;
-
     function everySpan(start as Float, end as Float) as Array<Array<Float> > {
         var out = new [StatMap.RINGS] as Array<Array<Float> >;
         for (var i = 0; i < StatMap.RINGS; i++) {
@@ -61,7 +55,7 @@ module MatrixTest {
                 if (!DotGrid.contains(dx, dy)) {
                     continue;
                 }
-                var slot = StatMap.classify(col, dx, dy, spans);
+                var slot = StatMap.classify(dx, dy, spans);
                 total += relativeLuminance(palette[slot]) * LIT_PIXELS_PER_DOT;
             }
         }
@@ -76,46 +70,41 @@ module MatrixTest {
     //! the *same* wrong slot. Only counting the slots catches it.
     (:test)
     function cacheCoversEveryLatticeDotExactlyOnce(logger as Logger) as Boolean {
-        for (var l = 0; l < ALL_LAYOUTS.size(); l++) {
-            Properties.setValue(StatMap.PROPERTY_LAYOUT, ALL_LAYOUTS[l]);
-            Config.reload();
-            DotGrid.build();
+        Config.reload();
+        DotGrid.build();
 
-            Test.assertEqualMessage(DotGrid.count, EXPECTED_DOTS,
-                "the build counted a different lattice than the mockup");
-            Test.assertEqualMessage(DotGrid.xs.size(), DotGrid.count,
-                "the cache is not the size it claims");
+        Test.assertEqualMessage(DotGrid.count, EXPECTED_DOTS,
+            "the build counted a different lattice than the mockup");
+        Test.assertEqualMessage(DotGrid.xs.size(), DotGrid.count,
+            "the cache is not the size it claims");
 
-            // One slot per grid cell, so a double write is visible as a 2.
-            var seen = new [DotGrid.ROWS * DotGrid.COLS] as Array<Number>;
-            for (var i = 0; i < seen.size(); i++) {
-                seen[i] = 0;
-            }
-            for (var i = 0; i < DotGrid.count; i++) {
-                var col = columnOf(DotGrid.xs[i]);
-                var row = columnOf(DotGrid.ys[i]);
-                Test.assertMessage(col >= 0 && col < DotGrid.COLS &&
-                                   row >= 0 && row < DotGrid.ROWS,
-                    "a cached dot sits outside the grid");
-                seen[row * DotGrid.COLS + col] += 1;
-            }
-
-            var filled = 0;
-            for (var row = 0; row < DotGrid.ROWS; row++) {
-                for (var col = 0; col < DotGrid.COLS; col++) {
-                    var times = seen[row * DotGrid.COLS + col];
-                    var wanted = DotGrid.contains(DotGrid.offsetAt(col),
-                                                  DotGrid.offsetAt(row)) ? 1 : 0;
-                    Test.assertEqualMessage(times, wanted,
-                        "grid cell " + col + "," + row + " was built " +
-                        times + " times, wanted " + wanted);
-                    filled += times;
-                }
-            }
-            logger.debug("layout " + StatMap.layout + ": " + filled +
-                         " dots, each built exactly once");
+        // One slot per grid cell, so a double write is visible as a 2.
+        var seen = new [DotGrid.ROWS * DotGrid.COLS] as Array<Number>;
+        for (var i = 0; i < seen.size(); i++) {
+            seen[i] = 0;
         }
-        Properties.setValue(StatMap.PROPERTY_LAYOUT, StatMap.LAYOUT_BANDS_BOTTOM);
+        for (var i = 0; i < DotGrid.count; i++) {
+            var col = columnOf(DotGrid.xs[i]);
+            var row = columnOf(DotGrid.ys[i]);
+            Test.assertMessage(col >= 0 && col < DotGrid.COLS &&
+                               row >= 0 && row < DotGrid.ROWS,
+                "a cached dot sits outside the grid");
+            seen[row * DotGrid.COLS + col] += 1;
+        }
+
+        var filled = 0;
+        for (var row = 0; row < DotGrid.ROWS; row++) {
+            for (var col = 0; col < DotGrid.COLS; col++) {
+                var times = seen[row * DotGrid.COLS + col];
+                var wanted = DotGrid.contains(DotGrid.offsetAt(col),
+                                              DotGrid.offsetAt(row)) ? 1 : 0;
+                Test.assertEqualMessage(times, wanted,
+                    "grid cell " + col + "," + row + " was built " +
+                    times + " times, wanted " + wanted);
+                filled += times;
+            }
+        }
+        logger.debug(filled + " dots, each built exactly once");
         Config.reload();
         return true;
     }
@@ -186,42 +175,39 @@ module MatrixTest {
         return true;
     }
 
-    //! Empty and full are the two states every layout must get exactly right,
+    //! Empty and full are the two states the mapping must get exactly right,
     //! and the two a gauge is most likely to get wrong.
     (:test)
     function spanEndpoints(logger as Logger) as Boolean {
         var empty = everySpan(0.0, 0.0);
         var full = everySpan(0.0, 1.0);
-        for (var i = 0; i < ALL_LAYOUTS.size(); i++) {
-            StatMap.layout = ALL_LAYOUTS[i];
-            logger.debug("layout " + StatMap.layout);
-            for (var row = 0; row < DotGrid.ROWS; row++) {
-                var dy = DotGrid.offsetAt(row);
-                for (var col = 0; col < DotGrid.COLS; col++) {
-                    var dx = DotGrid.offsetAt(col);
-                    if (!DotGrid.contains(dx, dy)) {
-                        continue;
-                    }
-                    Test.assertMessage(StatMap.classify(col, dx, dy, empty) % 2 == 0,
-                        "nothing may read as lit at 0%");
-                    Test.assertMessage(StatMap.classify(col, dx, dy, full) % 2 == 1,
-                        "everything must read as lit at 100%");
+        var checked = 0;
+        for (var row = 0; row < DotGrid.ROWS; row++) {
+            var dy = DotGrid.offsetAt(row);
+            for (var col = 0; col < DotGrid.COLS; col++) {
+                var dx = DotGrid.offsetAt(col);
+                if (!DotGrid.contains(dx, dy)) {
+                    continue;
                 }
+                Test.assertMessage(StatMap.classify(dx, dy, empty) % 2 == 0,
+                    "nothing may read as lit at 0%");
+                Test.assertMessage(StatMap.classify(dx, dy, full) % 2 == 1,
+                    "everything must read as lit at 100%");
+                checked++;
             }
         }
-        StatMap.layout = StatMap.LAYOUT_BANDS_BOTTOM;
+        logger.debug(checked + " dots checked empty and full");
         return true;
     }
 
     //! A range source must light only between its ends — that is the whole
-    //! point of spans, and what lets temperature share the layouts with levels.
+    //! point of spans, and what lets temperature share the rings with levels.
     (:test)
     function rangeLightsOnlyBetweenItsEnds(logger as Logger) as Boolean {
         var band = everySpan(0.4, 0.6);
         var below = 0;
         var inside = 0;
         var above = 0;
-        StatMap.layout = StatMap.LAYOUT_BANDS_BOTTOM;
 
         for (var row = 0; row < DotGrid.ROWS; row++) {
             var dy = DotGrid.offsetAt(row);
@@ -231,7 +217,7 @@ module MatrixTest {
                     continue;
                 }
                 var position = StatMap.positionOf(dx, dy);
-                var lit = (StatMap.classify(col, dx, dy, band) % 2) == 1;
+                var lit = (StatMap.classify(dx, dy, band) % 2) == 1;
                 if (position < 0.4) {
                     below++;
                     Test.assertMessage(!lit, "below the range must stay unlit");
@@ -381,23 +367,6 @@ module MatrixTest {
         return true;
     }
 
-    (:test)
-    function layoutSettingIsClamped(logger as Logger) as Boolean {
-        Properties.setValue(StatMap.PROPERTY_LAYOUT, 99);
-        Config.reload();
-        Test.assertEqualMessage(StatMap.layout, StatMap.LAYOUT_BANDS_BOTTOM,
-            "out-of-range layout must fall back to the default");
-
-        Properties.setValue(StatMap.PROPERTY_LAYOUT, StatMap.LAYOUT_RINGS);
-        Config.reload();
-        Test.assertEqualMessage(StatMap.layout, StatMap.LAYOUT_RINGS,
-            "a valid layout must be honoured");
-
-        Properties.setValue(StatMap.PROPERTY_LAYOUT, StatMap.LAYOUT_BANDS_BOTTOM);
-        Config.reload();
-        return true;
-    }
-
     //! Holding the fills back in always-on works by handing the renderer a
     //! span nothing is inside, rather than branching ~1100 times a frame. That
     //! only holds if no dot in any layout ever falls in it — and the obvious
@@ -408,29 +377,24 @@ module MatrixTest {
         Test.assertMessage(!(StatMap.NEVER_LIT[0] > StatMap.NEVER_LIT[1]),
             "the empty span must not read as wrapping, or it lights everything");
 
-        for (var l = 0; l < ALL_LAYOUTS.size(); l++) {
-            StatMap.layout = ALL_LAYOUTS[l];
-            var lit = 0;
-            var checked = 0;
-            for (var row = 0; row < DotGrid.ROWS; row++) {
-                var dy = DotGrid.offsetAt(row);
-                for (var col = 0; col < DotGrid.COLS; col++) {
-                    var dx = DotGrid.offsetAt(col);
-                    if (!DotGrid.contains(dx, dy)) {
-                        continue;
-                    }
-                    if (StatMap.classify(col, dx, dy, nothing) % 2 == 1) {
-                        lit++;
-                    }
-                    checked++;
+        var lit = 0;
+        var checked = 0;
+        for (var row = 0; row < DotGrid.ROWS; row++) {
+            var dy = DotGrid.offsetAt(row);
+            for (var col = 0; col < DotGrid.COLS; col++) {
+                var dx = DotGrid.offsetAt(col);
+                if (!DotGrid.contains(dx, dy)) {
+                    continue;
                 }
+                if (StatMap.classify(dx, dy, nothing) % 2 == 1) {
+                    lit++;
+                }
+                checked++;
             }
-            logger.debug("layout " + StatMap.layout + ": " + lit +
-                         " of " + checked + " dots lit");
-            Test.assertEqualMessage(lit, 0,
-                "a dot is lit by the empty span in layout " + StatMap.layout);
         }
-        StatMap.layout = StatMap.LAYOUT_BANDS_BOTTOM;
+        logger.debug(lit + " of " + checked + " dots lit");
+        Test.assertEqualMessage(lit, 0,
+            "a dot is lit by the empty span");
         return true;
     }
 
@@ -447,18 +411,13 @@ module MatrixTest {
     function heldBackFillsCutAlwaysOnLuminance(logger as Logger) as Boolean {
         Config.reload();
         var busy = everySpan(0.0, 0.82);
-        for (var l = 0; l < ALL_LAYOUTS.size(); l++) {
-            StatMap.layout = ALL_LAYOUTS[l];
-            var withFills = frameLuminance(busy, Palette.alwaysOn);
-            var heldBack = frameLuminance(StatMap.noSpans(), Palette.heldBack);
-            logger.debug("layout " + StatMap.layout + ": with fills " +
-                         withFills + ", held back " + heldBack);
-            Test.assertMessage(heldBack < withFills,
-                "holding the fills back must lower always-on luminance");
-            Test.assertMessage(heldBack < BUDGET,
-                "and must still sit inside the burn-in budget");
-        }
-        StatMap.layout = StatMap.LAYOUT_BANDS_BOTTOM;
+        var withFills = frameLuminance(busy, Palette.alwaysOn);
+        var heldBack = frameLuminance(StatMap.noSpans(), Palette.heldBack);
+        logger.debug("with fills " + withFills + ", held back " + heldBack);
+        Test.assertMessage(heldBack < withFills,
+            "holding the fills back must lower always-on luminance");
+        Test.assertMessage(heldBack < BUDGET,
+            "and must still sit inside the burn-in budget");
         return true;
     }
 
@@ -478,18 +437,13 @@ module MatrixTest {
         }
 
         var nothing = StatMap.noSpans();
-        for (var l = 0; l < ALL_LAYOUTS.size(); l++) {
-            StatMap.layout = ALL_LAYOUTS[l];
-            var before = frameLuminance(nothing, Palette.alwaysOn);
-            var lifted = frameLuminance(nothing, Palette.heldBack);
-            logger.debug("layout " + StatMap.layout + ": " + before +
-                         " -> " + lifted);
-            Test.assertMessage(lifted > before,
-                "the held-back field must be brighter than it was");
-            Test.assertMessage(lifted < BUDGET,
-                "and must still sit inside the burn-in budget");
-        }
-        StatMap.layout = StatMap.LAYOUT_BANDS_BOTTOM;
+        var before = frameLuminance(nothing, Palette.alwaysOn);
+        var lifted = frameLuminance(nothing, Palette.heldBack);
+        logger.debug(before + " -> " + lifted);
+        Test.assertMessage(lifted > before,
+            "the held-back field must be brighter than it was");
+        Test.assertMessage(lifted < BUDGET,
+            "and must still sit inside the burn-in budget");
         return true;
     }
 
@@ -512,19 +466,14 @@ module MatrixTest {
                 "ring " + ring + " changes brightness on a raise");
         }
 
-        // A span of zero length lights nothing in any layout — spanEndpoints
-        // pins that — so this measures the unfilled tier and nothing else.
+        // A span of zero length lights nothing — spanEndpoints pins that —
+        // so this measures the unfilled tier and nothing else.
         var empty = everySpan(0.0, 0.0);
-        for (var l = 0; l < ALL_LAYOUTS.size(); l++) {
-            StatMap.layout = ALL_LAYOUTS[l];
-            var held = frameLuminance(empty, Palette.heldBack);
-            var awake = frameLuminance(empty, Palette.active);
-            logger.debug("layout " + StatMap.layout + ": held back " + held +
-                         " / awake " + awake);
-            Test.assertEqualMessage(held, awake,
-                "the held-back and awake fields must measure the same");
-        }
-        StatMap.layout = StatMap.LAYOUT_BANDS_BOTTOM;
+        var held = frameLuminance(empty, Palette.heldBack);
+        var awake = frameLuminance(empty, Palette.active);
+        logger.debug("held back " + held + " / awake " + awake);
+        Test.assertEqualMessage(held, awake,
+            "the held-back and awake fields must measure the same");
         return true;
     }
 
@@ -559,14 +508,10 @@ module MatrixTest {
     function alwaysOnWorstCaseFitsBudget(logger as Logger) as Boolean {
         Config.reload();
         var full = everySpan(0.0, 1.0);
-        for (var i = 0; i < ALL_LAYOUTS.size(); i++) {
-            StatMap.layout = ALL_LAYOUTS[i];
-            var worst = frameLuminance(full, Palette.alwaysOn);
-            logger.debug("layout " + StatMap.layout + " worst-case always-on: " + worst);
-            Test.assertMessage(worst < BUDGET,
-                "always-on worst case exceeds the AMOLED burn-in budget");
-        }
-        StatMap.layout = StatMap.LAYOUT_BANDS_BOTTOM;
+        var worst = frameLuminance(full, Palette.alwaysOn);
+        logger.debug("worst-case always-on: " + worst);
+        Test.assertMessage(worst < BUDGET,
+            "always-on worst case exceeds the AMOLED burn-in budget");
         return true;
     }
 
@@ -726,17 +671,17 @@ module MatrixTest {
 
     //! Every settings row that shows a value, by index. The rings row is not
     //! here: it opens a sub-menu and carries no value of its own.
-    const MENU_VALUE_ROWS = [0, 1, 2, 4] as Array<Number>;
+    const MENU_VALUE_ROWS = [0, 1, 3] as Array<Number>;
 
     (:test)
     function settingsMenuRefreshesItsSubLabels(logger as Logger) as Boolean {
-        Properties.setValue(StatMap.PROPERTY_LAYOUT, StatMap.LAYOUT_BANDS_BOTTOM);
+        Properties.setValue(StatMap.PROPERTY_BACKING, StatMap.BACKING_OFF);
         Config.reload();
         var menu = new SettingsMenu();
         var before = subLabelOf(menu, 0);
 
-        // What a sub-menu does when the user picks a different layout.
-        Properties.setValue(StatMap.PROPERTY_LAYOUT, StatMap.LAYOUT_RINGS);
+        // What a sub-menu does when the user picks a different value.
+        Properties.setValue(StatMap.PROPERTY_BACKING, StatMap.BACKING_WHITE);
         Config.reload();
         Test.assertEqualMessage(subLabelOf(menu, 0), before,
             "sub-label should still be stale before the menu is shown again");
@@ -758,7 +703,7 @@ module MatrixTest {
                 "onShow refreshes have drifted from the rows it adds");
         }
 
-        Properties.setValue(StatMap.PROPERTY_LAYOUT, StatMap.LAYOUT_BANDS_BOTTOM);
+        Properties.setValue(StatMap.PROPERTY_BACKING, StatMap.BACKING_OFF);
         Config.reload();
         return true;
     }
@@ -817,37 +762,24 @@ module MatrixTest {
     //! offset would read past the end of ARMS and take the face down.
     (:test)
     function everyDotHasAValidArmOffset(logger as Logger) as Boolean {
-        var layouts = [StatMap.LAYOUT_BANDS_BOTTOM, StatMap.LAYOUT_RINGS]
-                      as Array<Number>;
-        for (var l = 0; l < layouts.size(); l++) {
-            Properties.setValue(StatMap.PROPERTY_LAYOUT, layouts[l]);
-            Config.reload();
-            DotGrid.build();
-            Test.assertEqualMessage(DotGrid.armOf.size(), DotGrid.count,
-                "every dot needs an orientation");
-
-            var distinct = 0;
-            for (var i = 0; i < DotGrid.count; i++) {
-                var offset = DotGrid.armOf[i];
-                Test.assertMessage(offset >= 0 &&
-                        offset + DotGrid.ARM_VALUES <= DotGrid.ARMS.size(),
-                    "arm offset points outside the table");
-                Test.assertEqualMessage(offset % DotGrid.ARM_VALUES, 0,
-                    "arm offset must land on an entry boundary");
-                distinct |= 1 << (offset / DotGrid.ARM_VALUES);
-            }
-            logger.debug("layout " + StatMap.layout + " orientations used: " + distinct);
-            if (StatMap.layout == StatMap.LAYOUT_RINGS) {
-                Test.assertEqualMessage(distinct,
-                    (1 << DotGrid.ORIENTATIONS) - 1,
-                    "the rings layout should use every orientation");
-            } else {
-                Test.assertEqualMessage(distinct, 1,
-                    "the band layouts should leave every cross upright");
-            }
-        }
-        Properties.setValue(StatMap.PROPERTY_LAYOUT, StatMap.LAYOUT_BANDS_BOTTOM);
         Config.reload();
+        DotGrid.build();
+        Test.assertEqualMessage(DotGrid.armOf.size(), DotGrid.count,
+            "every dot needs an orientation");
+
+        var distinct = 0;
+        for (var i = 0; i < DotGrid.count; i++) {
+            var offset = DotGrid.armOf[i];
+            Test.assertMessage(offset >= 0 &&
+                    offset + DotGrid.ARM_VALUES <= DotGrid.ARMS.size(),
+                "arm offset points outside the table");
+            Test.assertEqualMessage(offset % DotGrid.ARM_VALUES, 0,
+                "arm offset must land on an entry boundary");
+            distinct |= 1 << (offset / DotGrid.ARM_VALUES);
+        }
+        logger.debug("orientations used: " + distinct);
+        Test.assertEqualMessage(distinct, (1 << DotGrid.ORIENTATIONS) - 1,
+            "the field should carry every orientation");
         return true;
     }
 
@@ -858,36 +790,31 @@ module MatrixTest {
     //! orientationFor's are the readable definitions, and neither may drift.
     (:test)
     function cacheAgreesWithTheReferenceMaths(logger as Logger) as Boolean {
-        for (var l = 0; l < ALL_LAYOUTS.size(); l++) {
-            Properties.setValue(StatMap.PROPERTY_LAYOUT, ALL_LAYOUTS[l]);
-            Config.reload();
-            DotGrid.build();
+        Config.reload();
+        DotGrid.build();
 
-            var checked = 0;
-            for (var i = 0; i < DotGrid.count; i++) {
-                var dx = DotGrid.xs[i];
-                var dy = DotGrid.ys[i];
+        var checked = 0;
+        for (var i = 0; i < DotGrid.count; i++) {
+            var dx = DotGrid.xs[i];
+            var dy = DotGrid.ys[i];
 
-                Test.assertEqualMessage(DotGrid.ringOf[i],
-                    StatMap.ringFor(columnOf(dx), dx, dy),
-                    "cached ring disagrees with StatMap.ringFor");
+            Test.assertEqualMessage(DotGrid.ringOf[i],
+                StatMap.ringFor(dx, dy),
+                "cached ring disagrees with StatMap.ringFor");
 
-                var expected = StatMap.positionOf(dx, dy);
-                Test.assertMessage((DotGrid.positionOf[i] - expected).abs() < 0.0001,
-                    "cached position disagrees with StatMap.positionOf");
+            var expected = StatMap.positionOf(dx, dy);
+            Test.assertMessage((DotGrid.positionOf[i] - expected).abs() < 0.0001,
+                "cached position disagrees with StatMap.positionOf");
 
-                // Three dots in four take their orientation by mirroring a
-                // fourth, so the reflection rule needs checking per dot.
-                var wantedArm = (StatMap.layout == StatMap.LAYOUT_RINGS)
-                    ? DotGrid.orientationFor(dx, dy) : 0;
-                Test.assertEqualMessage(DotGrid.armOf[i], wantedArm,
-                    "cached orientation disagrees with orientationFor");
-                checked++;
-            }
-            logger.debug("layout " + StatMap.layout + ": " + checked + " dots agree");
-            Test.assertMessage(checked > 1000, "hardly any dots were checked");
+            // Three dots in four take their orientation by mirroring a
+            // fourth, so the reflection rule needs checking per dot.
+            Test.assertEqualMessage(DotGrid.armOf[i],
+                DotGrid.orientationFor(dx, dy),
+                "cached orientation disagrees with orientationFor");
+            checked++;
         }
-        Properties.setValue(StatMap.PROPERTY_LAYOUT, StatMap.LAYOUT_BANDS_BOTTOM);
+        logger.debug(checked + " dots agree");
+        Test.assertMessage(checked > 1000, "hardly any dots were checked");
         Config.reload();
         return true;
     }
@@ -900,43 +827,38 @@ module MatrixTest {
     //! two long runs of one colour instead of hundreds of short ones.
     (:test)
     function ringsAreContiguousAndInScanOrder(logger as Logger) as Boolean {
-        for (var l = 0; l < ALL_LAYOUTS.size(); l++) {
-            Properties.setValue(StatMap.PROPERTY_LAYOUT, ALL_LAYOUTS[l]);
-            Config.reload();
-            DotGrid.build();
+        Config.reload();
+        DotGrid.build();
 
-            Test.assertEqualMessage(DotGrid.ringStart.size(), StatMap.RINGS + 1,
-                "ringStart needs one entry per ring plus the total");
-            Test.assertEqualMessage(DotGrid.ringStart[0], 0,
-                "the first ring must start at the first dot");
-            Test.assertEqualMessage(DotGrid.ringStart[StatMap.RINGS],
-                DotGrid.count, "the ring blocks must account for every dot");
+        Test.assertEqualMessage(DotGrid.ringStart.size(), StatMap.RINGS + 1,
+            "ringStart needs one entry per ring plus the total");
+        Test.assertEqualMessage(DotGrid.ringStart[0], 0,
+            "the first ring must start at the first dot");
+        Test.assertEqualMessage(DotGrid.ringStart[StatMap.RINGS],
+            DotGrid.count, "the ring blocks must account for every dot");
 
-            var longestRun = 0;
-            for (var ring = 0; ring < StatMap.RINGS; ring++) {
-                var from = DotGrid.ringStart[ring];
-                var to = DotGrid.ringStart[ring + 1];
-                Test.assertMessage(to > from, "ring " + ring + " has no dots");
+        var longestRun = 0;
+        for (var ring = 0; ring < StatMap.RINGS; ring++) {
+            var from = DotGrid.ringStart[ring];
+            var to = DotGrid.ringStart[ring + 1];
+            Test.assertMessage(to > from, "ring " + ring + " has no dots");
 
-                var previous = -1;
-                for (var i = from; i < to; i++) {
-                    Test.assertEqualMessage(DotGrid.ringOf[i], ring,
-                        "a dot inside ring " + ring + "'s block belongs to " +
-                        DotGrid.ringOf[i]);
-                    // Scan order: row first, then column, strictly increasing.
-                    var key = columnOf(DotGrid.ys[i]) * DotGrid.COLS +
-                              columnOf(DotGrid.xs[i]);
-                    Test.assertMessage(key > previous,
-                        "ring " + ring + " is out of scan order at " + i);
-                    previous = key;
-                }
-                var size = to - from;
-                if (size > longestRun) { longestRun = size; }
+            var previous = -1;
+            for (var i = from; i < to; i++) {
+                Test.assertEqualMessage(DotGrid.ringOf[i], ring,
+                    "a dot inside ring " + ring + "'s block belongs to " +
+                    DotGrid.ringOf[i]);
+                // Scan order: row first, then column, strictly increasing.
+                var key = columnOf(DotGrid.ys[i]) * DotGrid.COLS +
+                          columnOf(DotGrid.xs[i]);
+                Test.assertMessage(key > previous,
+                    "ring " + ring + " is out of scan order at " + i);
+                previous = key;
             }
-            logger.debug("layout " + StatMap.layout + ": rings contiguous, " +
-                         "largest " + longestRun + " dots");
+            var size = to - from;
+            if (size > longestRun) { longestRun = size; }
         }
-        Properties.setValue(StatMap.PROPERTY_LAYOUT, StatMap.LAYOUT_BANDS_BOTTOM);
+        logger.debug("rings contiguous, largest " + longestRun + " dots");
         Config.reload();
         return true;
     }
@@ -1031,73 +953,62 @@ module MatrixTest {
     //! regression that narrows it shows up.
     (:test)
     function markLandsOnOneCentralDot(logger as Logger) as Boolean {
-        for (var l = 0; l < ALL_LAYOUTS.size(); l++) {
-            Properties.setValue(StatMap.PROPERTY_LAYOUT, ALL_LAYOUTS[l]);
-            Config.reload();
-            DotGrid.ensureBuilt();
+        Config.reload();
+        DotGrid.ensureBuilt();
 
-            for (var ring = 0; ring < StatMap.RINGS; ring++) {
-                var from = DotGrid.ringStart[ring];
-                var to = DotGrid.ringStart[ring + 1];
-                var half = DotGrid.markerHalf[ring];
+        for (var ring = 0; ring < StatMap.RINGS; ring++) {
+            var from = DotGrid.ringStart[ring];
+            var to = DotGrid.ringStart[ring + 1];
+            var half = DotGrid.markerHalf[ring];
 
-                var lowest = 1.0;
-                var highest = 0.0;
-                for (var i = from; i < to; i++) {
-                    var p = DotGrid.positionOf[i];
-                    if (p < lowest) { lowest = p; }
-                    if (p > highest) { highest = p; }
-                }
-
-                var worstOff = 0;
-                for (var step = 0; step <= 20; step++) {
-                    var mark = lowest + (highest - lowest) * step / 20.0;
-                    var window = StatMap.windowAround(mark, half);
-                    var at = DotGrid.markedDot(ring, window);
-
-                    Test.assertMessage(at >= 0,
-                        "layout " + StatMap.layout + " ring " + ring +
-                        ": the mark at " + mark + " found no dot");
-                    Test.assertMessage(at >= from && at < to,
-                        "the marked dot must belong to the ring it marks");
-                    Test.assertMessage(
-                        StatMap.isLit(DotGrid.positionOf[at], window),
-                        "the marked dot must sit inside the mark's window");
-
-                    // Nothing else in the window may be nearer the middle.
-                    var middle = DotGrid.markMiddle[ring];
-                    var radial = (StatMap.layout == StatMap.LAYOUT_RINGS);
-                    var chosen = offFromMiddle(at, middle, radial);
-                    for (var i = from; i < to; i++) {
-                        if (StatMap.isLit(DotGrid.positionOf[i], window)) {
-                            Test.assertMessage(
-                                offFromMiddle(i, middle, radial) >= chosen,
-                                "layout " + StatMap.layout + " ring " + ring +
-                                ": dot " + i + " sits nearer the middle than " +
-                                "the one the mark chose");
-                        }
-                    }
-                    if (chosen > worstOff) { worstOff = chosen; }
-                }
-                logger.debug("layout " + StatMap.layout + " ring " + ring +
-                             ": positions " + lowest + ".." + highest +
-                             ", worst offset from middle " + worstOff);
+            var lowest = 1.0;
+            var highest = 0.0;
+            for (var i = from; i < to; i++) {
+                var p = DotGrid.positionOf[i];
+                if (p < lowest) { lowest = p; }
+                if (p > highest) { highest = p; }
             }
+
+            var worstOff = 0;
+            for (var step = 0; step <= 20; step++) {
+                var mark = lowest + (highest - lowest) * step / 20.0;
+                var window = StatMap.windowAround(mark, half);
+                var at = DotGrid.markedDot(ring, window);
+
+                Test.assertMessage(at >= 0,
+                    "ring " + ring + ": the mark at " + mark +
+                    " found no dot");
+                Test.assertMessage(at >= from && at < to,
+                    "the marked dot must belong to the ring it marks");
+                Test.assertMessage(
+                    StatMap.isLit(DotGrid.positionOf[at], window),
+                    "the marked dot must sit inside the mark's window");
+
+                // Nothing else in the window may be nearer the middle.
+                var middle = DotGrid.markMiddle[ring];
+                var chosen = offFromMiddle(at, middle);
+                for (var i = from; i < to; i++) {
+                    if (StatMap.isLit(DotGrid.positionOf[i], window)) {
+                        Test.assertMessage(
+                            offFromMiddle(i, middle) >= chosen,
+                            "ring " + ring + ": dot " + i + " sits nearer " +
+                            "the middle than the one the mark chose");
+                    }
+                }
+                if (chosen > worstOff) { worstOff = chosen; }
+            }
+            logger.debug("ring " + ring + ": positions " + lowest + ".." +
+                         highest + ", worst offset from middle " + worstOff);
         }
-        Properties.setValue(StatMap.PROPERTY_LAYOUT, StatMap.LAYOUT_BANDS_BOTTOM);
         Config.reload();
         return true;
     }
 
     //! How far a dot sits from the middle of its ring, in markedDot's terms.
-    function offFromMiddle(i as Number, middle as Number,
-                           radial as Boolean) as Number {
-        if (radial) {
-            var dx = DotGrid.xs[i];
-            var dy = DotGrid.ys[i];
-            return (dx * dx + dy * dy - middle).abs();
-        }
-        return (DotGrid.xs[i] - middle).abs();
+    function offFromMiddle(i as Number, middle as Number) as Number {
+        var dx = DotGrid.xs[i];
+        var dy = DotGrid.ys[i];
+        return (dx * dx + dy * dy - middle).abs();
     }
 
     //! An unmarked ring must not quietly mark dot zero.
@@ -1253,8 +1164,9 @@ module MatrixTest {
         return true;
     }
 
-    //! Recover a dot's column from its x offset — build() knows it, the cache
-    //! does not store it, and ringFor needs it for the band layouts.
+    //! Recover a dot's column from its x offset — build() knows it and the
+    //! cache does not store it, so the checks that walk the lattice by grid
+    //! cell have to work it back out.
     function columnOf(dx as Number) as Number {
         return ((dx / (DotGrid.PITCH / 2)) + (DotGrid.COLS - 1)) / 2;
     }
@@ -1440,25 +1352,20 @@ module MatrixTest {
         }
 
         var checked = 0;
-        for (var i = 0; i < ALL_LAYOUTS.size(); i++) {
-            StatMap.layout = ALL_LAYOUTS[i];
-            for (var row = 0; row < DotGrid.ROWS; row++) {
-                var dy = DotGrid.offsetAt(row);
-                for (var col = 0; col < DotGrid.COLS; col++) {
-                    var dx = DotGrid.offsetAt(col);
-                    if (!DotGrid.contains(dx, dy)) {
-                        continue;
-                    }
-                    checked++;
-                    Test.assertMessage(
-                        StatMap.classify(col, dx, dy, spans) % 2 == 0,
-                        "an asleep seconds ring lit a dot in layout " +
-                        StatMap.layout);
+        for (var row = 0; row < DotGrid.ROWS; row++) {
+            var dy = DotGrid.offsetAt(row);
+            for (var col = 0; col < DotGrid.COLS; col++) {
+                var dx = DotGrid.offsetAt(col);
+                if (!DotGrid.contains(dx, dy)) {
+                    continue;
                 }
+                checked++;
+                Test.assertMessage(
+                    StatMap.classify(dx, dy, spans) % 2 == 0,
+                    "an asleep seconds ring lit a dot");
             }
         }
-        StatMap.layout = StatMap.LAYOUT_BANDS_BOTTOM;
-        logger.debug("checked " + checked + " dots across every layout");
+        logger.debug("checked " + checked + " dots");
         Test.assertMessage(checked > 0, "the walk must actually visit dots");
         return true;
     }
@@ -1467,7 +1374,6 @@ module MatrixTest {
     //! would pass just as well against a source that never reports anything.
     (:test)
     function secondsAreLiveWhileAwake(logger as Logger) as Boolean {
-        StatMap.layout = StatMap.LAYOUT_BANDS_BOTTOM;
         // Half past the minute, chosen rather than read, so this cannot pass
         // or fail depending on when the suite happens to run.
         var half = [0.0, ClockData.fraction(30)] as Array<Float>;

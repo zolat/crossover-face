@@ -1,11 +1,6 @@
 <strings xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://developer.garmin.com/downloads/connect-iq/resources.xsd">
     <string id="AppName">Crossover Face</string>
 
-    <string id="LayoutTitle">Layout</string>
-    <string id="LayoutPrompt">How the four stats fill the dot field</string>
-    <string id="LayoutBandsBottom">Bands — fill upward</string>
-    <string id="LayoutBandsCentre">Bands — fill from centre</string>
-    <string id="LayoutRings">Rings — fill clockwise</string>
     <string id="SettingsTitle">Crossover Face</string>
     <string id="InUse">In use</string>
 
@@ -22,10 +17,10 @@
     <string id="RingsTitle">Ring data</string>
     <string id="DiagnosticsTitle">Frame cost</string>
     <string id="RingPrompt">Which reading this ring shows</string>
-    <string id="Ring1Title">Ring 1 — outer / left</string>
+    <string id="Ring1Title">Ring 1 — outer</string>
     <string id="Ring2Title">Ring 2</string>
     <string id="Ring3Title">Ring 3</string>
-    <string id="Ring4Title">Ring 4 — inner / right</string>
+    <string id="Ring4Title">Ring 4 — inner</string>
 
     <string id="SourceSteps">Steps</string>
     <string id="SourceHeartRate">Heart rate</string>

@@ -24,15 +24,16 @@ import Toybox.Lang;
 //! A ring may also carry a *mark* — one position called out on top of the span,
 //! which is how the temperature ring shows where the current reading falls
 //! inside today's low-to-high. It is a single dot: a whole row of them, drawn
-//! out of crosses, reads as a bumpy dotted band rather than a line, and in the
-//! rings layout a radial run of dots on a square lattice staggers instead of
-//! lining up. The dot is chosen once per ring by DotGrid.markedDot() and drawn
-//! after the loop, so the loop itself never learns marks exist.
+//! out of crosses, reads as a bumpy dotted band rather than a line, and a
+//! radial run of dots on a square lattice staggers instead of lining up. The
+//! dot is chosen once per ring by DotGrid.markedDot() and drawn after the loop,
+//! so the loop itself never learns marks exist.
 //!
 //! Grouping also keeps the pen still. The renderer only calls setColor when the
 //! colour actually changes, and because each ring keeps the lattice's scan
-//! order, a band layout's ring draws as two long runs — unfilled, then filled —
-//! instead of alternating every few dots as it did when the rings interleaved.
+//! order, its dots arrive in whole rows — so a run of them on the same side of
+//! the fill's leading edge shares a colour, instead of alternating every few
+//! dots as it did when the rings interleaved.
 //!
 //! The lattice also cannot be cached to a BufferedBitmap: a full-screen
 //! 390x390 buffer at 16bpp is ~304KB against a 128KB watch-face budget.
@@ -48,7 +49,7 @@ module MatrixRenderer {
 
         // Anti-aliasing is sticky on the Dc, and it is ruinous here: measured,
         // the same frame costs about four times as much with it on, because a
-        // cross in the rings layout is mostly diagonal strokes. The dots are
+        // cross turned to follow its ring is mostly diagonal strokes. The dots are
         // meant to be crisp anyway, so it is turned off explicitly rather than
         // left to whatever the last drawer wanted.
         if (dc has :setAntiAlias) {
@@ -88,15 +89,6 @@ module MatrixRenderer {
         // Written as an explicit null test so the type narrows; hasBacking is
         // the same condition, kept for the dot loop.
         var backingColour = (backing != null) ? backing : 0;
-
-        // Only the rings layout turns its crosses, so in the band layouts every
-        // dot shares one orientation. Reading it here rather than per dot saves
-        // five array lookups on every dot of two layouts out of three.
-        var radial = (StatMap.layout == StatMap.LAYOUT_RINGS);
-        var ax = arms[0];
-        var ay = arms[1];
-        var bx = arms[2];
-        var by = arms[3];
 
         var markAt = new [StatMap.RINGS] as Array<Number>;
 
@@ -154,19 +146,16 @@ module MatrixRenderer {
                     dc.setColor(colour, Graphics.COLOR_TRANSPARENT);
                     lastColour = colour;
                 }
-                // A cross of two strokes through the dot's centre. In the rings
-                // layout each dot's pair is turned to follow the circle it sits
-                // on; elsewhere they stay upright. drawLine measured *faster*
-                // than the two fillRectangle calls this replaced.
+                // A cross of two strokes through the dot's centre, turned to
+                // follow the circle it sits on. drawLine measured *faster* than
+                // the two fillRectangle calls this replaced.
                 var x = centreX + dx;
                 var y = centreY + dy;
-                if (radial) {
-                    var a = armOf[i];
-                    ax = arms[a];
-                    ay = arms[a + 1];
-                    bx = arms[a + 2];
-                    by = arms[a + 3];
-                }
+                var a = armOf[i];
+                var ax = arms[a];
+                var ay = arms[a + 1];
+                var bx = arms[a + 2];
+                var by = arms[a + 3];
                 dc.drawLine(x - ax, y - ay, x + ax, y + ay);
                 dc.drawLine(x - bx, y - by, x + bx, y + by);
             }

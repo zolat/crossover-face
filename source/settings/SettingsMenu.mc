@@ -25,8 +25,6 @@ class SettingsMenu extends WatchUi.Menu2 {
     function initialize() {
         Menu2.initialize({:title => Rez.Strings.SettingsTitle});
         addItem(new WatchUi.MenuItem(
-            Rez.Strings.LayoutTitle, layoutLabel(), :layout, null));
-        addItem(new WatchUi.MenuItem(
             Rez.Strings.BackingTitle, backingLabel(), :backing, null));
         addItem(new WatchUi.MenuItem(Rez.Strings.AlwaysOnFillTitle,
             alwaysOnFillLabel(), :alwaysOnFill, null));
@@ -42,10 +40,9 @@ class SettingsMenu extends WatchUi.Menu2 {
     //! the values can be refreshed — the menu itself is not rebuilt.
     function onShow() as Void {
         Menu2.onShow();
-        setSubLabelOf(0, layoutLabel());
-        setSubLabelOf(1, backingLabel());
-        setSubLabelOf(2, alwaysOnFillLabel());
-        setSubLabelOf(4, Diagnostics.summary());
+        setSubLabelOf(0, backingLabel());
+        setSubLabelOf(1, alwaysOnFillLabel());
+        setSubLabelOf(3, Diagnostics.summary());
     }
 
     private function setSubLabelOf(index as Number,
@@ -54,13 +51,6 @@ class SettingsMenu extends WatchUi.Menu2 {
         if (item != null) {
             item.setSubLabel(label);
         }
-    }
-
-    private function layoutLabel() as ResourceId {
-        var labels = [Rez.Strings.LayoutBandsBottom,
-                      Rez.Strings.LayoutBandsCentre,
-                      Rez.Strings.LayoutRings] as Array<ResourceId>;
-        return labels[StatMap.layout];
     }
 
     private function alwaysOnFillLabel() as ResourceId {
@@ -86,13 +76,7 @@ class SettingsMenuDelegate extends WatchUi.Menu2InputDelegate {
 
     function onSelect(item as WatchUi.MenuItem) as Void {
         var id = item.getId();
-        if (id == :layout) {
-            push(new ChoiceMenu(Rez.Strings.LayoutTitle, StatMap.PROPERTY_LAYOUT,
-                [Rez.Strings.LayoutBandsBottom,
-                 Rez.Strings.LayoutBandsCentre,
-                 Rez.Strings.LayoutRings] as Array<ResourceId>,
-                StatMap.layout));
-        } else if (id == :rings) {
+        if (id == :rings) {
             WatchUi.pushView(new RingMenu(), new RingMenuDelegate(),
                              WatchUi.SLIDE_LEFT);
         } else if (id == :backing) {
@@ -124,7 +108,8 @@ class SettingsMenuDelegate extends WatchUi.Menu2InputDelegate {
     }
 }
 
-//! Lists the four rings, each showing what it is currently assigned to.
+//! Lists the four rings, outermost first, each showing what it is currently
+//! assigned to.
 class RingMenu extends WatchUi.Menu2 {
 
     function initialize() {

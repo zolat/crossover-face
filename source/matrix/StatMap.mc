@@ -5,17 +5,11 @@ import Toybox.Math;
 //! Decides which ring a dot belongs to, and whether it falls inside that
 //! ring's span.
 //!
-//! Layout is the seam: every layout shares one lattice and one palette, and
-//! differs only in how a dot's position becomes a ring index and a position
-//! along that ring. Because a dot's position is a single 0.0-1.0 number in
-//! every layout, a source that reports a range works everywhere a level does.
+//! The mapping is the seam every other module is written against: a dot's
+//! radius picks its ring, and its angle becomes a single 0.0-1.0 position
+//! along that ring. Because a position is one number rather than a coordinate,
+//! a source that reports a range works everywhere a level does.
 module StatMap {
-
-    enum Layout {
-        LAYOUT_BANDS_BOTTOM = 0,    //! Column picks the ring, fill rises from the rim.
-        LAYOUT_BANDS_CENTRE = 1,    //! As above, but position is measured out from the midline.
-        LAYOUT_RINGS = 2            //! Radius picks the ring, position runs clockwise.
-    }
 
     enum Backing {
         BACKING_OFF = 0,
@@ -29,7 +23,6 @@ module StatMap {
         ALWAYS_ON_FILL_HIDDEN = 1   //! Colour only; the data appears on a raise.
     }
 
-    const PROPERTY_LAYOUT = "layout";
     const PROPERTY_BACKING = "handBacking";
     const PROPERTY_ALWAYS_ON_FILL = "alwaysOnFill";
 
@@ -38,14 +31,11 @@ module StatMap {
     const PROPERTY_RINGS = ["ring1", "ring2", "ring3", "ring4"] as Array<String>;
 
     const RING_THICKNESS = (DotGrid.RADIUS - DotGrid.HUB) / RINGS;
-    const SPAN = 2 * DotGrid.RADIUS;
 
-    var layout as Number = LAYOUT_BANDS_BOTTOM;
     var backing as Number = BACKING_OFF;
     var alwaysOnFill as Number = ALWAYS_ON_FILL_SHOWN;
 
-    //! Which source each ring shows. Index 0 is the leftmost band, or the
-    //! outermost ring.
+    //! Which source each ring shows. Index 0 is the outermost ring.
     var rings as Array<Number> = [
         Source.SOURCE_STEPS,
         Source.SOURCE_HEART_RATE,
@@ -56,8 +46,6 @@ module StatMap {
     //! Re-read every setting. Safe at any time; anything missing or out of
     //! range falls back to its default rather than throwing.
     function load() as Void {
-        layout = readNumber(PROPERTY_LAYOUT, LAYOUT_BANDS_BOTTOM,
-                            LAYOUT_BANDS_BOTTOM, LAYOUT_RINGS);
         backing = readNumber(PROPERTY_BACKING, BACKING_OFF,
                              BACKING_OFF, BACKING_DARK);
         alwaysOnFill = readNumber(PROPERTY_ALWAYS_ON_FILL, ALWAYS_ON_FILL_SHOWN,
@@ -164,32 +152,21 @@ module StatMap {
         return [lo, hi] as Array<Float>;
     }
 
-    //! Which ring this dot belongs to.
-    function ringFor(col as Number, dx as Number, dy as Number) as Number {
-        var ring;
-        if (layout == LAYOUT_RINGS) {
-            var distance = Math.sqrt(dx * dx + dy * dy);
-            ring = ((DotGrid.RADIUS - distance) / RING_THICKNESS).toNumber();
-        } else {
-            ring = col * RINGS / DotGrid.COLS;
-        }
+    //! Which ring this dot belongs to: the outermost is 0, and the rings are
+    //! of equal thickness between the rim and the hub.
+    function ringFor(dx as Number, dy as Number) as Number {
+        var distance = Math.sqrt(dx * dx + dy * dy);
+        var ring = ((DotGrid.RADIUS - distance) / RING_THICKNESS).toNumber();
         if (ring < 0) { return 0; }
         if (ring >= RINGS) { return RINGS - 1; }
         return ring;
     }
 
-    //! Where this dot sits along its ring, 0.0 at the ring's origin to 1.0 at
-    //! its far end. A span lights every dot between its start and end.
+    //! Where this dot sits along its ring: turns clockwise from twelve, 0.0 up
+    //! to but not including 1.0. A span lights every dot between its start and
+    //! its end.
     function positionOf(dx as Number, dy as Number) as Float {
-        if (layout == LAYOUT_RINGS) {
-            return Angle.turnOf(dx, dy);
-        }
-        if (layout == LAYOUT_BANDS_CENTRE) {
-            // Out from the midline, so a level opens symmetrically.
-            return (dy.abs().toFloat() / DotGrid.RADIUS);
-        }
-        // Up from the rim, so a level rises like a tide.
-        return ((DotGrid.RADIUS - dy).toFloat() / SPAN);
+        return Angle.turnOf(dx, dy);
     }
 
     //! Is a dot at this position inside the span, given the span already
@@ -220,9 +197,9 @@ module StatMap {
     }
 
     //! Classify a dot into a palette slot: ring * 2, plus 1 when lit.
-    function classify(col as Number, dx as Number, dy as Number,
+    function classify(dx as Number, dy as Number,
                       spans as Array<Array<Float> >) as Number {
-        var ring = ringFor(col, dx, dy);
+        var ring = ringFor(dx, dy);
         return ring * 2 + (isLit(positionOf(dx, dy), spans[ring]) ? 1 : 0);
     }
 }

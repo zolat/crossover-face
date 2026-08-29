@@ -7,8 +7,8 @@ import Toybox.System;
 //! The Crossover's physical hands carry hours and minutes only, so there is no
 //! second hand on the glass and the face has never had a use for the clock's
 //! finest field before now. A ring assigned to this one fills through the
-//! minute and resets, which in the rings layout puts the leading edge of the
-//! fill exactly where a second hand would point.
+//! minute and resets, which puts the leading edge of the fill exactly where a
+//! second hand would point.
 //!
 //! Split the way WeatherData is: fraction() is the arithmetic and can be
 //! asserted without owning the clock, minuteSweep() is the reading.
