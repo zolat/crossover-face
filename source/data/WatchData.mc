@@ -23,14 +23,6 @@ module WatchData {
     const HR_FLOOR = 50;
     const HR_CEILING = 180;
 
-    //! Steps, heart rate, battery, body battery — the order StatMap expects.
-    //! Steps is capped here, unlike at its source, because this one promises
-    //! normalised values.
-    function normalised() as Array<Float> {
-        return [clamp(steps()), heartRate(), battery(), bodyBattery()]
-               as Array<Float>;
-    }
-
     function steps() as Float {
         var info = ActivityMonitor.getInfo();
         var count = info.steps;

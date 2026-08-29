@@ -76,9 +76,12 @@ module DotGrid {
     const ORIENTATIONS = 4;
 
     var count as Number = 0;
+    //! One entry per dot, in ring-grouped scan order. There is deliberately no
+    //! ringOf array: the dots are stored grouped by ring, so ringStart already
+    //! says which ring any index belongs to and a parallel copy was 1112
+    //! entries that nothing ever read.
     var xs as Array<Number> = [] as Array<Number>;      //! dx from centre
     var ys as Array<Number> = [] as Array<Number>;      //! dy from centre
-    var ringOf as Array<Number> = [] as Array<Number>;  //! which ring
     var positionOf as Array<Float> = [] as Array<Float>;//! 0.0-1.0 along it
     var armOf as Array<Number> = [] as Array<Number>;   //! offset into ARMS
 
@@ -322,7 +325,6 @@ module DotGrid {
         if (xs.size() != total) {
             xs = new [total] as Array<Number>;
             ys = new [total] as Array<Number>;
-            ringOf = new [total] as Array<Number>;
             positionOf = new [total] as Array<Float>;
             armOf = new [total] as Array<Number>;
         }
@@ -427,9 +429,6 @@ module DotGrid {
                 xs[topRight] = u;       ys[topRight] = y;
                 xs[bottomLeft] = x;     ys[bottomLeft] = v;
                 xs[bottomRight] = u;    ys[bottomRight] = v;
-
-                ringOf[topLeft] = ring;         ringOf[bottomLeft] = ring;
-                ringOf[topRight] = ring;        ringOf[bottomRight] = ring;
 
                 // Turns clockwise from twelve for the top-right quadrant,
                 // strictly between 0.0 and 0.25 — no dot sits on an axis.

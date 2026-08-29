@@ -44,13 +44,22 @@ module Diagnostics {
         return (frames == 0) ? 0 : totalMs / frames;
     }
 
-    //! One line for a menu sub-label: "31ms avg / 44 worst / 76k free".
+    //! One line for a menu sub-label: "31ms avg / 44 worst / 76% skipped /
+    //! 61k of 128k".
+    //!
+    //! Memory is reported as used against the total rather than as free, which
+    //! is what it used to say. Free on its own is a number with nothing to
+    //! measure it against, and it was misread once already — as a share of the
+    //! wrong budget entirely, by comparing a debug .prg's *file size* to the
+    //! device's runtime limit. Used-against-total states the position outright.
     function summary() as String {
         if (frames == 0) {
             return "no frames yet";
         }
-        var free = System.getSystemStats().freeMemory / 1024;
+        var stats = System.getSystemStats();
         return averageMs() + "ms avg / " + worstMs + " worst / " +
-               FrameGate.skipPercent() + "% skipped / " + free + "k free";
+               FrameGate.skipPercent() + "% skipped / " +
+               (stats.usedMemory / 1024) + "k of " +
+               (stats.totalMemory / 1024) + "k";
     }
 }

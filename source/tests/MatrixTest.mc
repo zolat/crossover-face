@@ -2,6 +2,7 @@ import Toybox.Application;
 import Toybox.Graphics;
 import Toybox.Lang;
 import Toybox.Math;
+import Toybox.System;
 import Toybox.Test;
 import Toybox.WatchUi;
 
@@ -18,6 +19,11 @@ module MatrixTest {
 
     //! Garmin blanks an always-on face above this share of screen luminance.
     const BUDGET = 0.10;
+
+    //! Ceiling for what the dot cache may cost, in bytes. Deliberately loose:
+    //! it is here to catch a new per-dot array, which would move the figure by
+    //! thousands, not to hold the current number to the byte.
+    const CACHE_CEILING = 56000;
 
     //! Lit pixels per dot. Dots are crosses: two DOT-long strokes sharing
     //! their centre pixel, so 2 * DOT - 1 — not DOT squared. Using the square
@@ -858,9 +864,13 @@ module MatrixTest {
             var dx = DotGrid.xs[i];
             var dy = DotGrid.ys[i];
 
-            Test.assertEqualMessage(DotGrid.ringOf[i],
-                StatMap.ringFor(dx, dy),
-                "cached ring disagrees with StatMap.ringFor");
+            // Which ring the cache put this dot in is now said by where it
+            // sits, not by a parallel array — and checking the placement
+            // against the mapping is a stronger claim than the array was. The
+            // array was written by the same pass that laid out the blocks, so
+            // a grouping bug could be mirrored into it and agree with itself.
+            Test.assertEqualMessage(ringHolding(i), StatMap.ringFor(dx, dy),
+                "the block a dot was placed in disagrees with StatMap.ringFor");
 
             var expected = StatMap.positionOf(dx, dy);
             Test.assertMessage((DotGrid.positionOf[i] - expected).abs() < 0.0001,
@@ -905,9 +915,14 @@ module MatrixTest {
 
             var previous = -1;
             for (var i = from; i < to; i++) {
-                Test.assertEqualMessage(DotGrid.ringOf[i], ring,
-                    "a dot inside ring " + ring + "'s block belongs to " +
-                    DotGrid.ringOf[i]);
+                // Against the mapping itself, not against a cached copy of it:
+                // this is the claim the grouping actually has to make good on,
+                // since the renderer reads a dot's ring from which block it is
+                // walking and nothing else.
+                Test.assertEqualMessage(
+                    StatMap.ringFor(DotGrid.xs[i], DotGrid.ys[i]), ring,
+                    "a dot inside ring " + ring + "'s block maps to ring " +
+                    StatMap.ringFor(DotGrid.xs[i], DotGrid.ys[i]));
                 // Scan order: row first, then column, strictly increasing.
                 var key = columnOf(DotGrid.ys[i]) * DotGrid.COLS +
                           columnOf(DotGrid.xs[i]);
@@ -1568,6 +1583,73 @@ module MatrixTest {
         StatMap.rings[1] = was;
         StatMap.rotation = turning;
         return true;
+    }
+
+    //! What the dot cache costs, in bytes, measured rather than reasoned about.
+    //!
+    //! The cache is the face's dominant runtime consumer — several parallel
+    //! arrays of one entry per dot, against a 131,072-byte watch-face budget —
+    //! and nothing measured it until now. This is the memory counterpart of
+    //! alwaysOnWorstCaseFitsBudget: it prices the thing, logs the figure, and
+    //! fails if a sixth per-dot array appears.
+    //!
+    //! **Dropping the references first is the whole test.** invalidate() plus
+    //! ensureBuilt() is a rebuild in place: each new array is assigned over its
+    //! predecessor, Monkey C reference-counts, so the old one is freed at the
+    //! moment the new one lands and the net delta is roughly nothing. Measured
+    //! that way this passes no matter how big the cache is. Assigning the empty
+    //! array drops the last reference and frees it there and then, so the
+    //! sample below is taken with the cache genuinely absent.
+    (:test)
+    function theDotCacheFitsItsShareOfMemory(logger as Logger) as Boolean {
+        Config.reload();
+        DotGrid.ensureBuilt();
+        var dots = DotGrid.count;
+
+        // Cold: let go of every per-dot array, then see what comes back.
+        DotGrid.xs = [] as Array<Number>;
+        DotGrid.ys = [] as Array<Number>;
+        DotGrid.positionOf = [] as Array<Float>;
+        DotGrid.armOf = [] as Array<Number>;
+        DotGrid.invalidate();
+
+        var before = System.getSystemStats().freeMemory;
+        DotGrid.ensureBuilt();
+        var after = System.getSystemStats().freeMemory;
+        var cost = before - after;
+
+        Test.assertEqualMessage(DotGrid.count, EXPECTED_DOTS,
+            "the rebuild must produce the whole lattice again");
+        // Only the delta means anything. The absolute free figure here is the
+        // test harness's allowance, which is megabytes — a test build is not
+        // held to the 131,072 a watch face gets, so measuring against it would
+        // be measuring the wrong budget.
+        logger.debug("dot cache: " + cost + " bytes for " + dots + " dots, " +
+                     (cost / dots) + " per dot");
+
+        // Generous, because this is a ceiling rather than a target: it exists to
+        // catch a new per-dot array, which would move the figure by thousands.
+        Test.assertMessage(cost < CACHE_CEILING,
+            "the dot cache costs " + cost + " bytes, over the " +
+            CACHE_CEILING + " this test allows — did a per-dot array appear?");
+        Test.assertMessage(cost > 0,
+            "the cache must cost something, or this is measuring nothing");
+        return true;
+    }
+
+    //! Which ring's block a cache index falls in.
+    //!
+    //! The cache stores dots grouped by ring, so ringStart is the whole answer
+    //! and no per-dot array is needed to say it — which is why there is no
+    //! longer a DotGrid.ringOf for the checks above to read.
+    function ringHolding(index as Number) as Number {
+        for (var ring = 0; ring < StatMap.RINGS; ring++) {
+            if (index >= DotGrid.ringStart[ring] &&
+                index < DotGrid.ringStart[ring + 1]) {
+                return ring;
+            }
+        }
+        return -1;
     }
 
     //! Recover a dot's column from its x offset — build() knows it and the

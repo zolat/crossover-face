@@ -111,14 +111,39 @@ the face would not load. The rule:
 > Nothing is computed in the render loop that `DotGrid.build()` could compute once, and nothing
 > calls out of the loop that could be an array lookup.
 
-`DotGrid` caches parallel arrays (`xs`, `ys`, `ringOf`, `positionOf`, `armOf`) built once per
-rebuild; `MatrixRenderer` is a flat indexed walk. The single deliberate exception is
+`DotGrid` caches parallel arrays (`xs`, `ys`, `positionOf`, `armOf`) built once per
+rebuild; `MatrixRenderer` is a flat indexed walk. There is no `ringOf`: dots are stored grouped
+by ring, so `ringStart` already says which ring an index belongs to. The single deliberate exception is
 `StatMap.isLit()`, called per dot (~6ms/frame) so the lit test has one definition shared with the
 tests. Current cost: avg 36ms, peak 44ms. **If you add per-dot work or raise the dot count,
 re-measure** — wrap `onUpdate` in `System.getTimer()` and read `make sim` output.
 
 Caching the field to a `BufferedBitmap` is not an option: 390×390 at 16bpp is ~304KB against a
 128KB watch-face memory budget.
+
+### What the memory budget actually measures
+
+The 131,072-byte watch-face limit is a **runtime** one, and it is worth being precise because
+the obvious wrong reading is alarming and has been made here already: comparing the size of a
+built `.prg` against it. That comparison is meaningless.
+
+- `monkeyc` does not enforce it at build time at all. A padded `watchface` `.prg` of **258KB**
+  compiles without complaint (measured, no `-t`). File size is not the budget.
+- A **debug** `.prg` is ~129KB and a **release** one (`-r`) is ~25KB. The whole difference is
+  symbol tables — `-r` is documented as "strip debug information" — not code. Optimisation is
+  not a lever: `-O 2`, `-O 3`, `-O 2z` and `-O 2p` all give the identical 25KB, which the
+  default already reaches.
+- What the face actually uses, read off `Diagnostics.summary()` on the device profile:
+  **46k of 123k, about 37%**. Note the app is granted 123k rather than the nominal 128k.
+
+The dominant runtime consumer is the `DotGrid` cache — four parallel arrays of one entry per
+dot, **22,240 bytes at 1112 dots**, five bytes a slot. `theDotCacheFitsItsShareOfMemory`
+measures it and fails if a fifth per-dot array appears. That test has to drop the arrays'
+references before sampling: a rebuild in place frees each old array as the new one is assigned,
+so measuring across `invalidate()` alone reports a delta of nothing and passes vacuously.
+
+`make install` ships the debug build on purpose — symbolicated `CIQ_LOG` traces are worth more
+than the flash on a face with a watchdog history. See the comment on `install:`.
 
 ### Config.reload() ordering is load-bearing
 
