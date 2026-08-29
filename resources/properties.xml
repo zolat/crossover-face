@@ -9,7 +9,8 @@
     <property id="alwaysOnFill" type="number">0</property>
     <!-- Which Source each ring shows. See Source.Kind:
          0 steps, 1 heart rate, 2 battery, 3 body battery,
-         4 temperature range, 5 rain chance, 6 off. -->
+         4 temperature range, 5 rain chance, 6 seconds, 7 off.
+         Seconds reports nothing in always-on. -->
     <property id="ring1" type="number">0</property>
     <property id="ring2" type="number">1</property>
     <property id="ring3" type="number">2</property>
