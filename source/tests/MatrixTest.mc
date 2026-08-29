@@ -534,6 +534,204 @@ module MatrixTest {
         return true;
     }
 
+    //! Same contract for the theme setting.
+    (:test)
+    function themeSettingIsClamped(logger as Logger) as Boolean {
+        Properties.setValue(StatMap.PROPERTY_THEME, 99);
+        Config.reload();
+        Test.assertEqualMessage(StatMap.theme, StatMap.THEME_TERRAIN,
+            "an out-of-range value must fall back to Terrain");
+
+        Properties.setValue(StatMap.PROPERTY_THEME, StatMap.THEME_ACTIVITY);
+        Config.reload();
+        Test.assertEqualMessage(StatMap.theme, StatMap.THEME_ACTIVITY,
+            "a valid value must be honoured");
+
+        // The menu reads its sub-label straight off the setting, so an
+        // unhandled value would index past the end of the label table.
+        var menu = new SettingsMenu();
+        menu.onShow();
+
+        Properties.setValue(StatMap.PROPERTY_THEME, StatMap.THEME_TERRAIN);
+        Config.reload();
+        return true;
+    }
+
+    //! Adding a theme means touching four places at once: the colours, the
+    //! ramp stops that pick three of them, the range StatMap clamps to, and
+    //! the menu's labels. Miss the clamp and the new theme is unreachable;
+    //! miss the labels and choosing it indexes past the end of the table.
+    (:test)
+    function themeTablesCoverEveryTheme(logger as Logger) as Boolean {
+        Test.assertEqualMessage(Palette.THEMES.size(),
+            Palette.THEME_COUNT * Palette.THEME_COLOURS,
+            "THEMES must hold exactly THEME_COLOURS entries per theme");
+        Test.assertEqualMessage(Palette.RAMP_STOPS.size(),
+            Palette.THEME_COUNT * Palette.RAMP_POINTS,
+            "every theme needs a cold, a mid and a hot ramp stop");
+        Test.assertEqualMessage(THEME_LABELS.size(), Palette.THEME_COUNT,
+            "every theme needs a name in the settings menu");
+
+        for (var i = 0; i < Palette.RAMP_STOPS.size(); i++) {
+            var stop = Palette.RAMP_STOPS[i];
+            Test.assertMessage(stop >= 0 && stop < Palette.THEME_COLOURS,
+                "ramp stop " + i + " points outside its theme");
+        }
+
+        // The clamp is the piece with no other symptom: a theme present in
+        // THEMES but outside StatMap's range simply never draws.
+        var last = Palette.THEME_COUNT - 1;
+        Properties.setValue(StatMap.PROPERTY_THEME, last);
+        Config.reload();
+        Test.assertEqualMessage(StatMap.theme, last,
+            "the last theme is unreachable — StatMap's clamp has not been " +
+            "widened to match Palette.THEME_COUNT");
+
+        Properties.setValue(StatMap.PROPERTY_THEME, Palette.THEME_COUNT);
+        Config.reload();
+        Test.assertEqualMessage(StatMap.theme, StatMap.THEME_TERRAIN,
+            "one past the last theme must still fall back");
+
+        Properties.setValue(StatMap.PROPERTY_THEME, StatMap.THEME_TERRAIN);
+        Config.reload();
+        return true;
+    }
+
+    //! The theme has to actually reach the drawn colours. The menu writes a
+    //! property and trusts Config.reload() to do the rest, so a build() that
+    //! read the wrong index — or never read the setting at all — would leave
+    //! the face looking identical and nothing else here would notice.
+    (:test)
+    function changingTheThemeChangesTheColours(logger as Logger) as Boolean {
+        Properties.setValue(StatMap.PROPERTY_THEME, StatMap.THEME_TERRAIN);
+        Config.reload();
+        var bands = new [StatMap.RINGS] as Array<Number>;
+        for (var ring = 0; ring < StatMap.RINGS; ring++) {
+            bands[ring] = Palette.active[ring * 2 + 1];
+        }
+        var coldest = Palette.rampActive[0];
+        var hottest = Palette.rampActive[Palette.RAMP_STEPS - 1];
+
+        Properties.setValue(StatMap.PROPERTY_THEME, StatMap.THEME_ACTIVITY);
+        Config.reload();
+        for (var ring = 0; ring < StatMap.RINGS; ring++) {
+            Test.assertMessage(Palette.active[ring * 2 + 1] != bands[ring],
+                "ring " + ring + " kept its colour across a theme change");
+        }
+        Test.assertMessage(Palette.rampActive[0] != coldest,
+            "the temperature ramp's cold end did not follow the theme");
+        Test.assertMessage(
+            Palette.rampActive[Palette.RAMP_STEPS - 1] != hottest,
+            "the temperature ramp's hot end did not follow the theme");
+        logger.debug("ramp " + coldest + "->" + hottest + " became " +
+            Palette.rampActive[0] + "->" +
+            Palette.rampActive[Palette.RAMP_STEPS - 1]);
+
+        Properties.setValue(StatMap.PROPERTY_THEME, StatMap.THEME_TERRAIN);
+        Config.reload();
+        return true;
+    }
+
+    //! Making the theme selectable re-indexed every colour lookup in build().
+    //! That is a refactor, so the shipping face must come out of it unmoved —
+    //! and the ramp stops, which used to be the literals 2, 0 and 3, must
+    //! still resolve to ice, orchid and rust for Terrain.
+    (:test)
+    function terrainIsUnchangedByTheThemeSeam(logger as Logger) as Boolean {
+        Properties.setValue(StatMap.PROPERTY_THEME, StatMap.THEME_TERRAIN);
+        Config.reload();
+
+        var terrain = [0xE879F9, 0xB8D64B, 0x7FD4FF, 0xFF6B5B]
+                      as Array<Number>;
+        for (var ring = 0; ring < StatMap.RINGS; ring++) {
+            Test.assertEqualMessage(Palette.active[ring * 2 + 1], terrain[ring],
+                "ring " + ring + " no longer draws its Terrain colour");
+        }
+
+        var stops = StatMap.THEME_TERRAIN * Palette.RAMP_POINTS;
+        Test.assertEqualMessage(
+            Palette.themeColour(Palette.RAMP_STOPS[stops]), 0x7FD4FF,
+            "Terrain's ramp must still start at ice");
+        Test.assertEqualMessage(
+            Palette.themeColour(Palette.RAMP_STOPS[stops + 1]), 0xE879F9,
+            "Terrain's ramp must still pass through orchid");
+        Test.assertEqualMessage(
+            Palette.themeColour(Palette.RAMP_STOPS[stops + 2]), 0xFF6B5B,
+            "Terrain's ramp must still end at rust");
+
+        Test.assertEqualMessage(Palette.rampActive[0], 0x7FD4FF,
+            "the built ramp no longer starts at ice");
+        Test.assertEqualMessage(
+            Palette.rampActive[Palette.RAMP_STEPS - 1], 0xFF6B5B,
+            "the built ramp no longer ends at rust");
+        return true;
+    }
+
+    //! Every luminance test here measures whichever theme happens to be
+    //! persisted, so a second theme would ship unmeasured. This walks them all
+    //! through the worst frame the face can draw.
+    (:test)
+    function everyThemeFitsTheAlwaysOnBudget(logger as Logger) as Boolean {
+        var full = everySpan(0.0, 1.0);
+        for (var theme = 0; theme < Palette.THEME_COUNT; theme++) {
+            Properties.setValue(StatMap.PROPERTY_THEME, theme);
+            Config.reload();
+            var worst = frameLuminance(full, Palette.alwaysOn);
+            logger.debug("theme " + theme + " worst-case always-on: " + worst);
+            Test.assertMessage(worst < BUDGET,
+                "theme " + theme + " exceeds the AMOLED burn-in budget");
+        }
+        Properties.setValue(StatMap.PROPERTY_THEME, StatMap.THEME_TERRAIN);
+        Config.reload();
+        return true;
+    }
+
+    //! The tiers a ring draws have to stay in order in every theme: unfilled
+    //! below the band, a second lap above it, and the mark above that.
+    //! theOverTierReadsBrighterThanTheBand pins that for the persisted theme,
+    //! so a colour dark enough to invert an ordering would slip past it in
+    //! any other. The per-ring tables must also stay distinguishable, or they
+    //! earn nothing over the single constants they replaced.
+    (:test)
+    function everyThemeKeepsTheTierOrder(logger as Logger) as Boolean {
+        for (var theme = 0; theme < Palette.THEME_COUNT; theme++) {
+            Properties.setValue(StatMap.PROPERTY_THEME, theme);
+            Config.reload();
+
+            for (var ring = 0; ring < StatMap.RINGS; ring++) {
+                var weak = relativeLuminance(Palette.active[ring * 2]);
+                var band = relativeLuminance(Palette.active[ring * 2 + 1]);
+                var over = relativeLuminance(Palette.overOf[ring]);
+                var mark = relativeLuminance(Palette.markerOf[ring]);
+                var where = "theme " + theme + " ring " + ring;
+                Test.assertMessage(weak < band,
+                    where + ": the unfilled tier must sit below the band");
+                Test.assertMessage(band < over,
+                    where + ": a second lap must read brighter than the band");
+                Test.assertMessage(over < mark,
+                    where + ": the mark must outshine the lap it lands on");
+            }
+
+            for (var a = 0; a < StatMap.RINGS; a++) {
+                for (var b = a + 1; b < StatMap.RINGS; b++) {
+                    var pair = "theme " + theme + ": rings " + a + " and " + b;
+                    Test.assertMessage(
+                        Palette.active[a * 2 + 1] != Palette.active[b * 2 + 1],
+                        pair + " share a colour");
+                    Test.assertMessage(
+                        Palette.markerOf[a] != Palette.markerOf[b],
+                        pair + " share a mark colour");
+                    Test.assertMessage(
+                        Palette.overOf[a] != Palette.overOf[b],
+                        pair + " share a second-lap colour");
+                }
+            }
+        }
+        Properties.setValue(StatMap.PROPERTY_THEME, StatMap.THEME_TERRAIN);
+        Config.reload();
+        return true;
+    }
+
     //! Every ring full is the brightest frame the face can draw. If that fits
     //! the budget, no real reading can blank the screen.
     (:test)
@@ -703,24 +901,32 @@ module MatrixTest {
 
     //! Every settings row that shows a value, by index. The rings row is not
     //! here: it opens a sub-menu and carries no value of its own.
-    const MENU_VALUE_ROWS = [0, 1, 2, 4] as Array<Number>;
+    const MENU_VALUE_ROWS = [0, 1, 2, 3, 5] as Array<Number>;
+
+    //! The row the staleness test below drives. Named rather than written as a
+    //! bare index because the two have to move together: the test changes the
+    //! backing setting and then asserts that *this* row followed it, so a row
+    //! inserted above backing turns the test into a check on somebody else's
+    //! sub-label, which passes for the wrong reason or fails for no reason.
+    const MENU_BACKING_ROW = 1;
 
     (:test)
     function settingsMenuRefreshesItsSubLabels(logger as Logger) as Boolean {
         Properties.setValue(StatMap.PROPERTY_BACKING, StatMap.BACKING_OFF);
         Config.reload();
         var menu = new SettingsMenu();
-        var before = subLabelOf(menu, 0);
+        var before = subLabelOf(menu, MENU_BACKING_ROW);
 
         // What a sub-menu does when the user picks a different value.
         Properties.setValue(StatMap.PROPERTY_BACKING, StatMap.BACKING_WHITE);
         Config.reload();
-        Test.assertEqualMessage(subLabelOf(menu, 0), before,
+        Test.assertEqualMessage(subLabelOf(menu, MENU_BACKING_ROW), before,
             "sub-label should still be stale before the menu is shown again");
 
         menu.onShow();
-        logger.debug("was '" + before + "', now '" + subLabelOf(menu, 0) + "'");
-        Test.assertMessage(!subLabelOf(menu, 0).equals(before),
+        logger.debug("was '" + before + "', now '" +
+                     subLabelOf(menu, MENU_BACKING_ROW) + "'");
+        Test.assertMessage(!subLabelOf(menu, MENU_BACKING_ROW).equals(before),
             "onShow must refresh the sub-label to the new setting");
 
         // onShow refreshes rows by index, so inserting a row silently points

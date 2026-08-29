@@ -1,4 +1,10 @@
 <settings xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://developer.garmin.com/downloads/connect-iq/resources.xsd">
+    <setting propertyKey="@Properties.theme" title="@Strings.ThemeTitle" prompt="@Strings.ThemePrompt">
+        <settingConfig type="list">
+            <listEntry value="0">@Strings.ThemeTerrain</listEntry>
+            <listEntry value="1">@Strings.ThemeActivity</listEntry>
+        </settingConfig>
+    </setting>
     <setting propertyKey="@Properties.handBacking" title="@Strings.BackingTitle" prompt="@Strings.BackingPrompt">
         <settingConfig type="list">
             <listEntry value="0">@Strings.BackingOff</listEntry>

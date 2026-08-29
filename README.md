@@ -366,6 +366,34 @@ app. `AppBase.getSettingsView()` provides this (`source/settings/`); watch faces
 normally accept input, and that hook is the sanctioned exception. The same settings appear
 in Garmin Connect or Garmin Express if the face is ever installed from the store.
 
+### Colour theme
+
+Which set of colours the rings carry. Every colour on the face comes from the theme's four —
+the filled band, the dimmed field behind it, the mark, the second lap a ring runs past its
+goal, and the temperature ramp.
+
+| Theme | Ring 1 — outer | Ring 2 | Ring 3 | Ring 4 — inner |
+|---|---|---|---|---|
+| **Terrain** | orchid `#E879F9` | moss `#B8D64B` | ice `#7FD4FF` | rust `#FF6B5B` |
+| **Activity** | gold `#E59A0A` | blue `#1F8FFE` | green `#6DC54F` | red `#FE4646` |
+
+**Activity** is not a palette invented for the face — it is the accent colours *this watch*
+uses, the ones an activity profile picks from. They were read off the device's own artwork
+rather than guessed: each `nwidget_*.png` and `D_list_select_*.png` in
+`~/.Garmin/ConnectIQ/Devices/instinctcrossoveramoled/` is a ramp from black to one accent, so
+the peak-chroma pixel *is* the accent, and the hue agrees to a tenth of a degree across both
+sets of artwork.
+
+Neither order is decorative. Each maximises the CIELAB distance between rings that sit *next
+to* each other — 93 for Terrain, 118 for Activity — because neighbours blurring together, not
+the set average, is what decides whether two rings can be told apart. Activity keeps gold, its
+one awkward colour, at the end of the run with only blue beside it.
+
+Gold got the same test that once rejected an amber for turning brown when dimmed: at the
+unfilled tier it is `#7D5405`, a CIELAB chroma of 47.3, level with orchid's 47.0. Activity is
+also the darker theme — worst-case always-on 4.82% against Terrain's 5.73%, both well inside
+the 10% budget.
+
 ### Ring data
 
 The face has four rings, and **each one is independently assigned to a source**:
@@ -387,8 +415,9 @@ level. Levels are just spans that start at zero. That one shape is why temperatu
 is a genuine range, needs no special case anywhere: a level fills from the origin, a range
 floats between its ends and reads as an arc.
 
-Temperature is the one source drawn on a ramp rather than a flat hue — ice through orchid to
-rust — so the ring reads as a temperature rather than just a length.
+Temperature is the one source drawn on a ramp rather than a flat hue — cold through a middle
+to hot, in the theme's own colours — so the ring reads as a temperature rather than just a
+length. Terrain runs ice through orchid to rust, Activity blue through gold to red.
 
 #### Past the goal — the second lap
 

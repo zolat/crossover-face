@@ -55,9 +55,48 @@ SOURCES = [
 ]
 SOURCE_TEMPERATURE = 4
 
-# Placeholder theme: rings alternate between navy and olive. Mirrors
-# Palette.THEME in Monkey C.
-THEME = [(0xE8, 0x79, 0xF9), (0xB8, 0xD6, 0x4B), (0x7F, 0xD4, 0xFF), (0xFF, 0x6B, 0x5B)]
+# Ring colours per theme, outermost first, and which three of each theme's four
+# the temperature ramp runs through as cold, mid and hot. Mirrors Palette.THEMES
+# and Palette.RAMP_STOPS in Monkey C — flat over there because a const array of
+# arrays comes back empty on the watch, named here because nothing forces it.
+#
+# Terrain is orchid, moss, ice, rust. Activity is the accent colours the watch
+# itself uses, read off the peak-chroma pixel of the device's own swatches in
+# ~/.Garmin/ConnectIQ/Devices/instinctcrossoveramoled/{nwidget,D_list_select}_*.png
+# rather than guessed: gold, blue, green, red.
+#
+# Each theme's order maximises the CIELAB distance between rings that sit next
+# to each other — 93 for Terrain, 118 for Activity — because neighbours blurring
+# together, not the set average, decides whether two rings can be told apart.
+THEMES = {
+    "terrain": [(0xE8, 0x79, 0xF9), (0xB8, 0xD6, 0x4B),
+                (0x7F, 0xD4, 0xFF), (0xFF, 0x6B, 0x5B)],
+    "activity": [(0xE5, 0x9A, 0x0A), (0x1F, 0x8F, 0xFE),
+                 (0x6D, 0xC5, 0x4F), (0xFE, 0x46, 0x46)],
+    # Not a shipping theme: Activity with the watch's *other* blue, #1852E6, so
+    # the choice between the two is made on a rendered face and not on a hex.
+    "activity-navy": [(0xE5, 0x9A, 0x0A), (0x18, 0x52, 0xE6),
+                      (0x6D, 0xC5, 0x4F), (0xFE, 0x46, 0x46)],
+}
+
+RAMP_STOPS = {
+    "terrain": (2, 0, 3),           # ice -> orchid -> rust
+    "activity": (1, 0, 3),          # blue -> gold -> red
+    "activity-navy": (1, 0, 3),
+}
+
+THEME_NAME = "terrain"
+THEME = THEMES[THEME_NAME]
+
+
+def use_theme(name: str) -> None:
+    """Swap the theme every colour here is derived from.
+
+    Same move as the WEAK_ACTIVE sweep in main(): this file mirrors Monkey C
+    module constants, so varying one means assigning to the global.
+    """
+    globals()["THEME_NAME"] = name
+    globals()["THEME"] = THEMES[name]
 
 # Mirrors Palette.MARKER: the current temperature called out on the range it
 # sits in. Carrying rather more than half its own band's colour — what makes a
@@ -149,10 +188,16 @@ def mix(a, b, t):
 
 
 def temperature_colour(fraction: float):
-    """Ice -> orchid -> rust, mirroring Palette.build()."""
+    """Cold -> mid -> hot through the theme's own colours.
+
+    Mirrors Palette.build(), including that the stops are indices into the
+    theme rather than colours of their own: a ramp stop *is* a ring colour, and
+    writing the value a second time is how the two drift apart.
+    """
+    cold, mid, hot = (THEME[i] for i in RAMP_STOPS[THEME_NAME])
     if fraction <= 0.5:
-        return mix(THEME[2], THEME[0], fraction * 2.0)
-    return mix(THEME[0], THEME[3], (fraction - 0.5) * 2.0)
+        return mix(cold, mid, fraction * 2.0)
+    return mix(mid, hot, (fraction - 0.5) * 2.0)
 
 # Dot shape. A square is the densest; a cross lights 9 of the 25 pixels a
 # square would, which reads as finer texture and costs proportionally less
@@ -548,7 +593,42 @@ def main(outdir: str = "build/mockups") -> int:
                   "lap, dot = the waterline").save(path)
     written.append(path)
 
-    # 9. Burn-in drift: how long any one pixel stays lit over a full cycle.
+    # 9. Themes — the same face in each set of ring colours, in both modes.
+    panels = []
+    for name, label in (("terrain", "TERRAIN"), ("activity", "ACTIVITY")):
+        use_theme(name)
+        for mode, always_on in (("awake", False), ("always-on", True)):
+            face = render(values, always_on=always_on)
+            panels.append((f"{label} {mode}   lum {measure(face) * 100:.2f}%",
+                           composite(face)))
+    use_theme("terrain")
+    path = os.path.join(outdir, "09-themes.png")
+    sheet(panels, "Colour themes — Terrain and Activity, awake and "
+                  "always-on").save(path)
+    written.append(path)
+
+    # 10. Which blue Activity should carry. The watch ships two, and the blue
+    #     is also the ramp's cold stop, so the weather face is shown beside the
+    #     plain one — the two hues separate most at the cold end of the ramp.
+    panels = []
+    for name, label in (("activity", "LIGHT BLUE #1F8FFE"),
+                        ("activity-navy", "NAVY #1852E6")):
+        use_theme(name)
+        plain = render(values)
+        panels.append((f"{label}   lum {measure(plain) * 100:.2f}%",
+                       composite(plain)))
+        weather = render(weather_spans, assign=weather_assign,
+                         marks=weather_marks)
+        panels.append((f"{label} / temp ramp   "
+                       f"lum {measure(weather) * 100:.2f}%",
+                       composite(weather)))
+    use_theme("terrain")
+    path = os.path.join(outdir, "10-activity-blue.png")
+    sheet(panels, "Activity's blue — the watch ships two, and it is the "
+                  "temperature ramp's cold stop").save(path)
+    written.append(path)
+
+    # 11. Burn-in drift: how long any one pixel stays lit over a full cycle.
     phases = [(-2, -2), (3, 3), (3, -2), (-2, 3)]
     duty = {}
     for dx, dy in phases:

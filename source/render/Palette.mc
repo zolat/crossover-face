@@ -2,7 +2,7 @@ import Toybox.Lang;
 
 //! Colour for every dot state, in both power modes.
 //!
-//! One colour per ring, from a fixed theme. The filled portion carries the
+//! One colour per ring, from the theme in force. The filled portion carries the
 //! colour at full read; the unfilled portion is the same colour dimmed enough
 //! to tint the field without reading as lit. Awake and always-on share their
 //! filled colours and differ only in that unfilled tier, which is what keeps
@@ -14,8 +14,16 @@ import Toybox.Lang;
 //! Every table is indexed by ring * 2, plus 1 when lit.
 module Palette {
 
-    //! Terrain: orchid, moss, ice, rust. Bright and saturated, because tuned in
-    //! a dark room the face was legible and outdoors in daylight it was not.
+    //! Ring colours for every theme, flat: THEMES[theme * THEME_COLOURS + n].
+    //!
+    //! Flat rather than an array of arrays, for the same reason DotGrid.ARMS
+    //! is flat: a const array of arrays is a step further than Monkey C's
+    //! const is meant to cover, and nesting it is the kind of thing that
+    //! resolves in the simulator and comes back empty on the watch.
+    //!
+    //! **Terrain** — orchid, moss, ice, rust. Bright and saturated, because
+    //! tuned in a dark room the face was legible and outdoors in daylight it
+    //! was not.
     //!
     //! Orchid replaces an amber that looked right at full strength and turned
     //! brown the moment it was dimmed for the unfilled tier. That tier covers
@@ -24,17 +32,41 @@ module Palette {
     //! chromatic. Orchid holds a CIELAB chroma of 47 when dimmed, against
     //! amber's 39 of brown.
     //!
-    //! The order is not decorative: it is the arrangement that maximises the
-    //! distance between rings which sit *next to* each other, 93 here against
-    //! 78 for the worst arrangement. Neighbours blurring together, not the set
-    //! average, is what decides whether two rings can be told apart.
+    //! **Activity** — gold, blue, green, red: the accent colours this watch
+    //! itself uses, read off the device's own artwork rather than guessed.
+    //! Each nwidget_*.png and D_list_select_*.png in the installed device
+    //! directory is a ramp from black to one accent, so the peak-chroma pixel
+    //! *is* the accent — and the hue agrees to a tenth of a degree across both
+    //! sets, which is what makes these the real values and not one image's
+    //! artefact.
+    //!
+    //! Gold is the rejected amber's cousin, so it was held to the same test:
+    //! dimmed to the unfilled tier it is #7D5405, a CIELAB chroma of 47.3 —
+    //! level with orchid's 47.0, and every Activity colour dims to a chroma
+    //! inside the band Terrain already occupies. Activity is also the darker
+    //! theme, at 84% of Terrain's luminance weighted by dots per ring, so it
+    //! costs the burn-in budget nothing.
+    //!
+    //! The order is decorative in neither theme: it is the arrangement that
+    //! maximises the distance between rings which sit *next to* each other —
+    //! 93 for Terrain against 78 for its worst arrangement, and 118 for
+    //! Activity. Neighbours blurring together, not the set average, is what
+    //! decides whether two rings can be told apart. Activity keeps gold, its
+    //! one awkward colour at 59 from red and 71 from green, at the end of the
+    //! run with only blue beside it.
     //!
     //! Ring 1 is the outermost.
-    const THEME = [
-        0xE879F9,   //! orchid
-        0xB8D64B,   //! moss
-        0x7FD4FF,   //! ice
-        0xFF6B5B    //! rust
+    const THEME_COLOURS = 4;
+    const THEME_COUNT = 2;
+    const THEMES = [
+        0xE879F9,   //! Terrain:  orchid
+        0xB8D64B,   //!           moss
+        0x7FD4FF,   //!           ice
+        0xFF6B5B,   //!           rust
+        0xE59A0A,   //! Activity: gold
+        0x1F8FFE,   //!           blue
+        0x6DC54F,   //!           green
+        0xFE4646    //!           red
     ] as Array<Number>;
 
     const WEAK_ACTIVE = 0.55;
@@ -127,10 +159,26 @@ module Palette {
     const BACKING_DARK = 0x101010;
 
     //! Temperature is drawn on a ramp so its band reads as a temperature and
-    //! not just a length. Ice through orchid to rust — cold to hot, and every
-    //! stop is a theme colour, so it stays inside the palette.
+    //! not just a length. Cold through a middle to hot, and every stop is one
+    //! of the theme's own four colours, so it stays inside the palette.
     //! Precomputed: working it out per dot costs too much inside the frame.
     const RAMP_STEPS = 32;
+
+    //! Which of a theme's colours the ramp runs through, flat and in cold,
+    //! mid, hot order: RAMP_STOPS[theme * RAMP_POINTS + n].
+    //!
+    //! Indices into the theme rather than colours of their own, because a ramp
+    //! stop *is* a ring colour and writing the value a second time is how the
+    //! two drift apart. Named per theme rather than fixed at 2, 0, 3, because
+    //! which slot holds the cold hue falls out of the ring ordering — and that
+    //! ordering answers to neighbour contrast, not to keeping the ramp's
+    //! indices where they were. Terrain runs ice -> orchid -> rust, Activity
+    //! blue -> gold -> red.
+    const RAMP_POINTS = 3;
+    const RAMP_STOPS = [
+        2, 0, 3,    //! Terrain
+        1, 0, 3     //! Activity
+    ] as Array<Number>;
 
     var active as Array<Number> = [] as Array<Number>;
     var alwaysOn as Array<Number> = [] as Array<Number>;
@@ -150,6 +198,12 @@ module Palette {
     var rampActive as Array<Number> = [] as Array<Number>;
     var rampAlwaysOn as Array<Number> = [] as Array<Number>;
 
+    //! One colour of the theme in force, by its index within that theme.
+    function themeColour(index as Number) as Number {
+        return THEMES[(StatMap.theme * THEME_COLOURS) +
+                      (index % THEME_COLOURS)];
+    }
+
     function build() as Void {
         var awake = [] as Array<Number>;
         var asleep = [] as Array<Number>;
@@ -157,7 +211,7 @@ module Palette {
         var marks = [] as Array<Number>;
         var beyond = [] as Array<Number>;
         for (var ring = 0; ring < StatMap.RINGS; ring++) {
-            var colour = THEME[ring % THEME.size()];
+            var colour = themeColour(ring);
             marks.add(mix(MARKER, colour, MARKER_TINT));
             beyond.add(mix(MARKER, colour, OVER_TINT));
             var lifted = scale(colour, LIFT);
@@ -181,11 +235,17 @@ module Palette {
 
         var ramp = [] as Array<Number>;
         var rampLifted = [] as Array<Number>;
+        // Hoisted: the stops are fixed for the whole ramp, so looking them up
+        // per step would pay for the indirection 32 times over for nothing.
+        var stops = StatMap.theme * RAMP_POINTS;
+        var cold = themeColour(RAMP_STOPS[stops]);
+        var mid = themeColour(RAMP_STOPS[stops + 1]);
+        var hot = themeColour(RAMP_STOPS[stops + 2]);
         for (var step = 0; step < RAMP_STEPS; step++) {
             var along = step.toFloat() / (RAMP_STEPS - 1);
             var colour = (along <= 0.5)
-                ? mix(THEME[2], THEME[0], along * 2.0)            // ice -> orchid
-                : mix(THEME[0], THEME[3], (along - 0.5) * 2.0);   // orchid -> rust
+                ? mix(cold, mid, along * 2.0)
+                : mix(mid, hot, (along - 0.5) * 2.0);
             ramp.add(colour);
             rampLifted.add(scale(colour, LIFT));
         }

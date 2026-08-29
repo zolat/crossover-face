@@ -147,9 +147,13 @@ than the flash on a face with a watchdog history. See the comment on `install:`.
 
 ### Config.reload() ordering is load-bearing
 
-`StatMap.load()` → `Palette.build()` → `DotGrid.build()`. Palette hues depend on the ring
-assignments, so one without the other draws last session's colours. Anything that changes a
-setting must go through `Config.reload()`, not a partial refresh. Nothing settable moves the
+`StatMap.load()` → `Palette.build()` → `DotGrid.build()`. Which theme the rings carry is
+itself a setting, so a load without a rebuild draws last session's colours. Anything that
+changes a setting must go through `Config.reload()`, not a partial refresh.
+
+An older comment here claimed the hues came from each ring's *source* assignment. They never
+did — `Palette.build()` reads `StatMap.RINGS`, the count, and has never read `StatMap.rings`.
+The ordering is real; that reason for it was not. Nothing settable moves the
 lattice any more, so `DotGrid.invalidate()` is now a safety net rather than a requirement —
 but the rebuild it schedules must still land in `onLayout`, never `onStart`.
 
@@ -174,8 +178,8 @@ implementations together so they cannot drift silently.
 
 Stored values are **list indices**, so `resources/properties.xml`, `resources/settings/settings.xml`,
 `resources/strings/strings.xml`, the enums in `StatMap`/`Source`, and the label arrays in
-`source/settings/SettingsMenu.mc` all have to agree. Seven properties today: `handBacking`,
-`alwaysOnFill`, `dotRotation`, `ring1`–`ring4`.
+`source/settings/SettingsMenu.mc` all have to agree. Eight properties today: `theme`,
+`handBacking`, `alwaysOnFill`, `dotRotation`, `ring1`–`ring4`.
 
 `SettingsMenu.onShow()` refreshes sub-labels **by row index**, and `getItem()` on a wrong
 index returns null rather than throwing — so adding or removing a row silently stops
@@ -192,6 +196,31 @@ To change a setting in the simulator: **File → Edit Persistent Storage → Edi
 Application.Properties**. Persisted values beat `properties.xml`, so a stale one survives a
 rebuild until **Reset All App Data**.
 
+### A theme is four colours and three ramp stops
+
+`Palette.THEMES` holds every theme's ring colours **flat** — `theme * THEME_COLOURS + n` —
+for the reason `DotGrid.ARMS` is flat: a const array of arrays is further than Monkey C's
+`const` is meant to go, and nesting it resolves in the simulator and comes back empty on the
+watch. `RAMP_STOPS` is flat for the same reason.
+
+The temperature ramp used to hard-code `THEME[2] → THEME[0] → THEME[3]`. Those indices carried
+meaning — cold, mid, hot — not position, so each theme now names its own three as
+`RAMP_STOPS[theme * RAMP_POINTS + n]`. They are **indices into the theme, not colours**: a ramp
+stop *is* a ring colour, and writing the value a second time is how the two drift apart. That
+frees the ring order to answer only to its real constraint, which is the CIELAB distance
+between rings that sit next to each other (93 for Terrain, 118 for Activity).
+
+Adding a theme means four things at once: the colours, its ramp stops, the range
+`StatMap.load()` clamps `theme` to, and a label in `SettingsMenu.THEME_LABELS`. Miss the clamp
+and the theme is simply unreachable, with no other symptom — `themeTablesCoverEveryTheme` is
+the guard. `everyThemeFitsTheAlwaysOnBudget` and `everyThemeKeepsTheTierOrder` walk *every*
+theme, because every other luminance test measures only whichever one is persisted.
+
+Activity's colours are not invented: they are the accent colours the watch itself uses, read
+off the peak-chroma pixel of the device's own `nwidget_*.png` and `D_list_select_*.png`
+swatches, whose hues agree to a tenth of a degree across both sets. Activity is the darker
+theme throughout: worst-case always-on 4.82% against Terrain's 5.73%.
+
 ### Dot rotation is a render choice, not a cached one
 
 `StatMap.rotation` decides only whether `MatrixRenderer` indexes `DotGrid.armOf` per dot or
@@ -204,7 +233,9 @@ guard. Every orientation lights nine pixels, so neither setting moves the lumina
 ### The 10% luminance budget
 
 Garmin blanks an always-on face that exceeds 10% of screen luminance. Current design sits at
-~4.8% active / ~4.6% always-on, ~5.7% worst case. `alwaysOnWorstCaseFitsBudget` asserts it in the
+~4.8% active / ~4.6% always-on, ~5.7% worst case on Terrain, and lower on every other theme —
+`everyThemeFitsTheAlwaysOnBudget` is what checks the others, since
+`alwaysOnWorstCaseFitsBudget` only ever measures the persisted one. It asserts it in the
 test suite; `tools/luminance.py` and the simulator's **File → View Screen Heat Map** measure it.
 
 Awake and always-on share their *filled* colours and differ only in the unfilled tier
