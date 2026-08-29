@@ -102,12 +102,20 @@ C compiler fails on them, which bites people whose iCloud folder is named
 | Family | `round-390x390` |
 | Connect IQ | 6.0.2 |
 | Input | buttons only — `enter, up, menu, down, esc`. **No touch.** |
-| Watch-face memory | 131,072 bytes |
+| Watch-face memory | 131,072 bytes — **runtime**, not `.prg` size (see below) |
 | Part number | 006-B4678-00 |
 
 Reference data lives in `~/.Garmin/ConnectIQ/Devices/instinctcrossoveramoled/`
 (`compiler.json`, `simulator.json`, `device.png`) and the SDK ships a full page at
 `doc/docs/Device_Reference/instinctcrossoveramoled.html`.
+
+**That memory figure is a runtime limit, and comparing a built `.prg` against it is a trap.**
+`monkeyc` does not enforce it when building — a padded watchface `.prg` of 258KB compiles
+fine. And the `.prg` you push is a *debug* build at ~129KB where the release equivalent is
+~25KB, the entire difference being stripped-out symbol tables rather than code. What the face
+really uses is **46k of the 123k it is granted, about 37%**, which `Diagnostics` now reports
+as `used of total` on the settings screen rather than as free bytes. The dot cache is most of
+it: 22,240 bytes, five bytes per slot across four arrays of one entry per dot.
 
 ### Analogue hands
 

@@ -27,7 +27,7 @@ SIMULATOR := $(SDK)bin/connectiq
 
 all: build
 
-## Debug build for the simulator.
+## Debug build — for the simulator, and for the watch too. See install:.
 build:
 	@mkdir -p bin
 	"$(MONKEYC)" -f monkey.jungle -o $(PRG) -y "$(KEY)" -d $(DEVICE) -w
@@ -95,6 +95,21 @@ sim: build
 ## Get the built face onto the watch.
 ## Modern Garmin devices are MTP-only — macOS cannot mount them, so there is
 ## nothing to cp to. Older mass-storage devices still work directly.
+##
+## This ships the DEBUG build, deliberately — it depends on build:, not on a
+## release compile, and that is a choice rather than an oversight.
+##
+## A debug .prg is 129KB against a release one's 25KB, and the whole difference
+## is symbol tables: monkeyc -r is documented as "strip debug information", and
+## stripping them is what turns a CIQ_LOG stack trace from bare PC addresses
+## into file, line and function. This face has tripped the watchdog before —
+## CIQ_LOG.BAK is one, symbolicated into StatMap.ringFor — so those names are
+## worth far more than the flash.
+##
+## Nothing is at risk from the size. The 131,072-byte watch-face limit is a
+## runtime one: monkeyc will build a 258KB watchface .prg without complaint
+## (measured), and the face itself runs at about a third of that limit. Only
+## package: needs -r, because the store wants the small artefact.
 install: build
 	@apps=$$(ls -d /Volumes/*/GARMIN/APPS 2>/dev/null | head -1); \
 	if [ -n "$$apps" ]; then \
