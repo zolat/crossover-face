@@ -2608,23 +2608,26 @@ module MatrixTest {
 
     // --- the seconds source --------------------------------------------------
 
-    //! The sweep is the minute expressed as a level: 0.0 at :00, climbing to
-    //! 59/60, and back to zero on the next minute rather than past 1.0. A span
-    //! end above 1.0 would not simply saturate — it would light a ring's dots
-    //! in the wrong order — so the reset is asserted, not assumed.
+    //! The sweep is the minute expressed as a level, counting the second in
+    //! progress: 1/60 at :00, one stop a tick, and exactly 1.0 at :59. It never
+    //! goes *past* 1.0 — a span end above a full turn would not simply saturate,
+    //! it would light a ring's dots in the wrong order — so both the ceiling and
+    //! the rollover are asserted rather than assumed.
     (:test)
     function theSweepFillsItsMinuteAndResets(logger as Logger) as Boolean {
-        Test.assertEqualMessage(ClockData.fraction(0), 0.0,
-            ":00 must sit at the ring's origin");
+        var stopSize = 1.0 / 60.0;
+        Test.assertMessage((ClockData.fraction(0) - stopSize).abs() < 0.001,
+            ":00 must light the first stop, not sit dark on the origin");
         for (var second = 0; second < 60; second += 15) {
-            var expected = second / 60.0;
+            var expected = (second + 1) / 60.0;
             Test.assertMessage((ClockData.fraction(second) - expected).abs() < 0.001,
                 "each second must land on its own stop around the ring");
         }
-        Test.assertMessage(ClockData.fraction(59) < 1.0,
-            "the sweep must never reach a full turn, or it would wrap");
-        Test.assertEqualMessage(ClockData.fraction(60), 0.0,
-            "the minute rolling over must put the sweep back at the origin");
+        Test.assertEqualMessage(ClockData.fraction(59), 1.0,
+            "the last second of the minute must complete the turn — a sweep " +
+            "that stops at 59/60 leaves the stop before twelve permanently dark");
+        Test.assertMessage((ClockData.fraction(60) - stopSize).abs() < 0.001,
+            "the minute rolling over must put the sweep back on the first stop");
 
         // Whatever the clock says right now, the reading is a level pinned to
         // the origin and landing on one of the sixty stops.
@@ -2635,8 +2638,66 @@ module MatrixTest {
         logger.debug("the sweep is at " + live[1] + ", stop " + stop);
         Test.assertMessage((stop - (stop + 0.5).toNumber()).abs() < 0.001,
             "the sweep must sit on a whole second, not between two");
-        Test.assertMessage(live[1] >= 0.0 && live[1] < 1.0,
+        Test.assertMessage(live[1] > 0.0 && live[1] <= 1.0,
             "the sweep must stay inside the ring");
+        return true;
+    }
+
+    //! How many dots of each ring a span leaves dark. The seconds ring is the
+    //! only source whose fill is expected to close, so the count is what the
+    //! test below reads rather than a lit/dark pair.
+    function darkPerRing(span as Array<Float>) as Array<Number> {
+        var spans = new [StatMap.RINGS] as Array<Array<Float> >;
+        var dark = new [StatMap.RINGS] as Array<Number>;
+        for (var i = 0; i < StatMap.RINGS; i++) {
+            spans[i] = span;
+            dark[i] = 0;
+        }
+        for (var row = 0; row < DotGrid.ROWS; row++) {
+            var dy = DotGrid.offsetAt(row);
+            for (var col = 0; col < DotGrid.COLS; col++) {
+                var dx = DotGrid.offsetAt(col);
+                if (!DotGrid.contains(dx, dy)) {
+                    continue;
+                }
+                var slot = StatMap.classify(dx, dy, spans);
+                if (slot % 2 == 0) {
+                    dark[slot / 2] += 1;
+                }
+            }
+        }
+        return dark;
+    }
+
+    //! The reported bug: the sweep climbed all minute and never actually got
+    //! there. A span end of 59/60 stops short of the outermost dots, which sit
+    //! as far round as 0.9958 — so eight dots on ring 0 and one on ring 3 stayed
+    //! dark at every second of every minute, and the leading edge jumped back
+    //! from just before twelve rather than closing on it.
+    //!
+    //! spanEndpoints already proves a hard-coded [0.0, 1.0] lights everything.
+    //! What was missing is that the seconds *source* produces such a span, which
+    //! is the half that regressed. :58 is asserted alongside so this cannot pass
+    //! against a sweep that is simply always full.
+    (:test)
+    function theSweepClosesOnTheLastSecond(logger as Logger) as Boolean {
+        var last = [0.0, ClockData.fraction(59)] as Array<Float>;
+        var dark = darkPerRing(last);
+        for (var ring = 0; ring < StatMap.RINGS; ring++) {
+            Test.assertEqualMessage(dark[ring], 0,
+                "ring " + ring + " left " + dark[ring] + " dots dark at :59 — " +
+                "the sweep must close its turn on the last second");
+        }
+
+        var almost = darkPerRing([0.0, ClockData.fraction(58)] as Array<Float>);
+        var short = 0;
+        for (var ring = 0; ring < StatMap.RINGS; ring++) {
+            short += almost[ring];
+        }
+        logger.debug("at :58 the sweep still leaves " + short + " dots dark");
+        Test.assertMessage(short > 0,
+            "the second before last must still be short of a full turn, or " +
+            "this test would pass against a sweep that never moves");
         return true;
     }
 
