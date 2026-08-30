@@ -244,7 +244,9 @@ clears the screen and redraws everything, and a *ring* print per ring (span, mar
 flag) whose change redraws only that ring. Awake and still, nothing is drawn at all.
 
 `MatrixRenderer.draw` therefore takes a dirty set and a `clears` flag, and a clean ring is
-not walked. Two rules make partial redraw safe and neither is optional:
+not walked. **A dirty ring is not fully redrawn either**: it is walked, and only the dots
+whose lit-ness actually changed are drawn — measured at 7ms against 24ms, 20 dots against
+436, on a seconds ring. Three rules make partial redraw safe and none is optional:
 
 - **every change is drawn `HOLD` (2) consecutive draws.** Not drawing is safe whatever the
   device does with its buffers; drawing *part* of a frame is only safe if the Dc handed to
@@ -259,10 +261,24 @@ not walked. Two rules make partial redraw safe and neither is optional:
   Holding it was measured at default rings — where the repair is nearly every draw there
   is — and cost the skip rate 82% → 68% for no visible difference.
 
+- **a delta is measured against the *two* spans a ring was last drawn with**, and may
+  differ by span alone. Two, because the buffer this draw lands in was written two draws
+  ago, so a dot is repainted when it differs from *either* remembered span — that set is
+  correct for whichever buffer it is, with nothing to reason about. And span alone, because
+  both colours, the over flag, the ramp and the backing repaint the ring wholesale; they are
+  compared as **values**, not inferred from the settings that move them, so a cause nobody
+  anticipated cannot slip through. A ring whose colours changed is repainted in full
+  **twice**, since both buffers hold the old tiers. `theDeltaCoversBothBuffersNotJustTheLastDraw`
+  is the guard that matters here: a delta taken against the last draw alone looks right on
+  screen and leaves every other frame a step behind.
+
 A mark is a solid block and a dot is a cross, so repainting a ring covers only 9 of the 25
 pixels a mark occupies. `MatrixRenderer` blacks the cell before repainting —
 unconditionally, since the ring is being repainted anyway and that needs no reasoning about
-which frame a move landed on. It keeps **two** slots, `drawnMark` and `previousMark`, and
+which frame a move landed on. Under a delta redraw the erase needs one more thing: the cell it blacks is the
+whole of that dot, and a delta will not repaint it because its tier did not change — so the
+rubbed-out cells are forced back into the paint set, or a moved mark leaves a hole exactly
+where the reading was. It keeps **two** slots, `drawnMark` and `previousMark`, and
 blacks both: with one, a mark moving P→Q rubs out P on the first held draw and Q on the
 second, so the buffer the second draw lands in keeps P's sixteen stray pixels under a
 nine-pixel cross. That is the one place where `HOLD` alone is not enough.

@@ -1,6 +1,6 @@
 # Roadmap
 
-**Current:** done — Phase 4 measured the remaining radical levers and picked one.
+**Current:** done — Phase 5 landed the lever Phase 4 picked.
 
 - [x] Phase 0 — baseline the frame cost on a fresh simulator
 - [x] Phase 1a — cost the skipped frame, which nothing measured before
@@ -11,6 +11,7 @@
 - [x] Phase 4 — cost the off-screen mirror, the palette swap, and the native
       draw, so the next optimisation is chosen on numbers rather than on the
       claim in a comment
+- [x] Phase 5 — draw only the dots that changed, not the whole ring
 
 Plans: `~/.claude/plans/can-you-review-for-stateless-puffin.md`,
 `~/.claude/plans/are-there-any-more-staged-piglet.md`
@@ -266,3 +267,76 @@ reported as 5200ms, then 1171ms, then 22688ms depending on when we stopped looki
   reach the other, and a run kept coming up on the defaults however the file was written.
   `CLAUDE.md` says the face and the test build share one file; that is not what this
   checkout does, and the spike pinned the ring assignment in the build to sidestep it.
+
+---
+
+# Phase 5: draw only the dots that changed (complete)
+
+**Current:** done — 7ms against 24ms on the frame class that dominates.
+
+Phase 4's one actionable number was that the two `drawLine` calls per dot are ~55% of a
+drawn frame. A dirty ring repainted all ~280 of its dots; between one draw and the next a
+seconds ring moves its edge about five. So the ring is still *walked* — the compare scan is
+the cheap half — and only the dots whose lit-ness changed are drawn.
+
+## The numbers
+
+Same-load A/B out of one binary, leg picked per drawn frame, seconds + temperature:
+
+| frame | delta redraw | whole ring |
+|---|---|---|
+| partial | **7ms**, 20 dots, n=134 | 24ms, 436 dots, n=112 |
+| repair  | 67ms, 1112 dots, n=30  | 65ms, 1112 dots, n=23 |
+
+The repair legs run **identical code** — a delta is ruled out when the screen has just been
+blacked — so their 3% spread is this run's noise floor, and the partial row is a 3.4x cut
+that sits well outside it.
+
+Defaults re-measured because the rule here says to when per-dot work is added, and this
+adds a boolean test per dot: **64ms avg / 116 worst / 82% skipped**, against the 70ms / 94 /
+81% in the Phase 3 table. In family, and on the slack side of it. That row has no partial
+frames at all, which is not a sampling gap: at default rings the gate skips ~80% of frames
+and `sinceClear` counts skips, so nearly every draw is the periodic repair. Delta redraw
+cannot help there, and the point of the row is that it does not hurt.
+
+## What makes it correct
+
+Two remembered spans per ring, not one — the same shape as `drawnMark`/`previousMark` and
+for the same reason. A partial draw is only correct in the buffer it lands in, and that
+buffer was written two draws ago, so a dot is repainted when it differs from *either*
+remembered span. That set is right for whichever buffer this draw is for without having to
+know which one it is.
+
+A delta may differ by span and nothing else. The two colours, the over flag, the ramp flag
+and the backing are compared as **values** rather than inferred from the settings that move
+them — power mode, theme, a ring reassignment — so a cause nobody thought of cannot slip
+through. A ring whose key changed is repainted in full twice, because both buffers hold the
+old tiers.
+
+The mark erase blacks a whole cell, which is the whole of that dot. A full repaint used to
+put the cross back as a matter of course and a delta will not, because that dot's tier did
+not change — so the rubbed-out cells are forced back into the paint set.
+
+Five tests drive the real renderer into a real Dc. The delta count is asserted against
+`StatMap.isLit` as an oracle rather than a magic number (11 of 224 for a 5% span move), and
+`theDeltaCoversBothBuffersNotJustTheLastDraw` measured 45 dots where the previous draw alone
+would have given 23 — the failure it guards against looks right on screen and leaves every
+other frame a step behind.
+
+## Left on the table
+
+- **The two-buffer assumption is now load-bearing in a second place.** `HOLD = 2` already
+  assumes the Dc handed to `onUpdate` is at most double-buffered; delta redraw depends on
+  the same fact, and gets a worse failure if it is wrong — a stale ring rather than a mark
+  ghost. The simulator cannot answer it, and this remains the on-watch check Phase 3 left
+  open. Unlike Phase 4's spike, this build *is* a wearable face, so `make install` and a
+  minute of watching would settle it whenever the watch is free.
+- **The scan is now the floor.** Delta redraw removed the drawing but kept the ~280-dot
+  walk that finds the changed dots. Indexing each ring by position would let it jump
+  straight to the arc that moved and skip the scan — worth roughly another 5ms of the 7,
+  at the cost of one more per-dot array (~5.5KB against the ~34KB of headroom
+  `theDotCacheFitsItsShareOfMemory` allows). Unmeasured; it is the obvious next phase.
+- **`setPalette` is still standing**, at ~20ms flat with no dot loop at all. That is now
+  *worse* than delta redraw on a partial frame and better on a repair, so if it is ever
+  taken it is for the repair frame, and it still costs the fill-edge quantisation Phase 4
+  described.
