@@ -10,7 +10,8 @@ const THEME_LABELS = [
     Rez.Strings.ThemeActivity,
     Rez.Strings.ThemeFrost,
     Rez.Strings.ThemeLagoon,
-    Rez.Strings.ThemeNocturne
+    Rez.Strings.ThemeNocturne,
+    Rez.Strings.ThemeAlpinist
 ] as Array<ResourceId>;
 
 //! Source names, in Source.Kind order — every value, including the retired

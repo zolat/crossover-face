@@ -85,6 +85,13 @@ THEMES = {
     "frost": [(0x5C, 0xD9, 0xF0), (0xF4, 0x5B, 0xD8)] * 2,
     "lagoon": [(0x2F, 0xD9, 0xC5), (0xE5, 0x9A, 0x0A)] * 2,
     "nocturne": [(0x8E, 0x7B, 0xFF), (0xFF, 0x6B, 0x5B)] * 2,
+    # After the Seiko Alpinist: a dark sunburst green dial under gold indices.
+    # Not transcribed -- that dial is a surface lit from outside and this face
+    # emits its own light on black, so the dial's ~#1E3A2F falls below the
+    # unfilled tier and is not there at all. The relationship carries over,
+    # the values do not. See the Alpinist note in Palette.mc for what the
+    # green and gold had to give up to separate at all.
+    "alpinist": [(0x44, 0xC2, 0x65), (0xFF, 0x99, 0x00)] * 2,
 }
 
 # Which three of a theme's four slots the temperature ramp runs through, as
@@ -100,6 +107,7 @@ RAMP_STOPS = {
     "frost": (0, RAMP_LINEAR, 1),      # cyan -> magenta
     "lagoon": (0, RAMP_LINEAR, 1),     # teal -> gold
     "nocturne": (0, RAMP_LINEAR, 1),   # indigo -> rust
+    "alpinist": (0, RAMP_LINEAR, 1),   # green -> gold
 }
 
 THEME_NAME = "terrain"
@@ -662,7 +670,7 @@ def main(outdir: str = "build/mockups") -> int:
     #     Ember (amber + rose) was rendered and dropped: its ramp was the best
     #     of the set but its rings only reached 70.
     panels = []
-    for name in ("frost", "lagoon", "nocturne"):
+    for name in ("frost", "lagoon", "nocturne", "alpinist"):
         use_theme(name)
         for mode, always_on in (("awake", False), ("always-on", True)):
             face = render(values, always_on=always_on)

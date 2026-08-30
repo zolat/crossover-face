@@ -413,10 +413,10 @@ and the theme is simply unreachable, with no other symptom — `themeTablesCover
 the guard. `everyThemeFitsTheAlwaysOnBudget` and `everyThemeKeepsTheTierOrder` walk *every*
 theme, because every other luminance test measures only whichever one is persisted.
 
-**Four slots, but not necessarily four colours.** Frost, Lagoon and Nocturne are duotones:
-two hues alternating, so slots 0 and 2 hold the same value and so do 1 and 3. Rings 1 and 3
-never touch, so a repeat costs no legibility — and alternating makes *every* neighbour a hue
-flip rather than a hue step, which is why the duotones measure 99–103 against Terrain's 93.
+**Four slots, but not necessarily four colours.** Frost, Lagoon, Nocturne and Alpinist are
+duotones: two hues alternating, so slots 0 and 2 hold the same value and so do 1 and 3. Rings
+1 and 3 never touch, so a repeat costs no legibility — and alternating makes *every* neighbour
+a hue flip rather than a hue step, which is why the duotones measure 94–103 against Terrain's 93.
 `everyThemeKeepsTheTierOrder` therefore compares **neighbours only**; it used to compare every
 pair, which a duotone fails by design.
 
@@ -436,6 +436,13 @@ Two things about that are counterintuitive and were both settled by measurement:
   stops, and `Palette.build()` substitutes the midpoint. Pairs whose blend goes grey are
   therefore unusable however well their rings separate — which is what kept several
   better-contrasting pairs out.
+
+Alpinist is the one worth reading `Palette.mc` about before touching. Green and gold sit close
+on the wheel, so it is the hardest duotone to separate and the only one that had to leave its
+source material to do it: the Seiko dial's own green puts the unfilled tier at a relative
+luminance of 0.012, invisible on a face that emits rather than reflects. Adding the dial's
+cream lume as a third colour makes it worse, not better — cream is bright and nearly
+achromatic, so it separates from nothing and drops the worst neighbour pair to 52.
 
 Activity's colours are not invented: they are the accent colours the watch itself uses, read
 off the peak-chroma pixel of the device's own `nwidget_*.png` and `D_list_select_*.png`
