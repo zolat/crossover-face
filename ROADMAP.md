@@ -1,6 +1,6 @@
 # Roadmap
 
-**Current:** done — the per-ring gate has landed and is measured.
+**Current:** done — Phase 4 measured the remaining radical levers and picked one.
 
 - [x] Phase 0 — baseline the frame cost on a fresh simulator
 - [x] Phase 1a — cost the skipped frame, which nothing measured before
@@ -8,8 +8,12 @@
 - [x] Phase 2a — memoise DotGrid.markedDot()
 - [x] Phase 3 — redraw only the rings that changed
 - [~] Phase 2b — dot-loop micro-hoists; not taken, see below
+- [x] Phase 4 — cost the off-screen mirror, the palette swap, and the native
+      draw, so the next optimisation is chosen on numbers rather than on the
+      claim in a comment
 
-Plan: `~/.claude/plans/can-you-review-for-stateless-puffin.md`
+Plans: `~/.claude/plans/can-you-review-for-stateless-puffin.md`,
+`~/.claude/plans/are-there-any-more-staged-piglet.md`
 
 ## What the measurements settled
 
@@ -105,3 +109,160 @@ Plan: `~/.claude/plans/is-the-ciq-simulator-cuddly-kahan.md`
 - Only whole-number settings are handled — every property this face has is a list.
 - One instance per checkout. Two sessions in the *same* checkout still share `bin/`,
   so they would race on build output rather than on the simulator.
+
+---
+
+# Phase 4: what the remaining radical levers actually cost (complete)
+
+**Current:** done — delta redraw is the recommendation; the off-screen mirror is dead.
+
+The question was whether anything *radical* was left after the per-ring gate, and two
+candidates could not be settled by reasoning: an off-screen mirror the field is rendered
+into and blitted from, and a palette-indexed buffer whose colours are swapped per frame
+instead of its pixels being redrawn. Both turn on numbers nobody here had measured.
+
+## Method
+
+Five legs, chosen **per drawn frame out of one binary**, so every leg saw identical load:
+
+    A  MatrixRenderer.draw to the screen Dc, untouched      the baseline
+    B  the same loop with the two drawLine calls deleted    native vs bytecode
+    C  the renderer into a mirror's Dc, then one blit       the mirror path
+    D  the blit alone, no field walk                        the repair frame, mirrored
+    E  setPalette on a paletted buffer, then one blit       the palette swap
+
+The leg is picked from an LCG rather than `frame % 4`. Round-robin would have shared a
+factor with `MAX_SKIPS = 5`: with a seconds ring every tick draws and the repair lands
+every sixth frame, so `gcd(6, 4) = 2` would have put every expensive clear-and-redraw on
+two legs and none on the others, inflating `A - B` — the one number the exercise exists
+to produce.
+
+Costs are **stratified by frame class**, partial against repair, never blended, for the
+same reason `Diagnostics` already keeps drawn and idle apart. Leg B is a spike-only clone
+of the loop rather than a flag inside it: a per-dot `if` would have added ~1100 compares
+to leg A and corrupted the baseline.
+
+Simulator only. The watch leg was cut: legs B, D and E draw a deliberately wrong frame, so
+the build is not a usable face and has no business on a wrist — see *Left on the table*.
+
+## The numbers
+
+Milliseconds, average over the sample count shown. `p` is a partial frame, `r` a repair.
+
+| leg | seconds + temperature | defaults |
+|---|---|---|
+| A  baseline               | **36** / 129p, **87** / 31r | — / 0p, **72** / 32r |
+| B  no drawLine            | 15 / 129p, 40 / 32r         | — / 0p, 32 / 30r     |
+| C  draw into mirror, blit | 22688 / 126p, 4288 / 30r    | — / 0p, 3527 / 31r   |
+| D  blit only              | 21 / 150p, 23 / 38r         | — / 0p, 18 / 35r     |
+| E  setPalette, blit       | 23 / 143p, 21 / 32r         | — / 0p, 19 / 34r     |
+
+The defaults column has **no partial frames at all**, which is not a gap in the sampling:
+at default rings the gate skips ~80% of frames and `sinceClear` counts skips, so nearly
+every draw there is the periodic repair. `FrameGate`'s own comment said as much; this is
+the measurement of it.
+
+## What it settles
+
+**Native drawing is ~55% of a drawn frame, consistently.** `B/A` is 42% on a partial
+frame, 46% on a seconds repair, 44% on a defaults repair — so the two `drawLine` calls per
+dot are 54-58% of the cost and the interpreted loop is the rest. That is the number that
+sizes delta redraw, and it is the largest single lever left.
+
+**The off-screen mirror is dead, on two independent counts.** Populating it cost 22.7
+*seconds* on a partial frame — 600x the baseline, and worse than its own repair frame,
+which is a red flag rather than a cost model: a partial frame draws one ring, so it cannot
+honestly cost five times a frame that draws four. Three artifacts were found and removed
+before that number and it did not come down (below). But the mirror does not need leg C to
+fail: **leg D alone kills it.** Presenting the buffer costs ~20ms, and a whole partial
+redraw costs 36ms. Even with population free, a mirror would trade 36ms of drawing for
+20ms of blitting on the frame that matters most, while adding a 304KB dependency.
+
+**`setPalette` is nearly free, and is the only radical option still standing.** Leg E
+matches leg D within noise, so swapping 128 palette entries costs ~0-2ms on top of the
+blit. Its per-frame cost is ~20ms *flat*, whatever changed — no dot loop at all. That is
+worse than a partial frame today (36ms would become 20ms, a real but modest win) and much
+better than a repair (87ms to 20ms). It is not free of consequences: encoding each dot's
+(ring, position) as a palette index quantises the fill edge to ~60 buckets a ring, which
+is a visible change to how the seconds ring advances, and that is a design decision rather
+than a performance one.
+
+**The memory claim in `CLAUDE.md` was wrong, though its conclusion survives.** All four
+buffer sizes allocated — 390x390 at 16bpp (~304KB) included — and the app heap moved by
+**616 bytes**, because `createBufferedBitmap` allocates from the graphics pool, which the
+SDK documents as separate from the application heap since API 4.0. The ladder, every rung
+`ok`, heap delta in bytes: 16bpp 616, 8bpp 616, 8bpp+palette 1280, 4bpp+palette 720. So
+the field *can* be cached to a `BufferedBitmap`; it simply should not be. Unverified on
+the watch.
+
+## Where this departs from the rule written before the numbers
+
+The plan pre-registered a decision rule so the result could not be argued with afterwards,
+and one branch of it fired: *"allocation succeeds and `D` is materially below **A-repair**
+→ the mirror is the next phase."* Allocation succeeded, and `D` is 23ms against
+`A-repair`'s 87ms. By the letter of the rule the mirror wins.
+
+It is still rejected, for a reason the rule did not anticipate: it was written expecting
+leg C to produce a number, and leg C came back unmeasurable rather than merely large. With
+population uncosted, all that survives is `D` — and `D` is a **floor**, ~20ms on every
+drawn frame whatever changed. Delta redraw's estimated ~16ms on a partial frame sits
+underneath that floor, and partial frames are the class that dominates the configuration
+the face is actually judged on. A rule keyed on the repair frame missed that the two
+options are not competing for the same frame.
+
+Recording the deviation rather than quietly re-reading the rule, because the point of
+writing it down first was to make exactly this visible.
+
+## Three artifacts, and one API fact worth keeping
+
+Each of these was a wrong number before it was a finding, and leg C would have been
+reported as 5200ms, then 1171ms, then 22688ms depending on when we stopped looking.
+
+- **The pool purges a buffer whose object you do not hold.** `createBufferedBitmap` returns
+  a *reference*; the SDK allocates in `get()` and locks the resource only while the object
+  it returns is in scope. Taking `get()` per frame and letting the result fall out of scope
+  measured ~5200ms a frame — the pool reloading 304KB every frame. Pinning the
+  `BufferedBitmap` in a variable cut it to ~880ms.
+- **`getDc()` per frame is allocation pressure**, not drawing. Caching the Dc removed a
+  drift where leg C's average *grew* 387ms to 1171ms across eight frames rather than
+  settling.
+- **A leg that is off must cost no frames**, not be folded into another leg, or the
+  remaining legs quietly change their share of the repair cadence.
+- **`dc.setAntiAlias(false)` throws on a paletted buffer** — *"Anti aliased primitives
+  cannot be drawn to a paletted buffer"* — and `dc has :setAntiAlias` still answers `true`,
+  so the guard already in `MatrixRenderer` does not catch it. It crashed the face on leg
+  C's first frame. Harmless in principle, since a paletted buffer has no anti-aliasing to
+  turn off and off is what the face wants; but any paletted-buffer design has to stop
+  making that call, which means touching the renderer.
+
+## Recommended next, in order
+
+1. **Delta redraw.** Redraw only the dots whose lit-ness changed since the last draw
+   rather than all ~280 in a dirty ring. Needs no new API, no new memory and no visual
+   change; `FrameGate._rings` already holds the previous span, which is exactly the input.
+   The ~280-dot compare scan stays (leg B, 15ms) and the drawing collapses to ~10 dots, so
+   a 36ms partial frame should land near 16ms. The `HOLD = 2` double-buffer rule still
+   applies: paint the union of the last two deltas, mirroring what `drawnMark` and
+   `previousMark` already do for the mark.
+2. **The hand-backing coverage cache**, still worth ~4ms and still backing-on only.
+3. **`setPalette`**, only if the fill-edge quantisation is acceptable as a design change.
+4. **Not the mirror.**
+
+## Left on the table
+
+- **Nothing here is confirmed on the watch.** The spike build cannot be worn — three of
+  its five legs draw a deliberately wrong frame — and the watch has no way to report a
+  number back: `println` reaches the simulator only, `CIQ_LOG` is written on a fault only,
+  and `tools/mtp_push.py` can upload but not download. An on-watch A/B needs a build whose
+  legs are all *correct* renderings, compared across runs rather than within one, which
+  gives up the same-load property the CLAUDE.md protocol demands. That tension is
+  unresolved and is the main reason these figures are ratios rather than absolutes.
+- **Leg C is not a cost model.** It says the simulator cannot draw into a BufferedBitmap at
+  a sane speed, not that the watch cannot. The recommendation does not rest on it — leg D
+  is what rules the mirror out — but if a mirror is ever revisited, leg C has to be
+  re-measured somewhere real.
+- **The simulator's `.SET` store is per app name.** `CROSSOVERFACE.SET` and
+  `CROSSOVERFACE-TEST.SET` are separate files here, so settings written for one do not
+  reach the other, and a run kept coming up on the defaults however the file was written.
+  `CLAUDE.md` says the face and the test build share one file; that is not what this
+  checkout does, and the spike pinned the ring assignment in the build to sidestep it.
