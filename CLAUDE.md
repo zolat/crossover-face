@@ -393,7 +393,7 @@ To change a setting in the simulator: **File → Edit Persistent Storage → Edi
 Application.Properties**. Persisted values beat `properties.xml`, so a stale one survives a
 rebuild until **Reset All App Data**.
 
-### A theme is four colours and three ramp stops
+### A theme is four ring slots and three ramp stops
 
 `Palette.THEMES` holds every theme's ring colours **flat** — `theme * THEME_COLOURS + n` —
 for the reason `DotGrid.ARMS` is flat: a const array of arrays is further than Monkey C's
@@ -412,6 +412,30 @@ Adding a theme means four things at once: the colours, its ramp stops, the range
 and the theme is simply unreachable, with no other symptom — `themeTablesCoverEveryTheme` is
 the guard. `everyThemeFitsTheAlwaysOnBudget` and `everyThemeKeepsTheTierOrder` walk *every*
 theme, because every other luminance test measures only whichever one is persisted.
+
+**Four slots, but not necessarily four colours.** Frost, Lagoon and Nocturne are duotones:
+two hues alternating, so slots 0 and 2 hold the same value and so do 1 and 3. Rings 1 and 3
+never touch, so a repeat costs no legibility — and alternating makes *every* neighbour a hue
+flip rather than a hue step, which is why the duotones measure 99–103 against Terrain's 93.
+`everyThemeKeepsTheTierOrder` therefore compares **neighbours only**; it used to compare every
+pair, which a duotone fails by design.
+
+Two things about that are counterintuitive and were both settled by measurement:
+
+- **The repeat has to be exact.** The obvious alternative — the same hue at two lightnesses,
+  which keeps four distinct values and needs no test change — is the one arrangement that
+  actually breaks the face. A dimmed `A` lands on top of `A`'s own unfilled tier, so ring 3
+  *lit* becomes indistinguishable from ring 1 *unlit*: a CIELAB distance of 5–16, against
+  61–67 for the four-hue themes. An exact repeat has no such collision, because the only pair
+  it creates is `A` against `0.55·A` — the band-to-unfilled contrast every ring already lives on.
+- **The temperature ramp is what actually constrains a duotone**, not ring contrast. With two
+  hues there is no third colour to turn through, so the ramp runs straight from one to the
+  other and *that blend is the middle of the scale*, where most readings sit. A complementary
+  pair blends through grey and reads as no data: violet+lime drops to a chroma of 4,
+  teal+coral to 14. `RAMP_LINEAR` (−1) in the mid slot is how a theme says it has only two
+  stops, and `Palette.build()` substitutes the midpoint. Pairs whose blend goes grey are
+  therefore unusable however well their rings separate — which is what kept several
+  better-contrasting pairs out.
 
 Activity's colours are not invented: they are the accent colours the watch itself uses, read
 off the peak-chroma pixel of the device's own `nwidget_*.png` and `D_list_select_*.png`

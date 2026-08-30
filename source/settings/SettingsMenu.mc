@@ -7,7 +7,10 @@ import Toybox.WatchUi;
 //! how the two stop agreeing.
 const THEME_LABELS = [
     Rez.Strings.ThemeTerrain,
-    Rez.Strings.ThemeActivity
+    Rez.Strings.ThemeActivity,
+    Rez.Strings.ThemeFrost,
+    Rez.Strings.ThemeLagoon,
+    Rez.Strings.ThemeNocturne
 ] as Array<ResourceId>;
 
 //! Source names, in Source.Kind order — every value, including the retired
