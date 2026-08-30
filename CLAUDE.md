@@ -199,8 +199,23 @@ by ring, so `ringStart` already says which ring an index belongs to. The single 
 `StatMap.isLit()`, called per dot (~6ms/frame) so the lit test has one definition shared with the
 tests.
 
-Caching the field to a `BufferedBitmap` is not an option: 390×390 at 16bpp is ~304KB against a
-128KB watch-face memory budget.
+Caching the field to a `BufferedBitmap` is not worth doing, but **not for the reason this
+note used to give**. It said 390×390 at 16bpp is ~304KB against a 128KB budget. Measured in
+Phase 4: a full-screen buffer allocates fine, and the app heap moves by **616 bytes**,
+because `Graphics.createBufferedBitmap` allocates from the *graphics pool*, which the SDK
+documents as separate from the application heap since API 4.0. Every rung of the ladder —
+16bpp, 8bpp, 8bpp with a palette, 4bpp — allocated. Memory was never the objection.
+
+What rules it out is the frame cost. Presenting a full-screen buffer measured ~20ms, against
+36ms for the whole single-ring redraw it would replace — so a mirror trades most of a partial
+frame for a blit and gains a 304KB dependency. Populating it measured far worse still,
+though that figure is a simulator artifact rather than a cost model. See ROADMAP Phase 4.
+
+Two API facts if this is ever revisited: the pool **purges a buffer whose `BufferedBitmap`
+object you do not hold** — the reference alone is not enough, and re-`get()`ing per frame
+cost ~5200ms a frame — and `dc.setAntiAlias(false)` **throws** on a paletted buffer
+(*"Anti aliased primitives cannot be drawn to a paletted buffer"*) while `dc has
+:setAntiAlias` still answers `true`, so the guard in `MatrixRenderer` does not catch it.
 
 **Most frames are not drawn, and most of the rest draw one ring.** `FrameGate` is what
 decides, and it is the largest lever the face has — bigger than anything left inside the

@@ -43,8 +43,12 @@ import Toybox.Lang;
 //! the fill's leading edge shares a colour, instead of alternating every few
 //! dots as it did when the rings interleaved.
 //!
-//! The lattice also cannot be cached to a BufferedBitmap: a full-screen
-//! 390x390 buffer at 16bpp is ~304KB against a 128KB watch-face budget.
+//! The lattice is deliberately not cached to a BufferedBitmap, though **not
+//! for the memory reason this comment used to give**. A full-screen 390x390
+//! buffer allocates fine and costs the app heap 616 bytes, because the
+//! graphics pool is separate from it. What rules it out is frame cost:
+//! presenting such a buffer measured ~20ms against the 36ms of the whole
+//! one-ring redraw it would replace. See ROADMAP Phase 4.
 module MatrixRenderer {
 
     //! Which mark each ring currently has on screen, so a ring being

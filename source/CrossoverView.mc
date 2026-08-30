@@ -28,6 +28,10 @@ class CrossoverView extends WatchUi.WatchFace {
         DotGrid.ensureBuilt();
         FrameGate.forget();
         holdHandsAtSystemTime();
+        // SPIKE: the allocation ladder runs after Config.reload(), because the
+        // palette it builds its colour table from has to exist first.
+        Spike.forceRings();
+        Spike.allocate();
     }
 
     //! Coming back from the settings menu, which pops rather than re-laying
@@ -36,6 +40,7 @@ class CrossoverView extends WatchUi.WatchFace {
     //! forget a frame it can no longer vouch for.
     function onShow() as Void {
         Config.reload();
+        Spike.forceRings();
         DotGrid.ensureBuilt();
         FrameGate.forget();
     }
@@ -91,9 +96,12 @@ class CrossoverView extends WatchUi.WatchFace {
         var palette = hideFills
             ? Palette.heldBack
             : (lowPower ? Palette.alwaysOn : Palette.active);
-        MatrixRenderer.draw(dc, spans, markers, overs, palette,
-                            lowPower ? Palette.rampAlwaysOn : Palette.rampActive,
-                            backing, dirty, FrameGate.clears);
+        // SPIKE: dispatches to one of four legs and books the cost. Leg A is
+        // MatrixRenderer.draw unchanged, which is what keeps the baseline honest.
+        Spike.lowPower = lowPower;
+        Spike.draw(dc, spans, markers, overs, palette,
+                   lowPower ? Palette.rampAlwaysOn : Palette.rampActive,
+                   backing, dirty, FrameGate.clears);
         Diagnostics.record(System.getTimer() - started);
     }
 
