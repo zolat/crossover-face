@@ -195,6 +195,24 @@ SDK documents as separate from the application heap since API 4.0. The ladder, e
 the field *can* be cached to a `BufferedBitmap`; it simply should not be. Unverified on
 the watch.
 
+## Where this departs from the rule written before the numbers
+
+The plan pre-registered a decision rule so the result could not be argued with afterwards,
+and one branch of it fired: *"allocation succeeds and `D` is materially below **A-repair**
+→ the mirror is the next phase."* Allocation succeeded, and `D` is 23ms against
+`A-repair`'s 87ms. By the letter of the rule the mirror wins.
+
+It is still rejected, for a reason the rule did not anticipate: it was written expecting
+leg C to produce a number, and leg C came back unmeasurable rather than merely large. With
+population uncosted, all that survives is `D` — and `D` is a **floor**, ~20ms on every
+drawn frame whatever changed. Delta redraw's estimated ~16ms on a partial frame sits
+underneath that floor, and partial frames are the class that dominates the configuration
+the face is actually judged on. A rule keyed on the repair frame missed that the two
+options are not competing for the same frame.
+
+Recording the deviation rather than quietly re-reading the rule, because the point of
+writing it down first was to make exactly this visible.
+
 ## Three artifacts, and one API fact worth keeping
 
 Each of these was a wrong number before it was a finding, and leg C would have been

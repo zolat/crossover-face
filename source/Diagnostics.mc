@@ -30,7 +30,7 @@ module Diagnostics {
     //! it is how every before/after figure in this module's history was taken.
     //! One const rather than a build annotation, so a measurement run is one
     //! edit away and the shipped default is silence.
-    const TRACE = true;      //! SPIKE: on for the measurement run
+    const TRACE = false;
     const TRACE_EVERY = 10;
 
     var frames as Number = 0;
@@ -116,10 +116,6 @@ module Diagnostics {
         _sinceTrace = 0;
         if (TRACE) {
             System.println(summary());
-            // SPIKE: the four legs, split by frame class.
-            System.println("  " + Spike.summary() +
-                           (Spike.ready() ? "  <<READY>>" : ""));
-            System.println("  ladder: " + Spike.ladder);
         }
     }
 }
