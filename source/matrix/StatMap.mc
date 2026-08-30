@@ -37,9 +37,14 @@ module StatMap {
 
     //! Which set of colours the rings carry. The theme decides every colour
     //! the face draws; see Palette.THEMES for what each one is and why.
+    //! Appended to, never reordered: the stored value is an index, so moving
+    //! one renames every theme above it on watches already carrying a setting.
     enum Theme {
         THEME_TERRAIN = 0,          //! Orchid, moss, ice, rust.
-        THEME_ACTIVITY = 1          //! The watch's own activity accents.
+        THEME_ACTIVITY = 1,         //! The watch's own activity accents.
+        THEME_FROST = 2,            //! Duotone: cyan and magenta.
+        THEME_LAGOON = 3,           //! Duotone: teal and gold.
+        THEME_NOCTURNE = 4          //! Duotone: indigo and rust.
     }
 
     const PROPERTY_THEME = "theme";
@@ -70,7 +75,7 @@ module StatMap {
     //! range falls back to its default rather than throwing.
     function load() as Void {
         theme = readNumber(PROPERTY_THEME, THEME_TERRAIN,
-                           THEME_TERRAIN, THEME_ACTIVITY);
+                           THEME_TERRAIN, THEME_NOCTURNE);
         backing = readNumber(PROPERTY_BACKING, BACKING_OFF,
                              BACKING_OFF, BACKING_DARK);
         alwaysOnFill = readNumber(PROPERTY_ALWAYS_ON_FILL, ALWAYS_ON_FILL_SHOWN,

@@ -764,10 +764,33 @@ module MatrixTest {
         Test.assertEqualMessage(THEME_LABELS.size(), Palette.THEME_COUNT,
             "every theme needs a name in the settings menu");
 
+        // Cold and hot must name a real colour. The mid slot may also be
+        // RAMP_LINEAR, which a two-hue theme uses to say it has no third
+        // colour to turn through — but only the mid slot: a sentinel at
+        // either end would leave the ramp with no colour at all.
         for (var i = 0; i < Palette.RAMP_STOPS.size(); i++) {
             var stop = Palette.RAMP_STOPS[i];
+            var isMid = (i % Palette.RAMP_POINTS) == 1;
+            if (isMid && stop == Palette.RAMP_LINEAR) {
+                continue;
+            }
             Test.assertMessage(stop >= 0 && stop < Palette.THEME_COLOURS,
                 "ramp stop " + i + " points outside its theme");
+        }
+
+        // A linear ramp still has to be a ramp: its two ends must differ, or
+        // every temperature draws one colour.
+        for (var theme = 0; theme < Palette.THEME_COUNT; theme++) {
+            var stops = theme * Palette.RAMP_POINTS;
+            if (Palette.RAMP_STOPS[stops + 1] != Palette.RAMP_LINEAR) {
+                continue;
+            }
+            var base = theme * Palette.THEME_COLOURS;
+            Test.assertMessage(
+                Palette.THEMES[base + Palette.RAMP_STOPS[stops]] !=
+                Palette.THEMES[base + Palette.RAMP_STOPS[stops + 2]],
+                "theme " + theme + " ramps linearly between two colours " +
+                "that are the same, so temperature reads as one flat band");
         }
 
         // The clamp is the piece with no other symptom: a theme present in
@@ -882,8 +905,10 @@ module MatrixTest {
     //! below the band, a second lap above it, and the mark above that.
     //! theOverTierReadsBrighterThanTheBand pins that for the persisted theme,
     //! so a colour dark enough to invert an ordering would slip past it in
-    //! any other. The per-ring tables must also stay distinguishable, or they
-    //! earn nothing over the single constants they replaced.
+    //! any other. The per-ring tables must also stay distinguishable between
+    //! rings that touch, or they earn nothing over the single constants they
+    //! replaced — see the loop below for why touching is the right test and
+    //! every-pair is not.
     (:test)
     function everyThemeKeepsTheTierOrder(logger as Logger) as Boolean {
         for (var theme = 0; theme < Palette.THEME_COUNT; theme++) {
@@ -904,19 +929,24 @@ module MatrixTest {
                     where + ": the mark must outshine the lap it lands on");
             }
 
-            for (var a = 0; a < StatMap.RINGS; a++) {
-                for (var b = a + 1; b < StatMap.RINGS; b++) {
-                    var pair = "theme " + theme + ": rings " + a + " and " + b;
-                    Test.assertMessage(
-                        Palette.active[a * 2 + 1] != Palette.active[b * 2 + 1],
-                        pair + " share a colour");
-                    Test.assertMessage(
-                        Palette.markerOf[a] != Palette.markerOf[b],
-                        pair + " share a mark colour");
-                    Test.assertMessage(
-                        Palette.overOf[a] != Palette.overOf[b],
-                        pair + " share a second-lap colour");
-                }
+            // Neighbours only, not every pair. A duotone repeats its two
+            // hues on purpose, and rings 1 and 3 never touch — a shared
+            // colour is only a defect between rings that sit against each
+            // other, which is the same reason the ring order is chosen on
+            // neighbour distance rather than on the set average.
+            for (var a = 0; a + 1 < StatMap.RINGS; a++) {
+                var b = a + 1;
+                var pair = "theme " + theme + ": rings " + a + " and " + b;
+                Test.assertMessage(
+                    Palette.active[a * 2 + 1] != Palette.active[b * 2 + 1],
+                    pair + " sit against each other and share a colour");
+                Test.assertMessage(
+                    Palette.markerOf[a] != Palette.markerOf[b],
+                    pair + " sit against each other and share a mark colour");
+                Test.assertMessage(
+                    Palette.overOf[a] != Palette.overOf[b],
+                    pair + " sit against each other and share a second-lap " +
+                    "colour");
             }
         }
         Properties.setValue(StatMap.PROPERTY_THEME, StatMap.THEME_TERRAIN);

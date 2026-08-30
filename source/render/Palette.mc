@@ -55,9 +55,38 @@ module Palette {
     //! one awkward colour at 59 from red and 71 from green, at the end of the
     //! run with only blue beside it.
     //!
+    //! **Frost**, **Lagoon** and **Nocturne** are duotones: two hues
+    //! alternating rather than four distinct ones, so slots 0 and 2 hold the
+    //! same colour and so do 1 and 3. That costs nothing, because rings 1 and
+    //! 3 never touch — a repeat is only a defect between neighbours, and
+    //! alternating makes *every* neighbour a hue flip rather than a hue step.
+    //! Measured, the worst neighbour pair is 102, 99 and 103 against the 93
+    //! Terrain ships with.
+    //!
+    //! The repeat has to be exact. The obvious alternative — the same hue at
+    //! two lightnesses, which would keep four distinct values and leave the
+    //! tests alone — is the one arrangement that actually breaks the face: a
+    //! dimmed A sits on top of A's own unfilled tier, so ring 3 *lit* becomes
+    //! indistinguishable from ring 1 *unlit*. Measured at a CIELAB distance of
+    //! 5 to 16, against 61 to 67 for the four-hue themes. An exact repeat has
+    //! no such collision, because the only pair it creates is A against
+    //! 0.55*A, which is the band-to-unfilled contrast every ring already
+    //! relies on.
+    //!
+    //! What does constrain a duotone is the temperature ramp. With two hues
+    //! there is no third colour to turn through, so the ramp runs straight
+    //! from one to the other and *that blend* is the scale's middle — where
+    //! most readings sit. A complementary pair blends through grey and reads
+    //! as no data at all: violet-lime drops to a chroma of 4, teal-coral to
+    //! 14. These three hold 30, 40 and 27 respectively, which is what put
+    //! them in and kept better-contrasting pairs out.
+    //!
+    //! Lagoon's gold and Nocturne's rust are deliberately the values Activity
+    //! and Terrain already carry, rather than new ones a shade off them.
+    //!
     //! Ring 1 is the outermost.
     const THEME_COLOURS = 4;
-    const THEME_COUNT = 2;
+    const THEME_COUNT = 5;
     const THEMES = [
         0xE879F9,   //! Terrain:  orchid
         0xB8D64B,   //!           moss
@@ -66,7 +95,19 @@ module Palette {
         0xE59A0A,   //! Activity: gold
         0x1F8FFE,   //!           blue
         0x6DC54F,   //!           green
-        0xFE4646    //!           red
+        0xFE4646,   //!           red
+        0x5CD9F0,   //! Frost:    cyan
+        0xF45BD8,   //!           magenta
+        0x5CD9F0,   //!           cyan again — see the duotone note above
+        0xF45BD8,   //!           magenta
+        0x2FD9C5,   //! Lagoon:   teal
+        0xE59A0A,   //!           gold, the same one Activity carries
+        0x2FD9C5,   //!           teal
+        0xE59A0A,   //!           gold
+        0x8E7BFF,   //! Nocturne: indigo
+        0xFF6B5B,   //!           rust, the same one Terrain carries
+        0x8E7BFF,   //!           indigo
+        0xFF6B5B    //!           rust
     ] as Array<Number>;
 
     const WEAK_ACTIVE = 0.55;
@@ -174,10 +215,28 @@ module Palette {
     //! ordering answers to neighbour contrast, not to keeping the ramp's
     //! indices where they were. Terrain runs ice -> orchid -> rust, Activity
     //! blue -> gold -> red.
+    //! A mid stop of RAMP_LINEAR means the theme has only two hues to ramp
+    //! through, so the middle is the midpoint of cold and hot rather than a
+    //! colour of its own — the two segments become one straight run. It is a
+    //! sentinel rather than a fourth colour because a duotone genuinely has
+    //! no third stop to name, and inventing one here would be writing a
+    //! colour value in the one table that exists to avoid exactly that.
+    const RAMP_LINEAR = -1;
+
+    //! The -1s below are RAMP_LINEAR, written as a literal on purpose. Naming
+    //! the const inside a const array's initialiser is the same shape as the
+    //! nested const array that resolves in the simulator and comes back empty
+    //! on the watch, and an empty RAMP_STOPS would not draw wrong — it would
+    //! index out of bounds and the face would not load. Not worth finding out
+    //! on the device. RAMP_LINEAR is still the name everything compares
+    //! against, which is a runtime read and safe.
     const RAMP_POINTS = 3;
     const RAMP_STOPS = [
-        2, 0, 3,    //! Terrain
-        1, 0, 3     //! Activity
+        2, 0, 3,                    //! Terrain:  ice -> orchid -> rust
+        1, 0, 3,                    //! Activity: blue -> gold -> red
+        0, -1, 1,                   //! Frost:    cyan -> magenta
+        0, -1, 1,                   //! Lagoon:   teal -> gold
+        0, -1, 1                    //! Nocturne: indigo -> rust
     ] as Array<Number>;
 
     var active as Array<Number> = [] as Array<Number>;
@@ -239,8 +298,13 @@ module Palette {
         // per step would pay for the indirection 32 times over for nothing.
         var stops = StatMap.theme * RAMP_POINTS;
         var cold = themeColour(RAMP_STOPS[stops]);
-        var mid = themeColour(RAMP_STOPS[stops + 1]);
         var hot = themeColour(RAMP_STOPS[stops + 2]);
+        // Branch before themeColour rather than inside it: the sentinel is not
+        // an index, and themeColour would wrap it into a real slot.
+        var midStop = RAMP_STOPS[stops + 1];
+        var mid = (midStop == RAMP_LINEAR)
+            ? mix(cold, hot, 0.5)
+            : themeColour(midStop);
         for (var step = 0; step < RAMP_STEPS; step++) {
             var along = step.toFloat() / (RAMP_STEPS - 1);
             var colour = (along <= 0.5)

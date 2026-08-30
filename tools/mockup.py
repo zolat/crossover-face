@@ -77,12 +77,29 @@ THEMES = {
     # the choice between the two is made on a rendered face and not on a hex.
     "activity-navy": [(0xE5, 0x9A, 0x0A), (0x18, 0x52, 0xE6),
                       (0x6D, 0xC5, 0x4F), (0xFE, 0x46, 0x46)],
+    # Duotones: two hues alternating, so every ring's neighbour is a hue flip
+    # and rings 1 and 3 -- which never touch -- may share a colour. Slots still
+    # run outermost first; they just repeat. The repeat is exact rather than
+    # the same hue at two lightnesses, because a dimmed A collides with A's own
+    # unfilled tier -- see the duotone note in Palette.mc.
+    "frost": [(0x5C, 0xD9, 0xF0), (0xF4, 0x5B, 0xD8)] * 2,
+    "lagoon": [(0x2F, 0xD9, 0xC5), (0xE5, 0x9A, 0x0A)] * 2,
+    "nocturne": [(0x8E, 0x7B, 0xFF), (0xFF, 0x6B, 0x5B)] * 2,
 }
+
+# Which three of a theme's four slots the temperature ramp runs through, as
+# cold, mid and hot. A mid of RAMP_LINEAR means the theme has only two hues to
+# ramp through, so the middle is the midpoint of cold and hot rather than a
+# colour of its own -- see temperature_colour and Palette.RAMP_LINEAR.
+RAMP_LINEAR = -1
 
 RAMP_STOPS = {
     "terrain": (2, 0, 3),           # ice -> orchid -> rust
     "activity": (1, 0, 3),          # blue -> gold -> red
     "activity-navy": (1, 0, 3),
+    "frost": (0, RAMP_LINEAR, 1),      # cyan -> magenta
+    "lagoon": (0, RAMP_LINEAR, 1),     # teal -> gold
+    "nocturne": (0, RAMP_LINEAR, 1),   # indigo -> rust
 }
 
 THEME_NAME = "terrain"
@@ -194,7 +211,11 @@ def temperature_colour(fraction: float):
     theme rather than colours of their own: a ramp stop *is* a ring colour, and
     writing the value a second time is how the two drift apart.
     """
-    cold, mid, hot = (THEME[i] for i in RAMP_STOPS[THEME_NAME])
+    cold_i, mid_i, hot_i = RAMP_STOPS[THEME_NAME]
+    cold, hot = THEME[cold_i], THEME[hot_i]
+    # A two-hue theme has no third colour to turn through, so its middle is
+    # simply the midpoint -- which makes the two segments one straight run.
+    mid = mix(cold, hot, 0.5) if mid_i == RAMP_LINEAR else THEME[mid_i]
     if fraction <= 0.5:
         return mix(cold, mid, fraction * 2.0)
     return mix(mid, hot, (fraction - 0.5) * 2.0)
@@ -626,6 +647,36 @@ def main(outdir: str = "build/mockups") -> int:
     path = os.path.join(outdir, "10-activity-blue.png")
     sheet(panels, "Activity's blue — the watch ships two, and it is the "
                   "temperature ramp's cold stop").save(path)
+    written.append(path)
+
+    # 12. The duotones. Two hues alternating rather than four distinct ones --
+    #     rings 1 and 3 never touch, so a repeat costs no legibility, and every
+    #     neighbour pair becomes a hue flip.
+    #
+    #     The temperature face is shown beside each, because the ramp is the
+    #     one place a duotone can fail: with only two hues it runs straight
+    #     from one to the other, and a complementary pair blends through grey
+    #     exactly where most readings sit. These three were picked by
+    #     measurement -- neighbour dE at or above the 93 Terrain ships with, a
+    #     blend that holds its chroma, and no more luminance than Terrain.
+    #     Ember (amber + rose) was rendered and dropped: its ramp was the best
+    #     of the set but its rings only reached 70.
+    panels = []
+    for name in ("frost", "lagoon", "nocturne"):
+        use_theme(name)
+        for mode, always_on in (("awake", False), ("always-on", True)):
+            face = render(values, always_on=always_on)
+            panels.append((f"{name.upper()} {mode}   "
+                           f"lum {measure(face) * 100:.2f}%", composite(face)))
+        weather = render(weather_spans, assign=weather_assign,
+                         marks=weather_marks)
+        panels.append((f"{name.upper()} temp ramp   "
+                       f"lum {measure(weather) * 100:.2f}%",
+                       composite(weather)))
+    use_theme("terrain")
+    path = os.path.join(outdir, "12-duotones.png")
+    sheet(panels, "Duotones - two alternating hues, awake, always-on and "
+                  "the temperature ramp").save(path)
     written.append(path)
 
     # 11. Burn-in drift: how long any one pixel stays lit over a full cycle.
