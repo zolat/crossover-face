@@ -106,6 +106,19 @@ module DotGrid {
     //! mark lands in the middle of a band rather than trailing off at the rim.
     var markMiddle as Array<Number> = [] as Array<Number>;
 
+    //! Squared outer radius of each radial sub-band, flat: ring * BANDS + band.
+    //!
+    //! What the hourly forecast reads instead of a span. A block reaching tier
+    //! t lights every dot in its ring out to bandEdge[ring * BANDS + t - 1],
+    //! so the renderer's radial test is one array lookup and one comparison
+    //! against dx*dx + dy*dy, which the dot loop already has to hand.
+    //!
+    //! Per *ring*, twelve numbers in all — not per dot. A per-dot band index
+    //! would be a fifth parallel array of 1112 entries for something two
+    //! multiplies recover, and theDotCacheFitsItsShareOfMemory exists to catch
+    //! exactly that.
+    var bandEdge as Array<Number> = [] as Array<Number>;
+
     //! The mark each ring last landed on, and the position it was asked for.
     //!
     //! markedDot() walks a whole ring to answer, so a marked ring used to be
@@ -256,6 +269,36 @@ module DotGrid {
         return out;
     }
 
+    //! Squared sub-band edges, one row of BANDS per ring. See bandEdge.
+    //!
+    //! **Integer thickness, matching ringBounds() rather than markerWidths().**
+    //! Two thicknesses coexist in this file: 42 exactly, which is what decides
+    //! the ring a dot lands in, and 42.25, which sizes the marker window. A
+    //! sub-band table built on the float one would put ring 1's outer edge at
+    //! 147.75 while ring 1 itself reaches 148, and the topmost dots would fall
+    //! outside their own ring's top band. On this lattice the outermost ring-1
+    //! dot happens to sit at 147.1 and it would work by 0.65px of luck. The
+    //! integer edges are the ring's own, so a full tier provably lights the
+    //! whole block.
+    function bandEdges(ringCount as Number) as Array<Number> {
+        var thickness = (RADIUS - HUB) / ringCount;
+        var step = thickness / HourBands.BANDS;
+        var out = new [ringCount * HourBands.BANDS] as Array<Number>;
+        for (var k = 0; k < ringCount; k++) {
+            var inner = RADIUS - (k + 1) * thickness;
+            for (var b = 0; b < HourBands.BANDS; b++) {
+                // The top band takes the ring's own outer edge rather than
+                // inner + BANDS * step, so a scale whose steps do not divide
+                // the thickness cannot leave a dead rim inside the ring.
+                var edge = (b == HourBands.BANDS - 1)
+                    ? inner + thickness
+                    : inner + (b + 1) * step;
+                out[k * HourBands.BANDS + b] = edge * edge;
+            }
+        }
+        return out;
+    }
+
     //! Which dot this ring marks, remembered between frames.
     //!
     //! The entry point the renderer uses. It owns the window as well as the
@@ -384,6 +427,7 @@ module DotGrid {
         var bounds = ringBounds(ringCount);
         markerHalf = markerWidths(ringCount);
         markMiddle = markMiddles(ringCount);
+        bandEdge = bandEdges(ringCount);
         // The cached marks are indices into the arrays about to be rewritten.
         forgetMarks(ringCount);
 

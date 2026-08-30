@@ -52,8 +52,10 @@ SOURCES = [
     ("Intensity minutes", (0xCC, 0x44, 0xFF)),
     ("Seconds", (0xCC, 0xCC, 0xCC)),
     ("Off", (0x44, 0x44, 0x44)),
+    ("Rain, next 12h", (0x00, 0x88, 0xCC)),
 ]
 SOURCE_TEMPERATURE = 4
+SOURCE_RAIN_HOURS = 9
 
 # Ring colours per theme, outermost first, and which three of each theme's four
 # the temperature ramp runs through as cold, mid and hot. Mirrors Palette.THEMES
@@ -253,6 +255,64 @@ LIFT = 1.0
 # field deliberately, so the background does not change brightness on a raise.
 WEAK_HELD_BACK = WEAK_ACTIVE
 
+# An hour the forecast said nothing about. Darker than the unfilled tier, so
+# "no data" does not read as "forecast says dry" — and so luminance can only
+# fall. Mirrors Palette.WEAK_UNKNOWN.
+WEAK_UNKNOWN = 0.25
+
+# The hourly forecast's geometry. Mirrors HourBands.mc: twelve blocks round the
+# ring, a gutter after each, three radial sub-bands across the ring's thickness.
+HOURS = 12
+HOUR_BANDS = 3
+HOUR_BLOCK_DEGREES = 22.5
+HOUR_FILL = HOUR_BLOCK_DEGREES / (360.0 / HOURS)
+
+
+def hour_block(position: float) -> int:
+    return min(HOURS - 1, int(position * HOURS))
+
+
+def inside_block(position: float) -> bool:
+    """False in the gutter after the block. Mirrors HourBands.insideBlock."""
+    at = position * HOURS
+    return (at - int(at)) < HOUR_FILL
+
+
+def band_edge(ring: int, tier: int) -> float:
+    """Squared outer radius of a sub-band. Mirrors DotGrid.bandEdges: integer
+    thickness, matching the edges that decide a dot's ring, and the top band
+    takes the ring's own outer edge rather than stacking three steps."""
+    thickness = (RADIUS - HUB) // RINGS
+    step = thickness // HOUR_BANDS
+    inner = RADIUS - (ring + 1) * thickness
+    edge = inner + thickness if tier == HOUR_BANDS else inner + tier * step
+    return edge * edge
+
+
+def hourly_colour(ring, position, dist_sq, tiers, always_on, held_back):
+    """One dot of a forecast ring. Mirrors MatrixRenderer's second inner loop.
+
+    `tiers` is twelve entries, each 0-HOUR_BANDS or None for an hour the
+    forecast said nothing about."""
+    colour = THEME[ring % len(THEME)]
+    if always_on:
+        colour = scale(colour, LIFT)
+    weak = WEAK_HELD_BACK if held_back else (
+        WEAK_ALWAYS_ON if always_on else WEAK_ACTIVE)
+    if held_back or tiers is None:
+        # Held back, every hour reads known and dry — never unknown, which
+        # would draw the dim tier right round the ring and put data in the one
+        # mode whose whole purpose is to carry none.
+        return scale(colour, weak)
+    if not inside_block(position):
+        return scale(colour, weak)
+    tier = tiers[hour_block(position)]
+    if tier is None:
+        return scale(colour, WEAK_UNKNOWN)
+    if tier > 0 and dist_sq <= band_edge(ring, tier):
+        return colour
+    return scale(colour, weak)
+
 
 def scale(rgb: tuple[int, int, int], factor: float) -> tuple[int, int, int]:
     return tuple(max(0, min(255, round(c * factor))) for c in rgb)
@@ -307,7 +367,7 @@ def hand_covers(dx: float, dy: float, axes) -> bool:
 
 
 def render(spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
-           held_back: bool = False,
+           held_back: bool = False, hourly=None,
            backing: tuple[int, int, int] | None = None,
            at_time: tuple[int, int] = (10, 9),
            drift: tuple[int, int] = (0, 0), marks=None,
@@ -345,9 +405,21 @@ def render(spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
                     colour = marker_colour(ring)
                     marked_here = True
                 else:
+                    source = assign[ring]
+                    if source == SOURCE_RAIN_HOURS:
+                        # Its own path, mirroring the renderer's own loop: the
+                        # forecast reads a radius as well as an angle, so it
+                        # cannot be said with a span.
+                        colour = hourly_colour(
+                            ring, position, dist_sq,
+                            (hourly or {}).get(ring), always_on, held_back)
+                        arm = ARMS[orientation_at(dx, dy)] if rotate \
+                            else ARMS[0]
+                        draw_dot(draw, x - half + drift[0],
+                                 y - half + drift[1], colour, arm)
+                        continue
                     start, end = spans[ring]
                     lit = start <= position <= end
-                    source = assign[ring]
                     over = bool(overs and overs[ring]) and not always_on
                     if lit and source == SOURCE_TEMPERATURE:
                         colour = temperature_colour(position)
@@ -599,6 +671,26 @@ def main(outdir: str = "build/mockups") -> int:
     sheet([(f"WEATHER   lum {measure(face) * 100:.2f}%", composite(face))],
           "Ring 1 = temperature 11-22C on a 0-60 scale, "
           "white mark = 17C now").save(path)
+    written.append(path)
+
+    # 7b. The hourly rain forecast on the outermost ring. Where round the ring
+    #     says when, how deep into the ring's own thickness says how likely.
+    #     Two hours are left as None so the unknown tier is visible: a forecast
+    #     that ran short must not read as a forecast of no rain.
+    hours = [0, 0, 1, 2, 3, 3, 2, 1, 0, 0, None, None]
+    hourly_assign = (SOURCE_RAIN_HOURS, 6, 2, 3)
+    panels = []
+    for label, kwargs in (("AWAKE", {}),
+                          ("ALWAYS-ON", {"always_on": True}),
+                          ("HELD BACK", {"always_on": True,
+                                         "held_back": True})):
+        face = render(values, assign=hourly_assign, hourly={0: hours},
+                      **kwargs)
+        panels.append((f"{label}   lum {measure(face) * 100:.2f}%",
+                       composite(face)))
+    path = os.path.join(outdir, "07b-rain-next-12h.png")
+    sheet(panels, "Ring 1 = rain next 12h — one block per hour ahead, "
+                  "deeper = more likely; last two hours unforecast").save(path)
     written.append(path)
 
     # 8. Past the goal — steps on ring 1, read as a second lap. Mirrors

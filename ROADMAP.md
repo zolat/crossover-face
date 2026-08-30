@@ -1,5 +1,65 @@
 # Roadmap
 
+**Current:** done — Rain, next 12h shipped; the frame A/B and the on-watch check are below.
+
+Out-of-band feature work, not a phase of the performance roadmap that follows: that one is
+complete and this does not extend it.
+
+- [x] Rain, next 12h — an hourly forecast in one ring
+
+Plan: `~/.claude/plans/i-want-to-plan-starry-graham.md`
+
+## What it is
+
+A ring's 360 degrees become twelve 30-degree hour slots, one per hour ahead. A 22.5-degree
+block in each leaves a countable gutter. How far a block reaches out through the ring's own
+42px thickness is the chance of rain: three radial sub-bands at 25/50/75%. An hour the
+forecast said nothing about draws a fourth tier at 0.25, darker than the 0.55 unfilled one,
+so "no data" cannot read as "forecast says dry".
+
+## What the measurements settled
+
+**Three sub-bands, not four.** A ring is 42px, so a four-way split is 10.5px bands beating
+against the 10px lattice pitch. Dots per block per sub-band:
+
+| ring | 3-way | 4-way |
+|---|---|---|
+| 0 (outer, 436 dots) | 11.0 / 12.3 / 13.0 | 8.3 / 9.7 / 9.7 / 8.7 |
+| 1 (340 dots) | 8.3 / 9.0 / 11.0 | 7.0 / 5.7 / 9.0 / 6.7 |
+
+Four is clean on ring 0 and lumpy on ring 1. The source must work on either, so three wins.
+
+**The outer two rings only, and that is a lattice fact rather than taste.** The worst
+(block, sub-band) holds 8 dots on ring 0 and 6 on ring 1, against 4 on ring 2 and 2 on ring
+3. `onlyTheOuterTwoRingsResolveTwelveHoursInThreeBands` asserts it, so if the lattice ever
+changes the test says whether `Source.HOURLY_TOP_RING` still means what it claims.
+
+**The hour-hand anchoring costs nothing.** The hand at local hour H points at clock position
+H mod 12, so the forecast N hours out belongs at (H + N) mod 12 — which is that forecast
+hour's own hour-of-day, mod 12. Bucket by the entry's own local hour and it lands where the
+hand will be. There is no rotation step on either side, and the plan's estimate of one was
+the largest thing this turned out not to need.
+
+## Left on the table
+
+- **Nothing has been seen.** `screencapture -l` still returns *could not create image from
+  window*, which is the ROADMAP's existing note about Screen Recording permission, and the
+  Mac display slept during this session besides. Every claim about what the face *looks*
+  like rests on `tools/mockup.py`'s panel and on dot counts asserted in the suite, not on a
+  render anybody looked at. Granting the permission and re-running
+  `python3 -m simctl.window shot` is the first thing to do next.
+- **The gutter's alignment is unexamined.** Blocks occupy the *leading* 22.5 degrees of each
+  wedge, so every boundary lands on an hour mark and the hour hand sits in its own block
+  from :00 to :45 and in the gutter after that. Centring the block instead keeps the hand
+  inside its band the whole hour but moves the boundaries off the marks. One constant either
+  way, and it should be decided looking at a render.
+- **On-watch verification.** `getHourlyForecast()` returns null in the simulator, so every
+  hour is unknown there and the whole ring draws the dim tier. Nothing has exercised the
+  bucketing against a real forecast, and the array's length is undocumented — the dim tier
+  exists precisely because it may come back shorter than twelve.
+
+# Previously: the frame budget (complete)
+
 **Current:** done — Phase 5 landed the lever Phase 4 picked.
 
 - [x] Phase 0 — baseline the frame cost on a fresh simulator

@@ -36,6 +36,7 @@
             <listEntry value="3">@Strings.SourceBodyBattery</listEntry>
             <listEntry value="4">@Strings.SourceTemperature</listEntry>
             <listEntry value="5">@Strings.SourceRain</listEntry>
+            <listEntry value="9">@Strings.SourceRainHours</listEntry>
             <listEntry value="6">@Strings.SourceIntensityMinutes</listEntry>
             <listEntry value="7">@Strings.SourceSeconds</listEntry>
             <listEntry value="8">@Strings.SourceOff</listEntry>
@@ -48,6 +49,7 @@
             <listEntry value="3">@Strings.SourceBodyBattery</listEntry>
             <listEntry value="4">@Strings.SourceTemperature</listEntry>
             <listEntry value="5">@Strings.SourceRain</listEntry>
+            <listEntry value="9">@Strings.SourceRainHours</listEntry>
             <listEntry value="6">@Strings.SourceIntensityMinutes</listEntry>
             <listEntry value="7">@Strings.SourceSeconds</listEntry>
             <listEntry value="8">@Strings.SourceOff</listEntry>
