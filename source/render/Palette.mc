@@ -108,9 +108,35 @@ module Palette {
     //! and lands 16 from Lagoon's teal. This green sits 41 away, which is what
     //! keeps it a different theme rather than a better-contrasting Lagoon.
     //!
+    //! **Alpinist 4** is the whole watch rather than the dial: the strap and
+    //! the lume join the green and the gold. It is the only four-colour theme
+    //! added since Activity, and it exists because of one fact that is not
+    //! obvious until it is measured.
+    //!
+    //! **Brown is what gold looks like unlit.** Gold at the unfilled tier is
+    //! 0x8C5400; a cocoa brown is 0x8B5A2B. Those are 15 apart in CIELAB
+    //! against the ~37 that separates a lit dot from an unlit one *within* a
+    //! ring — so a lit brown dot and an unlit gold dot are the same colour,
+    //! and a brown ring beside a gold one is unreadable. Brown is not a hue;
+    //! it is dark orange, which is precisely the thing this face makes when
+    //! it dims a gold. Every brown tried lands 15-24 from unlit gold.
+    //!
+    //! So the strap is a brick rather than a leather brown. Sweeping the brown
+    //! toward red, it has to reach a hue of about 4 degrees before it clears
+    //! that bar — at which point it is no longer brown. The alternative was to
+    //! drop the gold and keep a true brown, which works and was rendered: it
+    //! reaches only 65 between neighbours against this one's 86, and the brown
+    //! ring goes muddy against the green.
+    //!
+    //! The white sits on the **innermost** ring on purpose. Ring order is free
+    //! here, and the rings hold 436/340/244/92 dots outermost-in, so the
+    //! brightest colour on the smallest ring is what keeps a white-bearing
+    //! theme inside the luminance budget at all: 4.95% worst-case always-on,
+    //! which is lower than Terrain.
+    //!
     //! Ring 1 is the outermost.
     const THEME_COLOURS = 4;
-    const THEME_COUNT = 6;
+    const THEME_COUNT = 7;
     const THEMES = [
         0xE879F9,   //! Terrain:  orchid
         0xB8D64B,   //!           moss
@@ -135,7 +161,11 @@ module Palette {
         0x44C265,   //! Alpinist: forest green
         0xFF9900,   //!           gold
         0x44C265,   //!           forest green
-        0xFF9900    //!           gold
+        0xFF9900,   //!           gold
+        0xC75A5A,   //! Alpinist 4: brick, the strap. See the note above for
+        0x44C265,   //!             why it is not brown.
+        0xFF9900,   //!             gold
+        0xF5F5F5    //!             white, the lume, on the innermost ring
     ] as Array<Number>;
 
     const WEAK_ACTIVE = 0.55;
@@ -265,7 +295,8 @@ module Palette {
         0, -1, 1,                   //! Frost:    cyan -> magenta
         0, -1, 1,                   //! Lagoon:   teal -> gold
         0, -1, 1,                   //! Nocturne: indigo -> rust
-        0, -1, 1                    //! Alpinist: green -> gold
+        0, -1, 1,                   //! Alpinist: green -> gold
+        1, 2, 0                     //! Alpinist 4: green -> gold -> brick
     ] as Array<Number>;
 
     var active as Array<Number> = [] as Array<Number>;

@@ -92,6 +92,13 @@ THEMES = {
     # the values do not. See the Alpinist note in Palette.mc for what the
     # green and gold had to give up to separate at all.
     "alpinist": [(0x44, 0xC2, 0x65), (0xFF, 0x99, 0x00)] * 2,
+    # The whole watch rather than the dial: strap, dial, indices, lume. The
+    # strap is a brick and not a leather brown because brown is what gold
+    # looks like unlit -- see the Alpinist 4 note in Palette.mc. White goes on
+    # the innermost ring, which holds 92 dots against the outermost's 436;
+    # that placement is what keeps a white-bearing theme inside the budget.
+    "alpinist4": [(0xC7, 0x5A, 0x5A), (0x44, 0xC2, 0x65),
+                  (0xFF, 0x99, 0x00), (0xF5, 0xF5, 0xF5)],
 }
 
 # Which three of a theme's four slots the temperature ramp runs through, as
@@ -108,6 +115,7 @@ RAMP_STOPS = {
     "lagoon": (0, RAMP_LINEAR, 1),     # teal -> gold
     "nocturne": (0, RAMP_LINEAR, 1),   # indigo -> rust
     "alpinist": (0, RAMP_LINEAR, 1),   # green -> gold
+    "alpinist4": (1, 2, 0),            # green -> gold -> brick
 }
 
 THEME_NAME = "terrain"
@@ -670,7 +678,7 @@ def main(outdir: str = "build/mockups") -> int:
     #     Ember (amber + rose) was rendered and dropped: its ramp was the best
     #     of the set but its rings only reached 70.
     panels = []
-    for name in ("frost", "lagoon", "nocturne", "alpinist"):
+    for name in ("frost", "lagoon", "nocturne", "alpinist", "alpinist4"):
         use_theme(name)
         for mode, always_on in (("awake", False), ("always-on", True)):
             face = render(values, always_on=always_on)
