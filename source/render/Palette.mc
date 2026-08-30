@@ -84,9 +84,33 @@ module Palette {
     //! Lagoon's gold and Nocturne's rust are deliberately the values Activity
     //! and Terrain already carry, rather than new ones a shade off them.
     //!
+    //! **Alpinist** is after the Seiko Alpinist: a dark sunburst green dial
+    //! under gold indices. It is the one theme here that could not be
+    //! transcribed, and the reason is the medium — that dial is a surface
+    //! lit from outside, while this face emits its own light on black, so
+    //! the dial's own ~#1E3A2F falls below the unfilled tier and simply is
+    //! not there. What carries over is the *relationship*: a cool forest
+    //! green against a warm brass, taken up in luminance until the dim tier
+    //! still reads.
+    //!
+    //! Green and gold sit close on the wheel, so this pair is the hardest of
+    //! the duotones to separate — the obvious brass-on-forest choices land at
+    //! 64 to 75, well under the 93 Terrain ships. The green had to move to a
+    //! true leaf green and the gold toward orange to reach 94. Two things
+    //! were tried and rejected on measurement: the dial's actual green (the
+    //! dim tier collapses to a relative luminance of 0.012, invisible), and
+    //! adding the cream lume as a third colour, which *lowers* the worst
+    //! neighbour pair to 52 and pushes the field past Terrain's luminance —
+    //! cream is bright and nearly achromatic, so it separates from nothing.
+    //!
+    //! Pushing further gets a better number and a worse theme: the top of the
+    //! sweep drifts the green to teal and the gold to orange, which scores 100
+    //! and lands 16 from Lagoon's teal. This green sits 41 away, which is what
+    //! keeps it a different theme rather than a better-contrasting Lagoon.
+    //!
     //! Ring 1 is the outermost.
     const THEME_COLOURS = 4;
-    const THEME_COUNT = 5;
+    const THEME_COUNT = 6;
     const THEMES = [
         0xE879F9,   //! Terrain:  orchid
         0xB8D64B,   //!           moss
@@ -107,7 +131,11 @@ module Palette {
         0x8E7BFF,   //! Nocturne: indigo
         0xFF6B5B,   //!           rust, the same one Terrain carries
         0x8E7BFF,   //!           indigo
-        0xFF6B5B    //!           rust
+        0xFF6B5B,   //!           rust
+        0x44C265,   //! Alpinist: forest green
+        0xFF9900,   //!           gold
+        0x44C265,   //!           forest green
+        0xFF9900    //!           gold
     ] as Array<Number>;
 
     const WEAK_ACTIVE = 0.55;
@@ -236,7 +264,8 @@ module Palette {
         1, 0, 3,                    //! Activity: blue -> gold -> red
         0, -1, 1,                   //! Frost:    cyan -> magenta
         0, -1, 1,                   //! Lagoon:   teal -> gold
-        0, -1, 1                    //! Nocturne: indigo -> rust
+        0, -1, 1,                   //! Nocturne: indigo -> rust
+        0, -1, 1                    //! Alpinist: green -> gold
     ] as Array<Number>;
 
     var active as Array<Number> = [] as Array<Number>;

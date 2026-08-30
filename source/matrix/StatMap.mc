@@ -44,7 +44,8 @@ module StatMap {
         THEME_ACTIVITY = 1,         //! The watch's own activity accents.
         THEME_FROST = 2,            //! Duotone: cyan and magenta.
         THEME_LAGOON = 3,           //! Duotone: teal and gold.
-        THEME_NOCTURNE = 4          //! Duotone: indigo and rust.
+        THEME_NOCTURNE = 4,         //! Duotone: indigo and rust.
+        THEME_ALPINIST = 5          //! Duotone: forest green and gold.
     }
 
     const PROPERTY_THEME = "theme";
@@ -75,7 +76,7 @@ module StatMap {
     //! range falls back to its default rather than throwing.
     function load() as Void {
         theme = readNumber(PROPERTY_THEME, THEME_TERRAIN,
-                           THEME_TERRAIN, THEME_NOCTURNE);
+                           THEME_TERRAIN, THEME_ALPINIST);
         backing = readNumber(PROPERTY_BACKING, BACKING_OFF,
                              BACKING_OFF, BACKING_DARK);
         alwaysOnFill = readNumber(PROPERTY_ALWAYS_ON_FILL, ALWAYS_ON_FILL_SHOWN,

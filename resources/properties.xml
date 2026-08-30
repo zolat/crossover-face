@@ -1,5 +1,6 @@
 <properties xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://developer.garmin.com/downloads/connect-iq/resources.xsd">
-    <!-- 0 Terrain, 1 Activity, 2 Frost, 3 Lagoon, 4 Nocturne.
+    <!-- 0 Terrain, 1 Activity, 2 Frost, 3 Lagoon, 4 Nocturne,
+         5 Alpinist.
          Kept in sync with StatMap.Theme. -->
     <property id="theme" type="number">0</property>
     <!-- 0 off, 1 white, 2 dark. Kept in sync with StatMap.Backing. -->
