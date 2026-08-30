@@ -41,6 +41,26 @@ python3 tools/mockup.py [outdir]        # default build/mockups
 python3 tools/luminance.py <face.png>   # measure against the 10% AMOLED budget
 ```
 
+## Work happens in a worktree, never on main
+
+The face has a working baseline now, so the repo root is a place to build, test and
+sideload *from* — not a place to edit. **Every change starts in its own worktree under
+`.claude/worktrees/`, on its own branch, and merges back to `main` only once it is
+verified.** `/feature` does the whole cycle; `git worktree add .claude/worktrees/<name> -b
+<name>` by hand is the same thing.
+
+Two reasons this is now the rule rather than a suggestion:
+
+- several agents work this repo at once, and a shared checkout means one session's
+  half-finished edit is another's mysterious build failure — the isolation is what makes the
+  parallel sessions below safe;
+- `main` stays shippable. A worktree that turns out wrong is deleted, not unpicked.
+
+The exceptions are the files that are shared by design — `Makefile`, `monkey.jungle`,
+`CLAUDE.md` — where a fix is meant to land under every session at once (see the end of the
+next section), and one-line hotfixes to a broken `main`. Everything else, including
+"just a quick change", gets a worktree.
+
 ## Parallel sessions share three things
 
 Several agents work this repo at once, in worktrees under `.claude/worktrees/`.
