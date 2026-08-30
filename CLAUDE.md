@@ -14,7 +14,7 @@ covers the working knowledge that spans files and is easy to break.
 ```sh
 make build      # debug .prg for the simulator
 make sim        # build, start the simulator if needed, sideload, stream println
-make test       # build with -t, run the 48-test suite (takes the simulator lock)
+make test       # build with -t, run the 97-test suite (takes the simulator lock)
 make test-lock  # self-test tools/sim_lock.sh
 make test-simctl # tests for tools/simctl (no simulator, no build needed)
 make package    # signed .iq for the store
@@ -119,6 +119,15 @@ the `Sim-$USER` file that refuses a second instance, and `SHELL_SERVER_PORT` mov
 control channel. `simctl/instance.py` sets all three, symlinking `~/.Garmin/ConnectIQ` back
 so devices and the signing key stay shared. Two checkouts have run the full suite
 concurrently, both green, neither touching the other or the lock.
+
+> **The MCP server drives the checkout *it* runs from, not yours.** `.mcp.json` is registered
+> at the repo root, so `simctl.paths.repo_root()` — which resolves relative to its own file —
+> is the **root** checkout for every session, worktrees included. `sim_load` therefore builds
+> and sideloads main's face, and `sim_settings_set` validates against main's
+> `bin/<App>-settings.json`, so a new setting in a worktree is refused as out of range with a
+> message listing the old values. It looks exactly like a broken settings.xml. Run the CLI
+> from inside the worktree instead — `PYTHONPATH=tools python3 -m simctl.settings ...` picks
+> up that checkout's `tools/`, and so its `bin/`.
 
 Pass `instance="shared"` to drive the machine's normal simulator instead. That path still
 takes `tools/sim_lock.sh`, so it queues properly with plain `make sim` and `make test` in
@@ -343,7 +352,49 @@ The ordering is real; that reason for it was not. Nothing settable moves the
 lattice any more, so `DotGrid.invalidate()` is now a safety net rather than a requirement —
 but the rebuild it schedules must still land in `onLayout`, never `onStart`.
 
-### Every source reports a span, not a level
+### One source does not report a span at all
+
+`SOURCE_RAIN_HOURS` ("Rain, next 12h") turns a ring into a twelve-hour forecast: the ring's
+360° is twelve 30° hour slots, a 22.5° block in each leaving a countable gutter, and how far
+a block reaches out through the ring's **own 42px thickness** is the chance — three radial
+sub-bands at 25/50/75%. Twelve disjoint blocks with a radial axis is not something two floats
+can say, so it reports `Source.EMPTY` as its span and its real payload travels beside it:
+`Source.fillHours()` → `StatMap.hourly()` → the view → both the print and the renderer. The
+same move a marker makes, and for the same reason.
+
+Four things about it are load-bearing:
+
+- **The hour-hand anchoring is free.** The hand at local hour `H` points at clock position
+  `H mod 12`, so the forecast `N` hours out belongs at `(H + N) mod 12` — which *is* that
+  forecast hour's own hour-of-day, mod 12. `RainForecast` buckets an entry by its own local
+  hour and it lands where the hand will be. **Nothing rotates anywhere.** Code that turns a
+  table once an hour was written the hard way.
+- **The two packed words must be in the ring print.** An hourly ring's span is `EMPTY` on
+  every frame it draws and it carries no mark and no overflow, so without them nothing about
+  that ring ever changes and the gate never marks it dirty. `PER_RING` is 6 for this.
+- **It opts out of the delta redraw**, via `lastHourly` in the eligibility key — in *both*
+  places that key is compared, the delta test and the `stableFor` update. The palette is
+  keyed by ring rather than by source, so switching a ring in or out of the forecast moves
+  nothing else in the key. The direction that rots is *leaving* it: the buffers hold blocks
+  and gutters while the remembered spans describe `EMPTY`.
+- **`StatMap.noHourly()` reports every hour known and *dry*, not all zeroes.** Zero `known`
+  means every hour is unknown, which draws the dim tier right round the ring — data, in the
+  held-back mode whose entire purpose is to carry none.
+
+Three sub-bands rather than four was measured, not chosen: four splits a 42px ring into
+10.5px bands that beat against the 10px lattice pitch, and ring 1 comes out 7.0/5.7/9.0/6.7
+dots per block against three-way's 8.3/9.0/11.0. `DotGrid.bandEdges()` therefore uses the
+**integer** thickness `ringBounds()` uses, never `markerWidths()`'s 42.25 — the float one puts
+ring 1's top edge inside ring 1's own outermost dots.
+
+It is offered on the **outer two rings only** (`Source.HOURLY_TOP_RING`), enforced in three
+places that must agree: `StatMap.load()` maps it to Off elsewhere, the on-device picker walks
+`Source.offeredFor(ring)`, and `settings.xml` lists it in the `ring1`/`ring2` blocks alone.
+The justification is a claim about the lattice and is asserted as one —
+`onlyTheOuterTwoRingsResolveTwelveHoursInThreeBands` measures the worst (block, sub-band) at
+8 and 6 dots on rings 0 and 1, against 4 and 2 on rings 2 and 3.
+
+### Every other source reports a span, not a level
 
 `Source.span()` returns `[start, end]`, both 0.0–1.0. Levels are just `[0.0, value]`. This is why
 temperature — a genuine range — needs no special case anywhere downstream.
@@ -366,6 +417,15 @@ Stored values are **list indices**, so `resources/properties.xml`, `resources/se
 `resources/strings/strings.xml`, the enums in `StatMap`/`Source`, and the label arrays in
 `source/settings/SettingsMenu.mc` all have to agree. Eight properties today: `theme`,
 `handBacking`, `alwaysOnFill`, `dotRotation`, `ring1`–`ring4`.
+
+**A new source is appended after `SOURCE_OFF`, not before it.** That looks wrong and is the
+only safe place: the stored value is an index, so inserting below Off renumbers Off and
+everything under it on every watch already carrying a setting. `SOURCE_RAIN_HOURS = 9` sits
+above `SOURCE_OFF = 8` for that reason, while `Source.OFFERED` — which decides picker *order*
+— puts it next to the other rain. `sourceTablesCoverEveryKind` used to assert
+`SOURCE_OFF == COUNT - 1`; that was always a claim about `OFFERED`'s order and only happened
+to be expressible as an enum index while nothing had been added after Off, so it is now made
+against `OFFERED` directly.
 
 **A source is retired, never deleted.** Because the stored value is an index, removing an
 enum entry does not remove a source — it renames every source above it, on every watch
@@ -484,6 +544,14 @@ test suite; `tools/luminance.py` and the simulator's **File → View Screen Heat
 Awake and always-on share their *filled* colours and differ only in the unfilled tier
 (`WEAK_ACTIVE` 0.55 vs `WEAK_ALWAYS_ON` 0.45). `Palette.LIFT` is 1.0 — scaling up would clamp
 channels and shift hue rather than brighten.
+
+There is a **fourth tier**, `Palette.dimOf` at `WEAK_UNKNOWN` 0.25, for an hour the forecast
+said nothing about. The face never draws black, so a dry hour is the unfilled tier rather
+than darkness, and "no forecast" needs a third value or it reads as a confident forecast of
+no rain. 0.25 is chosen against **always-on**, the tighter pair: `0.45 / 1.82` reproduces the
+lit-to-unfilled step one rung down. Being *darker* than unfilled is what makes it free —
+luminance only falls, so no theme needs re-measuring — and `everyThemeKeepsTheTierOrder` now
+walks it alongside the other three.
 
 There is a **third palette table**, `Palette.heldBack`, for always-on with the fills held back.
 Nothing is lit in that mode, so the unfilled tier is the whole image rather than a backdrop, and

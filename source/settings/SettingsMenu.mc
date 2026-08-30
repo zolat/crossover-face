@@ -27,7 +27,8 @@ const SOURCE_LABELS = [
     Rez.Strings.SourceRain,
     Rez.Strings.SourceIntensityMinutes,
     Rez.Strings.SourceSeconds,
-    Rez.Strings.SourceOff
+    Rez.Strings.SourceOff,
+    Rez.Strings.SourceRainHours
 ] as Array<ResourceId>;
 
 //! On-device settings, reached from the watch's own Watch Face menu.
@@ -190,7 +191,8 @@ class RingMenuDelegate extends WatchUi.Menu2InputDelegate {
             WatchUi.pushView(
                 new ChoiceMenu(Rez.Strings.RingsTitle,
                                StatMap.PROPERTY_RINGS[index],
-                               offeredLabels(), Source.OFFERED,
+                               offeredLabelsFor(index),
+                               Source.offeredFor(index),
                                StatMap.rings[index]),
                 new ChoiceMenuDelegate(), WatchUi.SLIDE_LEFT);
         }
@@ -211,11 +213,17 @@ function sequential(count as Number) as Array<Number> {
     return out;
 }
 
-//! The labels for the sources a ring may be assigned to, in picker order.
-function offeredLabels() as Array<ResourceId> {
-    var out = new [Source.OFFERED.size()] as Array<ResourceId>;
-    for (var i = 0; i < Source.OFFERED.size(); i++) {
-        out[i] = SOURCE_LABELS[Source.OFFERED[i]];
+//! The labels for the sources *this ring* may be assigned to, in picker order.
+//!
+//! Per ring rather than global, because the hourly forecast needs more dots per
+//! hour than the inner two rings have. Built from Source.offeredFor() so the
+//! labels and the values it is handed beside cannot come out of step — a picker
+//! whose two lists disagree stores the wrong source with no symptom at all.
+function offeredLabelsFor(ring as Number) as Array<ResourceId> {
+    var offered = Source.offeredFor(ring);
+    var out = new [offered.size()] as Array<ResourceId>;
+    for (var i = 0; i < offered.size(); i++) {
+        out[i] = SOURCE_LABELS[offered[i]];
     }
     return out;
 }

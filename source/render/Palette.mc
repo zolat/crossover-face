@@ -189,6 +189,24 @@ module Palette {
     //! stops meaning anything — heldBackFillsCutAlwaysOnLuminance asserts it.
     const WEAK_HELD_BACK = WEAK_ACTIVE;
 
+    //! The tier for an hour the forecast said nothing about.
+    //!
+    //! The face never draws black, so a dry hour is not dark — it is the
+    //! unfilled tier. "No forecast" therefore needs a *third* value, or it
+    //! reads as a confident forecast of no rain.
+    //!
+    //! Darker than unfilled rather than brighter, which buys two things: it
+    //! reads as absence, the field visibly thinning where the data runs out;
+    //! and luminance only ever falls, so the always-on budget cannot be
+    //! threatened from this direction and no theme needs re-measuring for it.
+    //!
+    //! 0.25 is chosen against always-on, not awake, because always-on is the
+    //! tighter pair: its unfilled tier is 0.45, and the lit-to-unfilled step
+    //! the face already lives on is 1 / 0.55, so 0.45 / 1.82 reproduces that
+    //! same contrast one rung down. Awake then gets 0.55 / 0.25, which is more
+    //! separation than it needs.
+    const WEAK_UNKNOWN = 0.25;
+
     //! Always-on used to lift the colours to survive the panel's own dimming.
     //! With this palette there is nothing left to lift: ice and orchid are
     //! already at or near a full channel, so scaling up would clamp and shift
@@ -314,6 +332,16 @@ module Palette {
     //! Awake only, like markerOf and for the same reason, so there is no
     //! always-on tier to keep in step.
     var overOf as Array<Number> = [] as Array<Number>;
+
+    //! The unknown-hour tier on each ring. One entry per ring, not per slot —
+    //! the same shape as markerOf and overOf, and for the same reason: it is a
+    //! third colour the renderer swaps in, not a fourth palette slot, so the
+    //! ring * 2 + lit indexing every other table and test uses is untouched.
+    //!
+    //! One table for both power modes, because LIFT is 1.0 and an always-on
+    //! variant would be a duplicate of this one. If LIFT ever moves off 1.0
+    //! this owes a second table, exactly as heldBack does.
+    var dimOf as Array<Number> = [] as Array<Number>;
     var rampActive as Array<Number> = [] as Array<Number>;
     var rampAlwaysOn as Array<Number> = [] as Array<Number>;
 
@@ -329,9 +357,11 @@ module Palette {
         var held = [] as Array<Number>;
         var marks = [] as Array<Number>;
         var beyond = [] as Array<Number>;
+        var faint = [] as Array<Number>;
         for (var ring = 0; ring < StatMap.RINGS; ring++) {
             var colour = themeColour(ring);
             marks.add(mix(MARKER, colour, MARKER_TINT));
+            faint.add(scale(colour, WEAK_UNKNOWN));
             beyond.add(mix(MARKER, colour, OVER_TINT));
             var lifted = scale(colour, LIFT);
             awake.add(scale(colour, WEAK_ACTIVE));
@@ -351,6 +381,7 @@ module Palette {
         heldBack = held;
         markerOf = marks;
         overOf = beyond;
+        dimOf = faint;
 
         var ramp = [] as Array<Number>;
         var rampLifted = [] as Array<Number>;

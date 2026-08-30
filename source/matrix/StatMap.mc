@@ -99,6 +99,14 @@ module StatMap {
             if (stored == Source.SOURCE_RETIRED) {
                 stored = Source.SOURCE_OFF;
             }
+            // A source this ring cannot show reads as Off, for the same reason
+            // the retired one does: the ring has nothing to draw, and saying so
+            // is better than a band the menu cannot name. Falling back to the
+            // ring's *default* instead would quietly resurrect a source the
+            // wearer never chose.
+            if (!Source.allowedOn(stored, i)) {
+                stored = Source.SOURCE_OFF;
+            }
             loaded[i] = stored;
         }
         rings = loaded;
@@ -152,6 +160,43 @@ module StatMap {
         var out = new [RINGS] as Array<Array<Float> >;
         for (var i = 0; i < RINGS; i++) {
             out[i] = Source.span(rings[i], awake);
+        }
+        return out;
+    }
+
+    //! Values per ring in the hourly channel: packed levels, then known bits.
+    const HOURLY_VALUES = 2;
+
+    //! Every ring's packed hourly forecast, laid out flat. Read once per frame,
+    //! beside spans().
+    //!
+    //! A parallel channel rather than a wider span. That a span is exactly two
+    //! numbers is what lets a level and a range be treated alike everywhere
+    //! downstream, and twelve disjoint blocks with a radial axis is a different
+    //! shape entirely — so it travels beside the span, exactly as a marker does.
+    //!
+    //! No `awake` parameter, deliberately. An hourly forecast moves hourly, so
+    //! it is worth precisely as much in always-on as awake; only seconds has a
+    //! reading that goes stale between the one frame a minute that mode gets.
+    function hourly() as Array<Number> {
+        var out = new [RINGS * HOURLY_VALUES] as Array<Number>;
+        for (var i = 0; i < RINGS; i++) {
+            Source.fillHours(rings[i], out, i * HOURLY_VALUES);
+        }
+        return out;
+    }
+
+    //! Every hour known and dry, for always-on when the fills are held back.
+    //!
+    //! **Not all zeroes**, which is the trap. Zero `known` means every block is
+    //! *unknown*, which draws the dim tier across the whole ring — that is data,
+    //! in the one mode whose entire purpose is to show none. Known-and-dry is
+    //! what renders the plain unfilled field the mode is asking for.
+    function noHourly() as Array<Number> {
+        var out = new [RINGS * HOURLY_VALUES] as Array<Number>;
+        for (var i = 0; i < RINGS; i++) {
+            out[i * HOURLY_VALUES] = 0;
+            out[i * HOURLY_VALUES + 1] = RainForecast.ALL_KNOWN;
         }
         return out;
     }
