@@ -444,6 +444,21 @@ luminance of 0.012, invisible on a face that emits rather than reflects. Adding 
 cream lume as a third colour makes it worse, not better — cream is bright and nearly
 achromatic, so it separates from nothing and drops the worst neighbour pair to 52.
 
+**There can be no brown ring beside a gold one, and the reason generalises.** Brown is not a
+hue — it is dark orange, which is exactly what this face produces when it dims a gold. Unlit
+gold is `0x8C5400`; a cocoa brown is `0x8B5A2B`, 15 apart in CIELAB against the ~37 that
+separates lit from unlit *within* a ring. So a lit brown dot and an unlit gold dot are the
+same colour. Every brown tried lands 15–24 from unlit gold, and sweeping one toward red only
+clears the bar at a hue of about 4 degrees, by which point it is a brick and not a brown.
+That is why Alpinist 4's strap colour is `0xC75A5A`. The general rule: **any colour that is
+another ring's colour darkened cannot be used**, whatever its name. This is the same law that
+rules out the hue-at-two-lightnesses duotone above, arriving from a different direction.
+
+Alpinist 4 is also where ring order stops being free. White on the outermost ring — 436 dots
+against the innermost's 92 — puts a white-bearing theme over the luminance budget; on the
+innermost it lands at 4.95%, below Terrain. When a theme carries one much brighter colour,
+which ring it sits on matters more than which colour it is.
+
 Activity's colours are not invented: they are the accent colours the watch itself uses, read
 off the peak-chroma pixel of the device's own `nwidget_*.png` and `D_list_select_*.png`
 swatches, whose hues agree to a tenth of a degree across both sets. Activity is the darker
