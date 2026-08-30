@@ -120,6 +120,15 @@ control channel. `simctl/instance.py` sets all three, symlinking `~/.Garmin/Conn
 so devices and the signing key stay shared. Two checkouts have run the full suite
 concurrently, both green, neither touching the other or the lock.
 
+> **The MCP server drives the checkout *it* runs from, not yours.** `.mcp.json` is registered
+> at the repo root, so `simctl.paths.repo_root()` — which resolves relative to its own file —
+> is the **root** checkout for every session, worktrees included. `sim_load` therefore builds
+> and sideloads main's face, and `sim_settings_set` validates against main's
+> `bin/<App>-settings.json`, so a new setting in a worktree is refused as out of range with a
+> message listing the old values. It looks exactly like a broken settings.xml. Run the CLI
+> from inside the worktree instead — `PYTHONPATH=tools python3 -m simctl.settings ...` picks
+> up that checkout's `tools/`, and so its `bin/`.
+
 Pass `instance="shared"` to drive the machine's normal simulator instead. That path still
 takes `tools/sim_lock.sh`, so it queues properly with plain `make sim` and `make test` in
 sessions that never use the server.
