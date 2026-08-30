@@ -2761,4 +2761,250 @@ module MatrixTest {
         FrameGate.suppressed = suppressed;
         return true;
     }
+
+    // ------------------------------------------------------------------
+    // Delta redraw
+    // ------------------------------------------------------------------
+
+    //! A 64x64 off-screen Dc, or null when the device has no buffered bitmap.
+    //! Full-screen is ~304KB and takes the runner out; size does not matter to
+    //! what these cover, because the renderer still walks every dot and the
+    //! drawing clips.
+    function probeDc(logger as Logger) as Graphics.Dc? {
+        var bitmap = Graphics.createBufferedBitmap(
+            {:width => 64, :height => 64}).get();
+        if (!(bitmap instanceof Graphics.BufferedBitmap)) {
+            logger.debug("no buffered bitmap available; draw not exercised");
+            return null;
+        }
+        return bitmap.getDc();
+    }
+
+    function ringSize(ring as Number) as Number {
+        return DotGrid.ringStart[ring + 1] - DotGrid.ringStart[ring];
+    }
+
+    function noMarks() as Array<Float> {
+        var marks = new [StatMap.RINGS] as Array<Float>;
+        for (var i = 0; i < StatMap.RINGS; i++) {
+            marks[i] = Source.NO_MARKER;
+        }
+        return marks;
+    }
+
+    //! Two cleared frames, so the renderer has this ring in both buffers and
+    //! the draw after them is delta-eligible. Anything testing the delta has
+    //! to get here first, because the first two draws of any state are full
+    //! ones by design.
+    function settleBuffers(dc as Graphics.Dc, spans as Array<Array<Float> >,
+                           overs as Array<Boolean>, backing as Number?) as Void {
+        var marks = noMarks();
+        MatrixRenderer.draw(dc, spans, marks, overs, Palette.active,
+                            Palette.rampActive, backing,
+                            FrameGate.everything(), true);
+        MatrixRenderer.draw(dc, spans, marks, overs, Palette.active,
+                            Palette.rampActive, backing,
+                            FrameGate.everything(), true);
+    }
+
+    //! How many of a ring's dots read differently between two spans.
+    function differing(ring as Number, a as Array<Float>,
+                       b as Array<Float>) as Number {
+        var count = 0;
+        for (var i = DotGrid.ringStart[ring]; i < DotGrid.ringStart[ring + 1];
+                i++) {
+            var at = DotGrid.positionOf[i];
+            if (StatMap.isLit(at, a) != StatMap.isLit(at, b)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    //! A span that moved a little must repaint a little.
+    //!
+    //! The measurement this change is built on: the two drawLine calls per dot
+    //! are ~55% of a drawn frame, and a seconds ring moves its edge about five
+    //! dots between draws. So the ring is still walked — that part is cheap —
+    //! and the dots that did not change tier are left where they are.
+    //!
+    //! Asserted as a fraction of the ring rather than an exact count, because
+    //! the exact count is a property of the lattice and this is a claim about
+    //! the renderer.
+    (:test)
+    function aMovedSpanRepaintsOnlyItsEdge(logger as Logger) as Boolean {
+        Config.reload();
+        DotGrid.ensureBuilt();
+        var dc = probeDc(logger);
+        if (dc == null) {
+            return true;
+        }
+        var overs = noOvers();
+        var spans = everySpan(0.0, 0.50);
+        settleBuffers(dc, spans, overs, null);
+
+        var moved = everySpan(0.0, 0.55);
+        MatrixRenderer.draw(dc, moved, noMarks(), overs, Palette.active,
+                            Palette.rampActive, null, onlyRingDirty(2), false);
+
+        var whole = ringSize(2);
+        var expected = differing(2, spans[2], moved[2]);
+        logger.debug("ring 2: painted " + MatrixRenderer.painted + " of " +
+                     whole + ", " + expected + " dots changed tier");
+        Test.assertMessage(MatrixRenderer.painted > 0,
+            "the span moved, so something must have been drawn");
+        Test.assertEqualMessage(MatrixRenderer.painted, expected,
+            "a delta must draw exactly the dots that changed tier");
+        Test.assertMessage(MatrixRenderer.painted * 4 < whole,
+            "a 5% span move repainted " + MatrixRenderer.painted + " of " +
+            whole + " dots — that is not a delta, it is a full ring");
+        return true;
+    }
+
+    //! The delta must cover **both** buffers, not just the last draw.
+    //!
+    //! This is the one that would rot silently. A partial draw is only correct
+    //! in the buffer it lands in, and on a double-buffered device that buffer
+    //! was written two draws ago — which is why FrameGate repeats a change into
+    //! HOLD draws. A delta measured against the previous span alone looks right
+    //! on screen and leaves every other frame a step behind, which reads as a
+    //! ring that stutters rather than as anything broken.
+    (:test)
+    function theDeltaCoversBothBuffersNotJustTheLastDraw(logger as Logger) as Boolean {
+        Config.reload();
+        DotGrid.ensureBuilt();
+        var dc = probeDc(logger);
+        if (dc == null) {
+            return true;
+        }
+        var overs = noOvers();
+        var first = everySpan(0.0, 0.30);
+        settleBuffers(dc, first, overs, null);
+
+        // Two moves in a row, the way a seconds ring actually advances.
+        var second = everySpan(0.0, 0.40);
+        MatrixRenderer.draw(dc, second, noMarks(), overs, Palette.active,
+                            Palette.rampActive, null, onlyRingDirty(2), false);
+        var third = everySpan(0.0, 0.50);
+        MatrixRenderer.draw(dc, third, noMarks(), overs, Palette.active,
+                            Palette.rampActive, null, onlyRingDirty(2), false);
+
+        // The buffer this third draw lands in was last written with `first`,
+        // so the dots owed a repaint are those differing from either.
+        var union = differing(2, third[2], first[2]);
+        var justTheLast = differing(2, third[2], second[2]);
+        logger.debug("painted " + MatrixRenderer.painted + ", union " + union +
+                     ", against the last draw alone " + justTheLast);
+        Test.assertMessage(union > justTheLast,
+            "this test proves nothing unless the two-draw span is wider");
+        Test.assertEqualMessage(MatrixRenderer.painted, union,
+            "the delta must cover the span drawn two draws ago as well — " +
+            "it painted " + MatrixRenderer.painted + " where the buffer this " +
+            "draw lands in is " + union + " dots stale");
+        return true;
+    }
+
+    //! Anything but the span repaints the ring, twice.
+    //!
+    //! A delta may only differ by span. Both colours, the over flag, the ramp
+    //! and the backing repaint the ring wholesale, and a delta across one of
+    //! them would leave every unchanged dot showing a tier that no longer
+    //! exists. Twice, because both buffers hold the old colours.
+    (:test)
+    function aChangedTierForcesTwoFullRings(logger as Logger) as Boolean {
+        Config.reload();
+        DotGrid.ensureBuilt();
+        var dc = probeDc(logger);
+        if (dc == null) {
+            return true;
+        }
+        var spans = everySpan(0.0, 0.50);
+        var overs = noOvers();
+        settleBuffers(dc, spans, overs, null);
+
+        var whole = ringSize(2);
+        // Same span, but the ring has gone past its goal — which swaps both
+        // tiers underneath the loop.
+        overs[2] = true;
+        MatrixRenderer.draw(dc, spans, noMarks(), overs, Palette.active,
+                            Palette.rampActive, null, onlyRingDirty(2), false);
+        Test.assertEqualMessage(MatrixRenderer.painted, whole,
+            "the over flag swapped both tiers and the ring was not fully " +
+            "repainted — every unchanged dot is showing a colour that is gone");
+        MatrixRenderer.draw(dc, spans, noMarks(), overs, Palette.active,
+                            Palette.rampActive, null, onlyRingDirty(2), false);
+        Test.assertEqualMessage(MatrixRenderer.painted, whole,
+            "the second buffer still holds the old tiers, so the repeat draw " +
+            "must be full as well — this is what HOLD is for");
+        // And only then does the delta come back.
+        MatrixRenderer.draw(dc, spans, noMarks(), overs, Palette.active,
+                            Palette.rampActive, null, onlyRingDirty(2), false);
+        Test.assertMessage(MatrixRenderer.painted < whole,
+            "with both buffers holding the new tiers the ring may delta again");
+        logger.debug("over flip: full, full, then " + MatrixRenderer.painted +
+                     " of " + whole);
+        return true;
+    }
+
+    //! A cleared frame is never a delta.
+    (:test)
+    function aClearedFrameRedrawsEveryDot(logger as Logger) as Boolean {
+        Config.reload();
+        DotGrid.ensureBuilt();
+        var dc = probeDc(logger);
+        if (dc == null) {
+            return true;
+        }
+        var spans = everySpan(0.0, 0.50);
+        var overs = noOvers();
+        settleBuffers(dc, spans, overs, null);
+        MatrixRenderer.draw(dc, spans, noMarks(), overs, Palette.active,
+                            Palette.rampActive, null,
+                            FrameGate.everything(), true);
+        Test.assertEqualMessage(MatrixRenderer.painted, DotGrid.count,
+            "the screen was blacked, so every dot is owed a cross — " +
+            "a delta here leaves the field mostly black");
+        return true;
+    }
+
+    //! A mark the erase rubbed out gets its dot back.
+    //!
+    //! The one place the delta and the mark interact. Rubbing a mark out blacks
+    //! a DOT-square cell, which is the whole of that dot; the full repaint used
+    //! to put the cross back as a matter of course. A delta will not, because
+    //! that dot's tier did not change — so it has to be forced, or a moved mark
+    //! leaves a black hole exactly where the reading used to be.
+    (:test)
+    function anErasedMarkCellGetsItsDotBack(logger as Logger) as Boolean {
+        Config.reload();
+        DotGrid.ensureBuilt();
+        var dc = probeDc(logger);
+        if (dc == null) {
+            return true;
+        }
+        var spans = everySpan(0.0, 0.50);
+        var overs = noOvers();
+        settleBuffers(dc, spans, overs, null);
+
+        var marks = noMarks();
+        marks[2] = 0.20;
+        MatrixRenderer.draw(dc, spans, marks, overs, Palette.active,
+                            Palette.rampActive, null, onlyRingDirty(2), false);
+        // The mark moves, on a span that did not. Nothing changed tier, so the
+        // only dots owed a cross are the cells the erase blacked.
+        marks[2] = 0.80;
+        MatrixRenderer.draw(dc, spans, marks, overs, Palette.active,
+                            Palette.rampActive, null, onlyRingDirty(2), false);
+        logger.debug("mark move: erased " + MatrixRenderer.erased +
+                     ", painted " + MatrixRenderer.painted);
+        Test.assertMessage(MatrixRenderer.erased > 0,
+            "the mark moved, so its old cell must have been rubbed out");
+        Test.assertMessage(MatrixRenderer.painted >= MatrixRenderer.erased,
+            "every cell the erase blacked is owed its dot back — " +
+            MatrixRenderer.erased + " rubbed out against " +
+            MatrixRenderer.painted + " drawn leaves a hole in the field");
+        Test.assertMessage(MatrixRenderer.painted * 4 < ringSize(2),
+            "only the mark moved, so this must still be a delta");
+        return true;
+    }
 }

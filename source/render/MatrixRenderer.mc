@@ -82,6 +82,53 @@ module MatrixRenderer {
     var walked as Array<Boolean> = new [StatMap.RINGS] as Array<Boolean>;
     var erased as Number = 0;
 
+    //! How many dots the last draw actually put down. The delta redraw's whole
+    //! claim is that this is a handful rather than a ring, and like `walked` it
+    //! is otherwise unassertable: the screen cannot be read back.
+    var painted as Number = 0;
+
+    //! **The span each ring was last drawn with, and the one before that.**
+    //!
+    //! A dirty ring used to be repainted in full. Measured, the two drawLine
+    //! calls per dot are ~55% of a drawn frame — and between one draw and the
+    //! next a seconds ring moves its edge about five dots. So the ring is still
+    //! *walked*, which is cheap, and only the dots whose lit-ness actually
+    //! changed are drawn.
+    //!
+    //! Two spans rather than one, for exactly the reason `previousMark` keeps
+    //! two cells. A partial draw is only correct in the buffer it lands in, and
+    //! on a double-buffered device that buffer was last written two draws ago —
+    //! which is why FrameGate repeats every change into `HOLD` draws. So a dot
+    //! is repainted when it differs from *either* remembered span: that set is
+    //! right for whichever of the two buffers this draw is for, and needs no
+    //! reasoning about which one that is.
+    var lastFrom as Array<Float> = [] as Array<Float>;
+    var lastTo as Array<Float> = [] as Array<Float>;
+    var priorFrom as Array<Float> = [] as Array<Float>;
+    var priorTo as Array<Float> = [] as Array<Float>;
+
+    //! Everything about a ring that is *not* its span, folded into one key.
+    //!
+    //! The span is the only thing a delta may differ by. Its two colours, the
+    //! over flag, whether it draws the ramp and what the hands are backed with
+    //! all repaint the ring wholesale, and a delta would leave the other tier
+    //! stale. Rather than enumerate the settings that can move them — power
+    //! mode, theme, a ring reassignment — the values themselves are compared,
+    //! so a cause nobody thought of cannot slip through.
+    var lastWeak as Array<Number> = [] as Array<Number>;
+    var lastStrong as Array<Number> = [] as Array<Number>;
+    var lastBacking as Array<Number> = [] as Array<Number>;
+    var lastOver as Array<Boolean> = [] as Array<Boolean>;
+    var lastRamp as Array<Boolean> = [] as Array<Boolean>;
+
+    //! Consecutive draws this ring has been drawn with the key above unchanged.
+    //!
+    //! A delta needs **two**: both buffers must already hold this ring in these
+    //! colours, or the one this draw is not landing in keeps a tier that no
+    //! longer exists. Counting is what makes that checkable without storing a
+    //! second copy of every value.
+    var stableFor as Array<Number> = [] as Array<Number>;
+
     function draw(dc as Dc, spans as Array<Array<Float> >,
                   markers as Array<Float>, overs as Array<Boolean>,
                   palette as Array<Number>, ramp as Array<Number>,
@@ -109,9 +156,29 @@ module MatrixRenderer {
         if (drawnMark.size() != StatMap.RINGS) {
             drawnMark = new [StatMap.RINGS] as Array<Number>;
             previousMark = new [StatMap.RINGS] as Array<Number>;
+            lastFrom = new [StatMap.RINGS] as Array<Float>;
+            lastTo = new [StatMap.RINGS] as Array<Float>;
+            priorFrom = new [StatMap.RINGS] as Array<Float>;
+            priorTo = new [StatMap.RINGS] as Array<Float>;
+            lastWeak = new [StatMap.RINGS] as Array<Number>;
+            lastStrong = new [StatMap.RINGS] as Array<Number>;
+            lastBacking = new [StatMap.RINGS] as Array<Number>;
+            lastOver = new [StatMap.RINGS] as Array<Boolean>;
+            lastRamp = new [StatMap.RINGS] as Array<Boolean>;
+            stableFor = new [StatMap.RINGS] as Array<Number>;
             for (var ring = 0; ring < StatMap.RINGS; ring++) {
                 drawnMark[ring] = -1;
                 previousMark[ring] = -1;
+                lastFrom[ring] = 0.0;
+                lastTo[ring] = 0.0;
+                priorFrom[ring] = 0.0;
+                priorTo[ring] = 0.0;
+                lastWeak[ring] = -1;
+                lastStrong[ring] = -1;
+                lastBacking[ring] = -1;
+                lastOver[ring] = false;
+                lastRamp[ring] = false;
+                stableFor[ring] = 0;
             }
         } else if (clears) {
             // The screen is black; nothing is on it to rub out.
@@ -152,6 +219,10 @@ module MatrixRenderer {
         // Written as an explicit null test so the type narrows; hasBacking is
         // the same condition, kept for the dot loop.
         var backingColour = (backing != null) ? backing : 0;
+        // The backing folded into one comparable value, so a ring can tell
+        // "the hands were backed white last draw" from "they were not backed
+        // at all" with one integer. -1 is off; a colour is any real value.
+        var backingKey = (backing != null) ? backing : -1;
 
         // Whether the crosses follow their rings, read once. Upright, every
         // dot shares one orientation, so hoisting it here rather than reading
@@ -169,6 +240,7 @@ module MatrixRenderer {
         var half = DotGrid.DOT / 2;
         var lastColour = -1;
         erased = 0;
+        painted = 0;
         for (var ring = 0; ring < StatMap.RINGS; ring++) {
             walked[ring] = dirty[ring];
             if (!dirty[ring]) {
@@ -213,6 +285,53 @@ module MatrixRenderer {
             var isRamp = (rings[ring] == Source.SOURCE_TEMPERATURE);
             var last = ringStart[ring + 1];
 
+            // Is this ring's span the only thing that moved since it was last
+            // drawn, and has it been so for both of the draws sitting in the
+            // two buffers? Then the dots that agree with both remembered spans
+            // are already on screen, in the right colour, in whichever buffer
+            // this draw is for — and drawing them again is the cost this whole
+            // change exists to remove.
+            //
+            // `clears` rules a delta out on its own: the screen has just been
+            // blacked, so nothing is on it to keep.
+            var delta = !clears && stableFor[ring] >= 2 &&
+                        lastWeak[ring] == weak && lastStrong[ring] == strong &&
+                        lastOver[ring] == overs[ring] &&
+                        lastRamp[ring] == isRamp &&
+                        lastBacking[ring] == backingKey;
+            var fromA = lastFrom[ring];
+            var toA = lastTo[ring];
+            var wrapsA = (fromA > toA);
+            var fromB = priorFrom[ring];
+            var toB = priorTo[ring];
+            var wrapsB = (fromB > toB);
+            // The cells the mark erase just blacked. Their dots are owed a
+            // cross whatever the span did, or a delta leaves a hole where the
+            // mark was.
+            var forceA = delta ? drawnMark[ring] : -1;
+            var forceB = delta ? previousMark[ring] : -1;
+
+            // Remember what this draw is about to put down, before the loop
+            // consumes the locals. A ring drawn with the same key as last time
+            // is one draw closer to being delta-eligible; anything else starts
+            // the count again, which is what costs a changed ring its two full
+            // repaints and gives HOLD something to be right about.
+            stableFor[ring] = (lastWeak[ring] == weak &&
+                               lastStrong[ring] == strong &&
+                               lastOver[ring] == overs[ring] &&
+                               lastRamp[ring] == isRamp &&
+                               lastBacking[ring] == backingKey)
+                            ? stableFor[ring] + 1 : 1;
+            lastWeak[ring] = weak;
+            lastStrong[ring] = strong;
+            lastOver[ring] = overs[ring];
+            lastRamp[ring] = isRamp;
+            lastBacking[ring] = backingKey;
+            priorFrom[ring] = fromA;
+            priorTo[ring] = toA;
+            lastFrom[ring] = from;
+            lastTo[ring] = to;
+
             // Which dot this ring marks. The dot loop below never learns
             // about it: the mark is drawn afterwards, so the innermost
             // statement in the face is exactly what it was before marks
@@ -222,27 +341,49 @@ module MatrixRenderer {
             markAt[ring] = DotGrid.markedDotFor(ring, markers[ring]);
 
             for (var i = ringStart[ring]; i < last; i++) {
+                var position = positionOf[i];
+                // StatMap.litBetween()'s body, inlined. This is the innermost
+                // statement in the whole face.
+                var lit = wraps
+                    ? ((position >= from) || (position <= to))
+                    : ((position >= from) && (position <= to));
+
+                // The delta. A dot that reads the same against both remembered
+                // spans is already correct in both buffers, so it is not drawn.
+                // Two comparisons and a branch replace two native drawLine
+                // calls, on all but the handful of dots the fill edge crossed.
+                if (delta) {
+                    var litA = wrapsA
+                        ? ((position >= fromA) || (position <= toA))
+                        : ((position >= fromA) && (position <= toA));
+                    var litB = wrapsB
+                        ? ((position >= fromB) || (position <= toB))
+                        : ((position >= fromB) && (position <= toB));
+                    if (lit == litA && lit == litB && i != forceA &&
+                            i != forceB) {
+                        continue;
+                    }
+                }
+
                 var dx = xs[i];
                 var dy = ys[i];
                 var colour;
 
+                // The hands win over the fill, so this is tested second but
+                // decides first. A backed dot keeps its colour whatever the
+                // span did — the hands only move on a minute, and that changes
+                // the field print, which clears the screen and rules out a
+                // delta — so letting one through the test above only costs it
+                // a redundant repaint, never a wrong one.
                 if (hasBacking && HandBacking.covers(dx, dy, hourX, hourY,
                                                      minuteX, minuteY)) {
                     colour = backingColour;
+                } else if (lit) {
+                    colour = isRamp
+                        ? ramp[(position * rampTop).toNumber()]
+                        : strong;
                 } else {
-                    var position = positionOf[i];
-                    // StatMap.litBetween()'s body, inlined. This is the
-                    // innermost statement in the whole face.
-                    var lit = wraps
-                        ? ((position >= from) || (position <= to))
-                        : ((position >= from) && (position <= to));
-                    if (lit) {
-                        colour = isRamp
-                            ? ramp[(position * rampTop).toNumber()]
-                            : strong;
-                    } else {
-                        colour = weak;
-                    }
+                    colour = weak;
                 }
 
                 // Runs of dots share a colour, so only change pen when it
@@ -266,6 +407,7 @@ module MatrixRenderer {
                 }
                 dc.drawLine(x - ax, y - ay, x + ax, y + ay);
                 dc.drawLine(x - bx, y - by, x + bx, y + by);
+                painted++;
             }
         }
 
