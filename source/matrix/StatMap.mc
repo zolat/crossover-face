@@ -35,6 +35,14 @@ module StatMap {
         ROTATION_UPRIGHT = 1        //! Every cross stays upright.
     }
 
+    //! Which set of colours the rings carry. The theme decides every colour
+    //! the face draws; see Palette.THEMES for what each one is and why.
+    enum Theme {
+        THEME_TERRAIN = 0,          //! Orchid, moss, ice, rust.
+        THEME_ACTIVITY = 1          //! The watch's own activity accents.
+    }
+
+    const PROPERTY_THEME = "theme";
     const PROPERTY_BACKING = "handBacking";
     const PROPERTY_ALWAYS_ON_FILL = "alwaysOnFill";
     const PROPERTY_ROTATION = "dotRotation";
@@ -45,6 +53,7 @@ module StatMap {
 
     const RING_THICKNESS = (DotGrid.RADIUS - DotGrid.HUB) / RINGS;
 
+    var theme as Number = THEME_TERRAIN;
     var backing as Number = BACKING_OFF;
     var alwaysOnFill as Number = ALWAYS_ON_FILL_SHOWN;
     var rotation as Number = ROTATION_RADIAL;
@@ -60,6 +69,8 @@ module StatMap {
     //! Re-read every setting. Safe at any time; anything missing or out of
     //! range falls back to its default rather than throwing.
     function load() as Void {
+        theme = readNumber(PROPERTY_THEME, THEME_TERRAIN,
+                           THEME_TERRAIN, THEME_ACTIVITY);
         backing = readNumber(PROPERTY_BACKING, BACKING_OFF,
                              BACKING_OFF, BACKING_DARK);
         alwaysOnFill = readNumber(PROPERTY_ALWAYS_ON_FILL, ALWAYS_ON_FILL_SHOWN,

@@ -1,8 +1,13 @@
 import Toybox.Lang;
 
-//! Settings and the palette they imply are always reloaded together: the
-//! palette's hues come from whichever source each ring is assigned to, so one
-//! without the other leaves the face drawing last session's colours.
+//! Settings and the palette they imply are always reloaded together: which
+//! theme the rings carry is itself a setting, so a load without a rebuild
+//! leaves the face drawing last session's colours.
+//!
+//! The order is load-bearing for that reason — StatMap.load() before
+//! Palette.build(), never the other way round. (An older comment here claimed
+//! the hues came from each ring's *source* assignment. They never did:
+//! Palette.build() reads StatMap.RINGS, the count, and never StatMap.rings.)
 module Config {
     function reload() as Void {
         StatMap.load();

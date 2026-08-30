@@ -2,6 +2,14 @@ import Toybox.Application;
 import Toybox.Lang;
 import Toybox.WatchUi;
 
+//! Theme names, in StatMap.Theme order. A module const like SOURCE_LABELS
+//! below, because the menu and its picker both need it and a second copy is
+//! how the two stop agreeing.
+const THEME_LABELS = [
+    Rez.Strings.ThemeTerrain,
+    Rez.Strings.ThemeActivity
+] as Array<ResourceId>;
+
 //! Source names, in Source.Kind order — every value, including the retired
 //! one, so this stays indexable by the enum. What the picker *offers* is
 //! Source.OFFERED, which is a different and shorter list.
@@ -26,6 +34,9 @@ class SettingsMenu extends WatchUi.Menu2 {
 
     function initialize() {
         Menu2.initialize({:title => Rez.Strings.SettingsTitle});
+        // The theme leads: it is the largest visual choice on the face.
+        addItem(new WatchUi.MenuItem(
+            Rez.Strings.ThemeTitle, themeLabel(), :theme, null));
         addItem(new WatchUi.MenuItem(
             Rez.Strings.BackingTitle, backingLabel(), :backing, null));
         addItem(new WatchUi.MenuItem(Rez.Strings.AlwaysOnFillTitle,
@@ -44,10 +55,11 @@ class SettingsMenu extends WatchUi.Menu2 {
     //! the values can be refreshed — the menu itself is not rebuilt.
     function onShow() as Void {
         Menu2.onShow();
-        setSubLabelOf(0, backingLabel());
-        setSubLabelOf(1, alwaysOnFillLabel());
-        setSubLabelOf(2, rotationLabel());
-        setSubLabelOf(4, Diagnostics.summary());
+        setSubLabelOf(0, themeLabel());
+        setSubLabelOf(1, backingLabel());
+        setSubLabelOf(2, alwaysOnFillLabel());
+        setSubLabelOf(3, rotationLabel());
+        setSubLabelOf(5, Diagnostics.summary());
     }
 
     private function setSubLabelOf(index as Number,
@@ -56,6 +68,10 @@ class SettingsMenu extends WatchUi.Menu2 {
         if (item != null) {
             item.setSubLabel(label);
         }
+    }
+
+    private function themeLabel() as ResourceId {
+        return THEME_LABELS[StatMap.theme];
     }
 
     private function alwaysOnFillLabel() as ResourceId {
@@ -90,6 +106,9 @@ class SettingsMenuDelegate extends WatchUi.Menu2InputDelegate {
         if (id == :rings) {
             WatchUi.pushView(new RingMenu(), new RingMenuDelegate(),
                              WatchUi.SLIDE_LEFT);
+        } else if (id == :theme) {
+            push(new ChoiceMenu(Rez.Strings.ThemeTitle, StatMap.PROPERTY_THEME,
+                THEME_LABELS, sequential(THEME_LABELS.size()), StatMap.theme));
         } else if (id == :backing) {
             push(new ChoiceMenu(Rez.Strings.BackingTitle, StatMap.PROPERTY_BACKING,
                 [Rez.Strings.BackingOff,
