@@ -77,6 +77,34 @@ module MatrixTest {
         return total / (Math.PI * DotGrid.RADIUS * DotGrid.RADIUS);
     }
 
+    //! The same frame, with the hands laid over it.
+    //!
+    //! Hands at right angles — hour at three, minute at twelve — because that
+    //! is the arrangement with the least overlap and so the most lit area: two
+    //! separate corridors rather than one. Fixed rather than read off the clock,
+    //! so the measurement is the same every run.
+    function frameLuminanceWithHands(spans as Array<Array<Float> >,
+                                     palette as Array<Number>,
+                                     backing as Number) as Float {
+        var handColour = HandStyle.coloursFor(backing);
+        var total = 0.0;
+        for (var row = 0; row < DotGrid.ROWS; row++) {
+            var dy = DotGrid.offsetAt(row);
+            for (var col = 0; col < DotGrid.COLS; col++) {
+                var dx = DotGrid.offsetAt(col);
+                if (!DotGrid.contains(dx, dy)) {
+                    continue;
+                }
+                var hand = HandBacking.handAt(dx, dy, 1.0, 0.0, 0.0, -1.0);
+                var colour = (hand != HandBacking.NONE)
+                    ? handColour[hand]
+                    : palette[StatMap.classify(dx, dy, spans)];
+                total += relativeLuminance(colour) * LIT_PIXELS_PER_DOT;
+            }
+        }
+        return total / (Math.PI * DotGrid.RADIUS * DotGrid.RADIUS);
+    }
+
     //! build() fills three dots out of every four by mirroring a fourth across
     //! the axes, which means it writes to computed indices rather than to a
     //! running cursor. Get that arithmetic wrong and a slot is written twice
@@ -2606,40 +2634,261 @@ module MatrixTest {
         return true;
     }
 
-    //! The backing must land on the hands, and only on the hands.
+    //! The hands must land on the hands, and only on the hands.
     (:test)
     function handBackingFollowsTheHands(logger as Logger) as Boolean {
-        // Both hands straight up.
-        Test.assertMessage(HandBacking.covers(0, -100, 0.0, -1.0, 0.0, -1.0),
+        // Both hands straight up. The minute wins where they overlap, so the
+        // slot is named rather than merely non-zero.
+        Test.assertEqualMessage(
+            HandBacking.handAt(0, -100, 0.0, -1.0, 0.0, -1.0),
+            HandBacking.MINUTE,
             "a dot on the hand axis must be covered");
-        Test.assertMessage(!HandBacking.covers(100, 0, 0.0, -1.0, 0.0, -1.0),
+        Test.assertEqualMessage(
+            HandBacking.handAt(100, 0, 0.0, -1.0, 0.0, -1.0),
+            HandBacking.NONE,
             "a dot at right angles to the hand must not be covered");
-        Test.assertMessage(!HandBacking.covers(0, -HandBacking.MINUTE_REACH - 40,
-                0.0, -1.0, 0.0, -1.0),
+        Test.assertEqualMessage(
+            HandBacking.handAt(0, -HandBacking.MINUTE_REACH - 40,
+                               0.0, -1.0, 0.0, -1.0),
+            HandBacking.NONE,
             "a dot beyond the hand tip must not be covered");
-        Test.assertMessage(HandBacking.covers(HandBacking.HALF_WIDTH - 1, -100,
-                0.0, -1.0, 0.0, -1.0),
+        Test.assertEqualMessage(
+            HandBacking.handAt(HandBacking.HALF_WIDTH - 1, -100,
+                               0.0, -1.0, 0.0, -1.0),
+            HandBacking.MINUTE,
             "a dot within the hand's width must be covered");
-        Test.assertMessage(!HandBacking.covers(HandBacking.HALF_WIDTH * 3, -100,
-                0.0, -1.0, 0.0, -1.0),
+        Test.assertEqualMessage(
+            HandBacking.handAt(HandBacking.HALF_WIDTH * 3, -100,
+                               0.0, -1.0, 0.0, -1.0),
+            HandBacking.NONE,
             "a dot well outside the hand's width must not be covered");
 
         // The two hands are tested independently: a dot under the minute hand
         // alone must still be covered, and the hour hand's shorter reach must
         // not be lent to it. Collapsing three calls into one is exactly the
         // kind of change that could drop one hand's test silently.
-        Test.assertMessage(HandBacking.covers(0, -100, 1.0, 0.0, 0.0, -1.0),
+        Test.assertEqualMessage(
+            HandBacking.handAt(0, -100, 1.0, 0.0, 0.0, -1.0),
+            HandBacking.MINUTE,
             "a dot under the minute hand alone must be covered");
-        Test.assertMessage(HandBacking.covers(100, 0, 1.0, 0.0, 0.0, -1.0),
+        Test.assertEqualMessage(
+            HandBacking.handAt(100, 0, 1.0, 0.0, 0.0, -1.0),
+            HandBacking.HOUR,
             "a dot under the hour hand alone must be covered");
-        Test.assertMessage(
-            !HandBacking.covers(0, -HandBacking.HOUR_REACH - 20,
-                                0.0, -1.0, 1.0, 0.0),
+        Test.assertEqualMessage(
+            HandBacking.handAt(0, -HandBacking.HOUR_REACH - 20,
+                               0.0, -1.0, 1.0, 0.0),
+            HandBacking.NONE,
             "the hour hand must not reach as far as the minute hand");
-        Test.assertMessage(
-            HandBacking.covers(0, -HandBacking.HOUR_REACH - 20,
+        Test.assertEqualMessage(
+            HandBacking.handAt(0, -HandBacking.HOUR_REACH - 20,
                                1.0, 0.0, 0.0, -1.0),
+            HandBacking.MINUTE,
             "the minute hand does reach that far");
+        return true;
+    }
+
+    //! The window the renderer gates the hand test with must never exclude a
+    //! dot the hand actually covers.
+    //!
+    //! **This is the guard the whole hand implementation now rests on.** The
+    //! renderer does not call handAt(): the bar test is eight float multiplies
+    //! and paying it on every dot of a 1544-dot lattice tripped the watchdog
+    //! outright, so the loop tests an angular window first and only runs the
+    //! bar inside it. That makes the drawn hand the *intersection* of two
+    //! things, and a window even slightly too narrow clips the hand along its
+    //! length — which looks like a rendering quirk, not like a bug in a
+    //! trigonometric bound, and would be found by eye or not at all.
+    //!
+    //! So: every dot, every ring, at a spread of hand angles chosen to fall
+    //! between the lattice's own symmetries. If handAt() says a hand covers the
+    //! dot, the dot must be inside that hand's window and the hand must have
+    //! been allowed to reach that ring.
+    (:test)
+    function theGatedHandTestAgreesWithHandBacking(logger as Logger) as Boolean {
+        Config.reload();
+        DotGrid.ensureBuilt();
+        var checked = 0;
+        var covered = 0;
+        // Awkward on purpose: not multiples of 30 degrees, so the hands do not
+        // sit on the lattice's axes or its diagonals.
+        var minutes = [0, 7, 13, 22, 38, 47, 59] as Array<Number>;
+        for (var m = 0; m < minutes.size(); m++) {
+            var minute = minutes[m];
+            for (var hour = 0; hour < 12; hour += 5) {
+                var hourTurn = (((hour * 30.0) + (minute * 0.5)) / 360.0).toFloat();
+                var minuteTurn = ((minute * 6.0) / 360.0).toFloat();
+                var hourRad = hourTurn * DotGrid.FULL_TURN;
+                var minuteRad = minuteTurn * DotGrid.FULL_TURN;
+                var hx = Math.sin(hourRad).toFloat();
+                var hy = -Math.cos(hourRad).toFloat();
+                var mx = Math.sin(minuteRad).toFloat();
+                var my = -Math.cos(minuteRad).toFloat();
+                for (var ring = 0; ring < StatMap.RINGS; ring++) {
+                    var inner = DotGrid.ringInner[ring];
+                    var hourWindow = StatMap.windowAround(hourTurn,
+                                                          DotGrid.handHalf[ring]);
+                    var minuteWindow = StatMap.windowAround(minuteTurn,
+                                                            DotGrid.handHalf[ring]);
+                    var last = DotGrid.ringStart[ring + 1];
+                    for (var i = DotGrid.ringStart[ring]; i < last; i++) {
+                        var hand = HandBacking.handAt(
+                            DotGrid.xs[i], DotGrid.ys[i], hx, hy, mx, my);
+                        checked++;
+                        if (hand == HandBacking.NONE) {
+                            continue;
+                        }
+                        covered++;
+                        var window = (hand == HandBacking.HOUR) ? hourWindow
+                                                                : minuteWindow;
+                        var reach = (hand == HandBacking.HOUR)
+                            ? HandBacking.HOUR_REACH : HandBacking.MINUTE_REACH;
+                        Test.assertMessage(reach >= inner,
+                            "a hand covers a dot on a ring the renderer skips it on");
+                        Test.assertMessage(
+                            StatMap.litBetween(DotGrid.positionOf[i],
+                                               window[0], window[1],
+                                               window[0] > window[1]),
+                            "the window clips a dot the hand covers, on ring "
+                                + ring + " at " + hour + ":" + minute);
+                    }
+                }
+            }
+        }
+        logger.debug("checked " + checked + " dot-angles, " + covered + " covered");
+        // A window that matched nothing would pass every assertion above.
+        Test.assertMessage(covered > 0,
+            "no dot was covered at all, so nothing was actually checked");
+        return true;
+    }
+
+    //! Where the two hands cross, the minute hand is the one on top.
+    //!
+    //! On the Crossover this decides nothing — both slots carry the one backing
+    //! colour — which is exactly why it needs asserting here rather than being
+    //! left to show up on screen. A drawn face that stacked them the other way
+    //! would read as the hour hand passing in front of the minute, which no
+    //! watch does, and the only place that order lives is the order of two
+    //! branches inside handAt().
+    (:test)
+    function theMinuteHandCrossesOverTheHour(logger as Logger) as Boolean {
+        // Both hands at twelve: every dot on the axis is under both.
+        for (var out = HandBacking.HALF_WIDTH; out < HandBacking.HOUR_REACH;
+                out += 20) {
+            Test.assertEqualMessage(
+                HandBacking.handAt(0, -out, 0.0, -1.0, 0.0, -1.0),
+                HandBacking.MINUTE,
+                "the minute hand is above the hour where they overlap");
+        }
+        // Behind the pivot they overlap too, and the same order must hold.
+        Test.assertEqualMessage(
+            HandBacking.handAt(0, HandBacking.COUNTERWEIGHT - 1,
+                               0.0, -1.0, 0.0, -1.0),
+            HandBacking.MINUTE,
+            "the counterweights stack the same way the hands do");
+        return true;
+    }
+
+    //! Each hand paints from its own slot, and the two styles differ only there.
+    //!
+    //! `HandStyle.coloursFor` is what the renderer hoists once a frame and then
+    //! indexes per dot, so this is the whole of the difference between a watch
+    //! whose hands are brass and one that draws them. Asserted through the
+    //! style rather than against fixed colours, so one test serves both builds.
+    (:test)
+    function eachHandPaintsFromItsOwnSlot(logger as Logger) as Boolean {
+        var colours = HandStyle.coloursFor(Palette.BACKING_WHITE);
+        Test.assertEqualMessage(colours.size(), HandBacking.SLOTS,
+            "the table must have a slot for every answer handAt gives");
+        logger.debug("hour " + colours[HandBacking.HOUR].format("%06X") +
+                     ", minute " + colours[HandBacking.MINUTE].format("%06X"));
+        if (HandStyle.DRAWN) {
+            // Drawn, the two hands must be told apart. They are the Crossover's
+            // own white-and-grey pair, which is what lets every theme's
+            // measurements carry over untouched.
+            Test.assertEqualMessage(colours[HandBacking.HOUR],
+                Palette.HAND_HOUR, "the drawn hour hand is the Crossover's");
+            Test.assertEqualMessage(colours[HandBacking.MINUTE],
+                Palette.HAND_MINUTE, "the drawn minute hand is the Crossover's");
+            Test.assertMessage(
+                colours[HandBacking.HOUR] != colours[HandBacking.MINUTE],
+                "drawn hands must be distinguishable from each other");
+        } else {
+            // Brass, the hands distinguish themselves and the dots behind them
+            // only have to sit there, so one backing colour serves both.
+            Test.assertEqualMessage(colours[HandBacking.HOUR],
+                Palette.BACKING_WHITE, "the backing is the backing");
+            Test.assertEqualMessage(colours[HandBacking.MINUTE],
+                Palette.BACKING_WHITE, "both hands take the one backing");
+        }
+        // Dark is a silhouette on either watch: one colour, both hands.
+        var dark = HandStyle.coloursFor(Palette.BACKING_DARK);
+        Test.assertEqualMessage(dark[HandBacking.HOUR], Palette.BACKING_DARK,
+            "a dark hand is cut out of the field, not coloured");
+        Test.assertEqualMessage(dark[HandBacking.MINUTE], Palette.BACKING_DARK,
+            "and both hands are cut out the same way");
+        return true;
+    }
+
+    //! The hands stay lit in always-on exactly when the face is the one drawing
+    //! them.
+    //!
+    //! One line, and it is the whole of the Epix's power-mode difference. Where
+    //! the hands are brass they keep telling the time with the dots behind them
+    //! dark, so backing is suppressed to save light; where the face draws them
+    //! they are the only thing on the glass saying what o'clock it is, and
+    //! suppressing them would leave always-on with no time on it at all. Tying
+    //! the two constants together is what stops a future style setting one and
+    //! forgetting the other.
+    (:test)
+    function handsSurviveAlwaysOnExactlyWhenTheFaceDrawsThem(
+            logger as Logger) as Boolean {
+        logger.debug("drawn " + HandStyle.DRAWN +
+                     ", always-on " + HandStyle.ALWAYS_ON);
+        Test.assertEqualMessage(HandStyle.ALWAYS_ON, HandStyle.DRAWN,
+            "hands the face draws must survive always-on, and only those");
+        return true;
+    }
+
+    //! Drawn hands must cost almost nothing against the burn-in budget.
+    //!
+    //! This is the measurement the whole design rests on, so it is asserted
+    //! rather than argued. A hand made of dots *recolours* dots already lit at
+    //! the unfilled tier; it does not add lit area. Solid polygons of the same
+    //! geometry measure about 5% of screen on their own — on top of the worst
+    //! theme's 5.7% field, over the 10% cliff before anything else is drawn.
+    //!
+    //! Walked over every theme, because every other luminance test here
+    //! measures whichever one happens to be persisted, and the worst frame the
+    //! face can draw, because that is the one the rule is written against.
+    (:test)
+    function handsCostLittleAlwaysOnLuminance(logger as Logger) as Boolean {
+        var full = everySpan(0.0, 1.0);
+        var worstCost = 0.0;
+        for (var theme = 0; theme < Palette.THEME_COUNT; theme++) {
+            Properties.setValue(StatMap.PROPERTY_THEME, theme);
+            Config.reload();
+            var bare = frameLuminance(full, Palette.alwaysOn);
+            var handed = frameLuminanceWithHands(full, Palette.alwaysOn,
+                                                 Palette.BACKING_WHITE);
+            var cost = handed - bare;
+            if (cost > worstCost) {
+                worstCost = cost;
+            }
+            logger.debug("theme " + theme + " always-on " + bare +
+                         " -> " + handed + " with hands");
+            Test.assertMessage(handed < BUDGET,
+                "theme " + theme + " exceeds the burn-in budget once the " +
+                "hands are drawn");
+        }
+        logger.debug("worst hand cost: " + worstCost);
+        // A point of screen luminance. Generous against the ~0.6 this measures,
+        // and nowhere near the ~5 a filled polygon would cost — so it fails on
+        // a change of *kind*, which is what it is here to catch.
+        Test.assertMessage(worstCost < 0.01,
+            "drawn hands must recolour the field, not light new area");
+        Properties.setValue(StatMap.PROPERTY_THEME, StatMap.THEME_TERRAIN);
+        Config.reload();
         return true;
     }
 

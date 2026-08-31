@@ -1,0 +1,15 @@
+<properties xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://developer.garmin.com/downloads/connect-iq/resources.xsd">
+    <!-- Overrides for the watches that have no hands of their own.
+
+         Only what actually differs is here; every other property comes from
+         resources/properties.xml, so the stored values stay indices into the
+         same enums and a ring set on one watch means the same on another. -->
+
+    <!-- 0 off, 1 white, 2 dark. Kept in sync with StatMap.Backing.
+
+         **On by default here, where it is off on the Crossover.** There the
+         setting decides whether to light the dots behind two brass hands, and
+         off is the plainer face. Here it decides whether the face shows the
+         time at all. -->
+    <property id="handBacking" type="number">1</property>
+</properties>

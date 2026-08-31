@@ -34,23 +34,23 @@ module Lattice {
     //!
     //! COLS is the largest even count that keeps the outermost dot on screen
     //! once the drift has pushed it: offsetAt(COLS-1) + Drift.MAX_OFFSET +
-    //! DOT/2 must stay inside SCREEN/2 - 1. Here that is 215 + 3 + 2 = 220
+    //! DOT/2 must stay inside SCREEN/2 - 1. Here that is 205 + 3 + 2 = 210
     //! against 226.
-    const COLS as Number = 44;
-    const ROWS as Number = 44;
+    const COLS as Number = 42;
+    const ROWS as Number = 42;
 
     //! The lattice's own radius: half the screen, less a 5px margin.
-    const RADIUS as Number = 222;
+    const RADIUS as Number = 210;
 
     //! Radius punched out of the middle. On the Crossover this is what the
     //! physical hand pivot covers; on a drawn-hands device it is where the two
     //! hands cross, and is kept for the same reason — a dot there is never
     //! legible.
-    const HUB as Number = 24;
+    const HUB as Number = 23;
 
     //! What DotGrid.measureRows() counts from the values above. Asserted, not
     //! trusted: it is a claim about this lattice that the suite re-derives.
-    const EXPECTED_DOTS as Number = 1544;
+    const EXPECTED_DOTS as Number = 1380;
 
     // --- the hands -----------------------------------------------------------
     //
@@ -60,8 +60,8 @@ module Lattice {
     // own scales these by its radius, so the drawn hands sit in the field the
     // same way the brass ones sit over the glass.
 
-    const HAND_HALF_WIDTH as Number = 16;
-    const HAND_COUNTERWEIGHT as Number = 54;
-    const HOUR_REACH as Number = 153;
-    const MINUTE_REACH as Number = 206;
+    const HAND_HALF_WIDTH as Number = 15;
+    const HAND_COUNTERWEIGHT as Number = 51;
+    const HOUR_REACH as Number = 145;
+    const MINUTE_REACH as Number = 195;
 }

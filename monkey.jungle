@@ -24,3 +24,15 @@ epix2pro42mm.sourcePath = $(base.sourcePath);source-lattice/crossover;source-han
 epix2.sourcePath = $(base.sourcePath);source-lattice/epix416;source-hands/drawn
 epix2pro47mm.sourcePath = $(base.sourcePath);source-lattice/epix416;source-hands/drawn
 epix2pro51mm.sourcePath = $(base.sourcePath);source-lattice/epix454;source-hands/drawn
+
+# What the four hands-drawn watches override, shared between them.
+#
+# It cannot be a qualified folder. `resources-<device>` would need four copies
+# of the same two files, and the family qualifier is no better: epix2pro42mm is
+# round-390x390, which is the Crossover's family too, so a family folder would
+# reach the one watch these overrides are wrong for.
+epix2.resourcePath = $(epix2.resourcePath);resources-drawn-hands
+epix2pro42mm.resourcePath = $(epix2pro42mm.resourcePath);resources-drawn-hands
+epix2pro47mm.resourcePath = $(epix2pro47mm.resourcePath);resources-drawn-hands
+epix2pro51mm.resourcePath = $(epix2pro51mm.resourcePath);resources-drawn-hands
+

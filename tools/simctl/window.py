@@ -236,33 +236,106 @@ def capture(window: SimulatorWindow, destination: Path | None = None,
     return image
 
 
+def _profile(device: str = DEFAULT_DEVICE) -> dict:
+    return json.loads((DEVICE_DIR / device / "simulator.json").read_text())
+
+
 def device_image(device: str = DEFAULT_DEVICE) -> Image.Image:
-    return Image.open(DEVICE_DIR / device / "device.png").convert("RGB")
+    """The watch artwork the simulator draws its bezel from.
+
+    The filename is named by the device's own profile rather than assumed. Only
+    the Crossover calls it ``device.png``; the Epix family names the file after
+    the device (``epix2pro51mm.png``), so hard-coding the crossover's name made
+    every capture on another watch fail with a FileNotFoundError that reads like
+    a broken install.
+    """
+    name = _profile(device).get("image", "device.png")
+    return Image.open(DEVICE_DIR / device / name).convert("RGB")
 
 
 def display_location(device: str = DEFAULT_DEVICE) -> dict:
-    data = json.loads((DEVICE_DIR / device / "simulator.json").read_text())
-    return data["display"]["location"]
+    return _profile(device)["display"]["location"]
 
 
-def locate_device(shot: Image.Image, device: str = DEFAULT_DEVICE) -> tuple[float, int, float]:
+#: A capture pixel this close to white is the simulator window's own background.
+BACKGROUND_FLOOR = 240
+
+
+def artwork_extent(shot: Image.Image, chrome: int = 8) -> tuple[int, int, int, int] | None:
+    """Where the watch artwork sits in a capture: ``(left, top, width, height)``.
+
+    The simulator draws the watch centred on a white page, so the artwork is
+    simply everything on that page which is not white. Its own widest row is its
+    full width - the artwork has no transparent margin - so the bounding box
+    gives the scale and both offsets outright.
+
+    A row only counts if it has background on **both** sides. The title bar and
+    the status strip under the watch are not white either, and they span the
+    window edge to edge - so without that condition the widest row is a piece of
+    window chrome and the artwork appears to fill the window, which is the very
+    mistake this function exists to correct.
+    """
+    px = shot.convert("RGB").load()
+    left, right, top, bottom = None, None, None, None
+    for row in range(chrome, shot.height - chrome):
+        first = None
+        last = None
+        for column in range(chrome, shot.width - chrome):
+            if min(px[column, row]) < BACKGROUND_FLOOR:
+                if first is None:
+                    first = column
+                last = column
+        if first is None or first == chrome or last == shot.width - chrome - 1:
+            continue                    # chrome, or something running off-edge
+        if top is None:
+            top = row
+        bottom = row
+        left = first if left is None else min(left, first)
+        right = last if right is None else max(right, last)
+    if top is None:
+        return None
+    return left, top, right - left + 1, bottom - top + 1
+
+
+def locate_device(shot: Image.Image,
+                  device: str = DEFAULT_DEVICE) -> tuple[float, int, int, float]:
     """Find the device artwork inside a window capture.
 
-    Returns ``(scale, y_offset, mismatch)``. The artwork is drawn to fit the window
-    width, so the scale follows from the capture width; only the vertical offset is
-    unknown, and it is found by comparing bezel pixels against ``device.png`` instead of
-    assuming a title-bar height. ``mismatch`` is the mean per-channel difference at the
-    best offset — near zero when the match is real, large when the window is showing
-    something else (a dialog, a different device).
+    Returns ``(scale, x_offset, y_offset, mismatch)``. ``mismatch`` is the mean
+    per-channel difference between the artwork and what was found there - near
+    zero when the match is real, large when the window is showing something else
+    (a dialog, a different device).
+
+    **The placement is measured, not searched.** The first version took the scale
+    from the window width and hunted for the vertical offset by matching bezel
+    pixels. Both halves were wrong for anything but the Crossover: that window
+    happens to draw the artwork edge to edge, while an Epix pads it with white
+    and puts a taller status strip under it, so a width-derived scale came out
+    2.0 against a real 1.84 and cropped a ring of bezel into what was supposed
+    to be the display. The failure is quiet - a crop that looks plausible and
+    measures wrong - which is the worst kind here, because tools/luminance.py
+    trusts what it is handed.
+
+    Searching for the scale with the same bezel probes does not rescue it: the
+    bezel is mostly black, so black matches black at any scale and the search
+    returns whichever one it tried first. The white page around the artwork is
+    the unambiguous signal, so the whole placement comes from that box and the
+    probes are left to do the one thing they are good at - saying whether what
+    was found is really this device.
     """
     art = device_image(device)
-    scale = shot.width / art.width
+    display = display_location(device)
+
+    box = artwork_extent(shot)
+    if box is None:
+        raise CaptureError("the capture is blank; nothing to locate")
+    x_offset, box_top, art_width, box_height = box
+    scale = art_width / art.width
     art_height = int(round(art.height * scale))
     if art_height > shot.height:
         raise CaptureError("capture is shorter than the device artwork; window too small")
 
     # Sample the bezel only: the display area changes every frame, the artwork never does.
-    display = display_location(device)
     probes = []
     for row in range(4, art.height, 37):
         for column in range(4, art.width, 53):
@@ -270,30 +343,41 @@ def locate_device(shot: Image.Image, device: str = DEFAULT_DEVICE) -> tuple[floa
                       and display["y"] <= row < display["y"] + display["height"])
             if not inside:
                 probes.append((column, row))
-    reference = [art.getpixel(point) for point in probes]
 
-    small = shot.convert("RGB").resize((art.width, int(shot.height / scale)), Image.BILINEAR)
-    best, best_score = 0, None
-    for offset in range(0, small.height - art.height + 1):
+    # The box gives the scale outright, because the artwork's own widest row is
+    # its full width. Its *height* is less trustworthy - the window draws a soft
+    # shadow under the watch, which reads as artwork and stretches the box
+    # several percent past where the asset ends - so the top edge is settled by
+    # matching bezel pixels, over the short range the box has already narrowed
+    # it to. Scale measured, offset matched: each by the signal it is good for.
+    rgb = shot.convert("RGB")
+    reference = [art.getpixel(point) for point in probes]
+    slack = max(4, box_height - art_height)
+    best, best_score = box_top, None
+    for top in range(max(0, box_top - 4), min(box_top + slack, shot.height - art_height) + 1):
         total = 0
         for (column, row), expected in zip(probes, reference):
-            actual = small.getpixel((column, row + offset))
+            actual = rgb.getpixel((x_offset + int(round(column * scale)),
+                                   top + int(round(row * scale))))
             total += (abs(actual[0] - expected[0]) + abs(actual[1] - expected[1])
                       + abs(actual[2] - expected[2]))
             if best_score is not None and total >= best_score:
                 break  # already worse than the incumbent
         else:
             if best_score is None or total < best_score:
-                best, best_score = offset, total
-    mismatch = (best_score or 0) / (len(probes) * 3)
-    return scale, int(round(best * scale)), mismatch
+                best, best_score = top, total
+    return scale, x_offset, best, (best_score or 0) / (len(probes) * 3)
 
 
 def crop_face(shot: Image.Image, device: str = DEFAULT_DEVICE) -> Image.Image:
-    """The raw 390x390 display, which is what tools/luminance.py expects."""
-    scale, y_offset, _ = locate_device(shot, device)
+    """The raw display, at its own resolution - what tools/luminance.py expects.
+
+    390x390 on the Crossover, 454x454 on an Epix 2 Pro 51mm. luminance.py reads
+    the size off the image, so it needs no telling.
+    """
+    scale, x_offset, y_offset, _ = locate_device(shot, device)
     display = display_location(device)
-    left = int(round(display["x"] * scale))
+    left = x_offset + int(round(display["x"] * scale))
     top = y_offset + int(round(display["y"] * scale))
     right = left + int(round(display["width"] * scale))
     bottom = top + int(round(display["height"] * scale))
@@ -305,10 +389,12 @@ def crop_face(shot: Image.Image, device: str = DEFAULT_DEVICE) -> Image.Image:
 
 def crop_device(shot: Image.Image, device: str = DEFAULT_DEVICE) -> Image.Image:
     """The watch without the window chrome."""
-    scale, y_offset, _ = locate_device(shot, device)
+    scale, x_offset, y_offset, _ = locate_device(shot, device)
     art = device_image(device)
     return shot.convert("RGB").crop(
-        (0, y_offset, shot.width, y_offset + int(round(art.height * scale)))
+        (x_offset, y_offset,
+         x_offset + int(round(art.width * scale)),
+         y_offset + int(round(art.height * scale)))
     )
 
 

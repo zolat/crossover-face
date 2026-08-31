@@ -114,6 +114,31 @@ module DotGrid {
     //! mark lands in the middle of a band rather than trailing off at the rim.
     var markMiddle as Array<Number> = [] as Array<Number>;
 
+    //! Each ring's inner radius, and how far round it a hand can possibly
+    //! reach from there — in turns, so it compares against `positionOf`.
+    //!
+    //! **This is what keeps the hands affordable.** The bar test is eight float
+    //! multiplies, and paying it on every dot of a 1544-dot lattice trips the
+    //! watchdog outright — measured, on a 454 screen, with the face refusing to
+    //! load. But a hand is a *narrow* thing: a dot at radius r is under a bar of
+    //! half-width W only if its angle is within asin(W / r) of the hand's, and
+    //! that angle is widest at the ring's inner edge. So each ring carries the
+    //! widest window it could possibly need, the renderer places it on the
+    //! hand's own angle, and the two comparisons that gate it are the same
+    //! comparisons the fill already makes. The bar test then runs on the few
+    //! percent inside the window rather than on everything.
+    //!
+    //! Two rings answer it without any window at all. The counterweight sticks
+    //! out behind the pivot, so a ring close enough to the middle is reachable
+    //! in *both* directions and its window would be most of the turn anyway —
+    //! those get 0.5, which `StatMap.windowAround` already turns into the whole
+    //! ring. And a hand that does not reach a ring's inner edge never touches
+    //! it: at every screen size the hour hand falls short of ring 0, which is
+    //! where 40% of the dots live, so the outermost ring tests one hand rather
+    //! than two.
+    var ringInner as Array<Number> = [] as Array<Number>;
+    var handHalf as Array<Float> = [] as Array<Float>;
+
     //! Squared outer radius of each radial sub-band, flat: ring * BANDS + band.
     //!
     //! What the hourly forecast reads instead of a span. A block reaching tier
@@ -277,6 +302,48 @@ module DotGrid {
         return out;
     }
 
+    //! The inner radius of each ring.
+    //!
+    //! The innermost takes HUB rather than its nominal edge. Integer thickness
+    //! leaves the last ring's nominal inner edge a pixel or two above the hub —
+    //! 26 against 24 on a 454 screen — while build() puts every dot below it in
+    //! that ring regardless, since it never consults bounds[lastRing]. Naming
+    //! the hub keeps this an honest floor rather than one that is nearly right.
+    function ringInners(ringCount as Number) as Array<Number> {
+        var thickness = (RADIUS - HUB) / ringCount;
+        var out = new [ringCount] as Array<Number>;
+        for (var k = 0; k < ringCount; k++) {
+            out[k] = (k == ringCount - 1) ? HUB
+                                          : RADIUS - (k + 1) * thickness;
+        }
+        return out;
+    }
+
+    //! Half-widths for the hand window, one per ring. See handHalf.
+    function handWindows(inners as Array<Number>) as Array<Float> {
+        var out = new [inners.size()] as Array<Float>;
+        var w = HandBacking.HALF_WIDTH;
+        // Where the counterweight can still reach: a dot no further out than
+        // the corner of the bar behind the pivot is reachable in both
+        // directions, so no single window describes it.
+        var behindSq = (HandBacking.COUNTERWEIGHT * HandBacking.COUNTERWEIGHT)
+                     + (w * w);
+        for (var k = 0; k < inners.size(); k++) {
+            var inner = inners[k];
+            // Opened by the cache's own angular error. `positionOf` is a
+            // polynomial approximation while the bar test below it is exact
+            // integer geometry, so a window sized to the true half-angle
+            // clips dots the hand really covers — measured at 0.00027 of a
+            // turn on ring 1, which is a hand cut off along its length and
+            // nothing that reads as an arithmetic bug.
+            out[k] = (inner <= w || inner * inner <= behindSq)
+                ? 0.5                       //! windowAround: the whole turn
+                : ((Math.asin(w.toFloat() / inner) / FULL_TURN)
+                    + Angle.MAX_TURN_ERROR).toFloat();
+        }
+        return out;
+    }
+
     //! Squared sub-band edges, one row of BANDS per ring. See bandEdge.
     //!
     //! **Integer thickness, matching ringBounds() rather than markerWidths().**
@@ -436,6 +503,8 @@ module DotGrid {
         markerHalf = markerWidths(ringCount);
         markMiddle = markMiddles(ringCount);
         bandEdge = bandEdges(ringCount);
+        ringInner = ringInners(ringCount);
+        handHalf = handWindows(ringInner);
         // The cached marks are indices into the arrays about to be rewritten.
         forgetMarks(ringCount);
 

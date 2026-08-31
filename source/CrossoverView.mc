@@ -72,9 +72,17 @@ class CrossoverView extends WatchUi.WatchFace {
         // Held back like the spans rather than like the marks, because it is
         // the ring's data rather than an annotation on it.
         var hourly = hideFills ? StatMap.noHourly() : StatMap.hourly();
-        // Backing is awake-only: in always-on it would cost luminance for a
-        // detail nobody is looking at.
-        var backing = lowPower ? null : backingColour();
+        // Backing is awake-only where the hands are real: in always-on it would
+        // cost luminance for a detail nobody is looking at, and the brass keeps
+        // telling the time whether the dots behind it are lit or not.
+        //
+        // **Where the face draws the hands, that inverts.** They are the only
+        // thing on the glass saying what o'clock it is, so they stay through
+        // always-on and through the held-back mode both. It is close to free:
+        // a hand recolours dots that were already lit at the unfilled tier
+        // rather than adding lit area, which is why HandStyle can simply say so
+        // rather than trading it against the budget.
+        var backing = (lowPower && !HandStyle.ALWAYS_ON) ? null : backingColour();
 
         // What of this frame is worth drawing. Awake, most frames repeat the
         // one before and are not drawn at all; of the rest, almost all move a
@@ -189,8 +197,13 @@ class CrossoverView extends WatchUi.WatchFace {
 
     //! Backing is only correct while the hands show the time, so ask for that
     //! explicitly rather than hoping the watch has not parked them elsewhere.
+    //!
+    //! Nothing to ask where the face draws its own: there are no hands to park,
+    //! and `handAt()` reads the same clock the rest of the frame does. The `has`
+    //! guard below would no-op anyway, but saying it outright is what keeps the
+    //! two styles readable side by side.
     private function holdHandsAtSystemTime() as Void {
-        if (StatMap.backing == StatMap.BACKING_OFF) {
+        if (HandStyle.DRAWN || StatMap.backing == StatMap.BACKING_OFF) {
             return;
         }
         if (self has :setClockHandPosition &&
