@@ -2,9 +2,14 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-A Connect IQ watch face for the **Garmin Instinct Crossover AMOLED**, written in Monkey C. The
-face is a dot-matrix field where the data *is* the background: four concentric rings of
-~1,100 dots, each dot coloured by the source its ring is assigned to.
+A Connect IQ watch face for the **Garmin Instinct Crossover AMOLED** and the **Epix 2
+family**, written in Monkey C. The face is a dot-matrix field where the data *is* the
+background: four concentric rings of ~1,100-1,400 dots, each dot coloured by the source its
+ring is assigned to.
+
+The two halves of that list differ in one hardware fact with consequences everywhere: the
+Crossover has **physical** analogue hands over the glass, and the Epix has none, so there the
+face draws the hands out of its own dots. See *One face, five watches* below.
 
 `README.md` is the authority on toolchain setup, MTP sideloading and design rationale. This file
 covers the working knowledge that spans files and is easy to break.
@@ -14,7 +19,7 @@ covers the working knowledge that spans files and is easy to break.
 ```sh
 make build      # debug .prg for the simulator
 make sim        # build, start the simulator if needed, sideload, stream println
-make test       # build with -t, run the 97-test suite (takes the simulator lock)
+make test       # build with -t, run the 103-test suite (takes the simulator lock)
 make test-lock  # self-test tools/sim_lock.sh
 make test-simctl # tests for tools/simctl (no simulator, no build needed)
 make package    # signed .iq for the store
@@ -24,22 +29,138 @@ make reveal     # fallback: open OpenMTP for a manual drag
 make sdk-info   # resolved SDK path, device and key
 ```
 
+**Every target takes `DEVICE=`**, defaulting to `instinctcrossoveramoled`. Build output is
+namespaced by it — `bin/<device>/CrossoverFace.prg` — because a flat `bin/` let one watch's
+build overwrite another's with nothing recording which it was for, and `make sim` would then
+sideload a 390 face onto a 454 screen and look merely wrong rather than broken. The PRG
+*stem* is deliberately unchanged, so `CROSSOVERFACE.SET` stays where every tool expects it.
+
+```sh
+make test DEVICE=epix2pro51mm    # the 454 lattice, drawn hands
+make build DEVICE=epix2          # 416
+make package                     # passes no -d: builds every manifest product
+```
+
 Run one test. `make test` must have run at least once first — it builds the test `.prg`
 (`bin/` is gitignored) and starts the simulator, both of which `monkeydo` needs. The test
 name must be **module-qualified**; a bare name errors out:
 
 ```sh
 SDK=$(connect-iq-sdk-manager sdk current-path)
-"${SDK}bin/monkeydo" bin/CrossoverFace-test.prg instinctcrossoveramoled \
+"${SDK}bin/monkeydo" bin/instinctcrossoveramoled/CrossoverFace-test.prg \
+    instinctcrossoveramoled \
     -t MatrixTest.driftDutyCycleIsOnePhaseInFour
 ```
 
 Design loop, no compile needed:
 
 ```sh
-python3 tools/mockup.py [outdir]        # default build/mockups
+python3 tools/mockup.py [outdir] [device]   # default build/mockups, crossover
 python3 tools/luminance.py <face.png>   # measure against the 10% AMOLED budget
 ```
+
+## One face, five watches
+
+`manifest.xml` lists five products and `monkey.jungle` gives each its own source path. Two
+small modules are what differ, and exactly one copy of each reaches any build:
+
+    source-lattice/{crossover,epix416,epix454}/Lattice.mc   the screen
+    source-hands/{physical,drawn}/HandStyle.mc              what the hands are
+
+    screen  COLS  RADIUS  HUB  dots   devices
+    390       38     190   21  1112   instinctcrossoveramoled, epix2pro42mm
+    416       40     203   22  1272   epix2, epix2pro47mm
+    454       42     210   23  1380   epix2pro51mm
+
+**`Lattice`'s constants stay `const` on both sides of the seam.** `DotGrid` re-declares them
+(`const RADIUS as Number = Lattice.RADIUS;`) rather than reading through, so everything
+downstream — ring bounds, marker windows, sub-band edges, the dot count — still folds at
+compile time and the render loop keeps its rule. The `as Number` is not decoration: strict
+typecheck loses the type across a module boundary and the build fails with *Member is
+untyped*.
+
+`PITCH` and `DOT` never move. `Drift`'s −2/+3 offsets are exactly `DOT` apart and consume
+exactly the slack a 10px pitch leaves, so `PITCH` must stay `2 · DOT` and `DotGrid.ARMS`'s
+half-lengths are tuned to `DOT` 5. Holding both fixed is also what makes **the luminance
+budget scale-invariant**: dot density is `1/PITCH²` whatever the radius and each dot lights
+`2·DOT−1`, so the all-lit fraction is 8.8% at 390 and 9.0% at 454. Every theme keeps its
+measured figure on every watch, and `frameLuminance()` needs no change because it already
+divides by the *lattice's* own `π·RADIUS²`.
+
+`COLS` is the largest even count whose outermost dot survives the drift inside `SCREEN/2 − 1`,
+and `RADIUS` is the lattice's extent plus `DOT`, which is the relation the Crossover has.
+
+### The 454 lattice is smaller than the screen allows, and the watchdog is why
+
+A native 454 fill wants `COLS 44` — 1512 dots, a 12px unlit rim matching the Crossover's own
+10px. **It trips the watchdog with the hands on and will not load.** Bisected on the
+simulator, hands on: 1388 dots runs, 1444 does not. 1380 is what ships, at a 22px rim.
+
+The dots alone are not the problem — 1544 renders fine with the hands off. It is the hand
+test on top of them, and the ceiling is genuinely close: the Crossover at 1112 is one
+dot-count bump from its own cliff.
+
+If this is ever revisited, the lever is `PITCH`, and `PITCH` drags `DOT`, `DotGrid.ARMS`,
+`Drift`'s offsets and the whole Python mirror with it. That is a phase, not an edit.
+
+### The hands are dots, and the bar test cannot be afforded per dot
+
+`HandBacking.handAt()` answers *which* hand covers a dot — `NONE`, `HOUR` or `MINUTE` — and
+the renderer indexes a three-slot colour table from `HandStyle.coloursFor()`. The Crossover
+points both slots at its one backing colour, so its picture is unchanged; the Epix gives the
+hour and minute the Crossover's own white and `0x808080`. **Minute is tested first**, so it
+wins where they cross, which is the physical stack.
+
+That is the whole mechanism. There is no polygon and **not one line of `FrameGate` changed**:
+the minute already sits in the field print whenever the hands are on, so hand motion was
+already a whole-field invalidation — one clear-and-redraw a minute. A drawn *polygon* hand
+would need erase-and-restore of two corridors across all four rings, in both buffers, every
+frame. It would also cost 5.03% of screen at 390 against a worst-theme field of 5.73%, over
+the 10% cliff on its own; dot hands measure **+0.05 to +0.16 points**, because they recolour
+dots already lit rather than adding lit area.
+
+**The bar test is gated by an angular window, and that gate is not optional.** Eight float
+multiplies on every dot tripped the watchdog outright at 1544 dots — the face refused to
+load — and inlining the call, the move this codebase reaches for first, did not save it. So
+`DotGrid.handHalf[ring]` carries the widest angle a hand can reach from that ring's inner
+edge, `asin(HALF_WIDTH / inner)` in turns, and the loop tests it with the same two
+comparisons the fill already makes. The bar runs on the few percent inside. Two shortcuts
+fall out and both matter:
+
+- the counterweight makes the **innermost** ring reachable in both directions, so it takes
+  `0.5` — which `StatMap.windowAround` already turns into the whole turn — rather than
+  pretending one window describes it;
+- the hour hand does not reach ring 0's inner edge at **any** screen size, so the ring
+  holding 40% of the dots tests one hand rather than two.
+
+> **The window must be a superset of the bar, and it is not by construction.**
+> `positionOf` is `Angle`'s polynomial approximation while the bar test is exact integer
+> geometry, so a window sized to the true half-angle clips dots the hand really covers —
+> measured at 0.00027 of a turn on ring 1, which draws as a hand cut off along its length and
+> reads as a rendering quirk rather than a bound that is wrong. `handWindows()` opens the
+> window by `Angle.MAX_TURN_ERROR`, and `theGatedHandTestAgreesWithHandBacking` is what
+> caught it — on its first run.
+
+**Where the hands are the face's, they survive always-on.** That is the one Crossover
+decision the Epix inverts: there, backing is suppressed in low power to save light and the
+brass keeps telling the time; here it is the only thing on the glass that does.
+`HandStyle.ALWAYS_ON` is the switch and
+`handsSurviveAlwaysOnExactlyWhenTheFaceDrawsThem` ties it to `DRAWN`.
+
+### Per-device resources go in one shared folder, not four
+
+`resources-drawn-hands/` carries what the four hands-drawn watches override — `handBacking`
+defaulting to **on** rather than off, the labels that would otherwise describe brass hands,
+and a 60x60 launcher icon against the Crossover's 38x38 — and `monkey.jungle` appends it to
+each of their `resourcePath`s.
+
+It cannot be a qualified folder. `resources-<device>` would need four copies, and the family
+qualifier is worse: `epix2pro42mm` is `round-390x390`, which is the **Crossover's** family
+too, so a family folder would reach the one watch these overrides are wrong for.
+
+The on-device menu needs no change for the labels — `SettingsMenu` already goes through
+`Rez.Strings.*`. `simctl.settings` does not follow the override, though: it reads the base
+`resources/strings/strings.xml`, so a label it prints for an Epix build is the Crossover's.
 
 ## Work happens in a worktree, never on main
 
@@ -176,7 +297,19 @@ out to `screencapture -l`, which works on an off-screen window without stealing 
 **The reported luminance is not the 10% budget figure.** A capture includes the simulator's
 drawing of the two *physical* analogue hands, which emit no light on the real watch: measured
 11.17% as captured against 5.43% with the neutral-grey pixels removed. `MatrixTest`
-and `tools/mockup.py` remain the authorities — both measure the dot field before hands.
+and `tools/mockup.py` remain the authorities — both measure the dot field before hands. That
+caveat is the Crossover's; an Epix capture has no hands drawn over it, but the crop below is
+approximate there, so the in-suite figure is still the one to quote.
+
+**Locating the face in a capture is per-device, and both halves of it were wrong for
+anything but the Crossover.** The artwork is named by the profile — only the Crossover calls
+it `device.png`, the Epix names the file after the device — and it is *not* drawn to the
+window width: that window pads the watch with white and puts a taller status strip under it,
+so a width-derived scale came out 2.0 against a real 1.84 and cropped a ring of bezel into
+what was supposed to be the display. `locate_device()` now measures the scale off the white
+page around the artwork, because bezel probes cannot fit it — the bezel is mostly black, so
+black matches black at any scale. **The Epix crop still lands a percent or two out**; it is
+good enough to see the face by and not good enough to measure.
 
 > **An all-black capture means the Mac display slept**, which stops the Monkey C VM and
 > makes a healthy face look like a hung test run. Worse, window capture then fails outright
@@ -407,9 +540,15 @@ rather than clamps, so a sub-zero range runs from e.g. :55 round past twelve to 
 ### tools/mockup.py mirrors the Monkey C by hand
 
 The Python mockup duplicates the lattice constants, `THEME`, `WEAK_*`/`LIFT`, `ARMS`, the
-ring mapping and the hand geometry. It is not generated. **Any change to geometry or palette
-must land in both**, and `MatrixTest.EXPECTED_DOTS` (1112) plus the luminance tests pin the two
-implementations together so they cannot drift silently.
+ring mapping, the hand geometry and `handAt`'s minute-first order. It is not generated.
+**Any change to geometry or palette must land in both**, and `MatrixTest.EXPECTED_DOTS` plus
+the luminance tests pin the two implementations together so they cannot drift silently.
+
+There is no jungle to pick a `Lattice` in a script, so `mockup.LATTICES` is one row per
+`Lattice.mc` and `use_device()` rebinds the module's globals. `python3 tools/mockup.py
+<outdir> <device>` renders any of the five; on a hands-drawn watch the hands appear *in* the
+field rather than composited over it, and `composite()` skips the overlay because those
+profiles carry no `analogHands`.
 
 ### Settings live in five places that must stay in step
 
@@ -417,6 +556,10 @@ Stored values are **list indices**, so `resources/properties.xml`, `resources/se
 `resources/strings/strings.xml`, the enums in `StatMap`/`Source`, and the label arrays in
 `source/settings/SettingsMenu.mc` all have to agree. Eight properties today: `theme`,
 `handBacking`, `alwaysOnFill`, `dotRotation`, `ring1`–`ring4`.
+
+**The indices are the same on every watch, deliberately.** `resources-drawn-hands/` overrides
+only `handBacking`'s *default* and some labels; forking the schema per device would multiply
+this rule by five for nothing, and a setting would stop meaning the same thing across them.
 
 **A new source is appended after `SOURCE_OFF`, not before it.** That looks wrong and is the
 only safe place: the stored value is an index, so inserting below Off renumbers Off and
@@ -537,6 +680,9 @@ guard. Every orientation lights nine pixels, so neither setting moves the lumina
 
 Garmin blanks an always-on face that exceeds 10% of screen luminance. Current design sits at
 ~4.8% active / ~4.6% always-on, ~5.7% worst case on Terrain, and lower on every other theme —
+**and those figures hold on every screen size**, because `PITCH` and `DOT` do not move with
+the screen (see *One face, five watches*). Drawn hands add 0.05-0.16 points on top, taking
+the worst theme to 6.16%.
 `everyThemeFitsTheAlwaysOnBudget` is what checks the others, since
 `alwaysOnWorstCaseFitsBudget` only ever measures the persisted one. It asserts it in the
 test suite; `tools/luminance.py` and the simulator's **File → View Screen Heat Map** measure it.
@@ -563,11 +709,25 @@ and `heldBackFillsCutAlwaysOnLuminance` is what holds the line.
 
 ### Device facts that constrain the design
 
-390×390 round AMOLED, buttons only (**no touch**), 131,072-byte watch-face memory. A 21px hub and
-two physical analogue hands (hour 131px, minute 176px reach, 28px wide, minute hand mid-grey
-`0x808080`) sit over the glass — the grey minute hand is the real palette constraint. Hand and
-display geometry is read from `~/.Garmin/ConnectIQ/Devices/instinctcrossoveramoled/simulator.json`;
-keep it sourced from there rather than hard-coding new numbers.
+Round AMOLED throughout, ~325ppi throughout, 123k of watch-face memory granted on all five,
+and the same 240,000-count watchdog. What differs:
+
+    device                    screen   touch  hands     launcher icon
+    instinctcrossoveramoled   390      no     physical  38x38
+    epix2pro42mm              390      yes    drawn     60x60
+    epix2 / epix2pro47mm      416      yes    drawn     60x60
+    epix2pro51mm              454      yes    drawn     60x60
+
+The Crossover's 21px hub and two analogue hands (hour 131px, minute 176px reach, 28px wide,
+minute hand mid-grey `0x808080`) sit over the glass — **the grey minute hand is the real
+palette constraint**, and it is why the drawn hands reuse that exact pair rather than
+choosing: every theme was designed to survive it. Hand and display geometry comes from
+`~/.Garmin/ConnectIQ/Devices/<device>/simulator.json`; keep it sourced from there rather than
+hard-coding new numbers, and note the Epix profiles carry **no `analogHands` block at all**.
+
+The Epix family is touch-capable where the Crossover is not. `SettingsMenu` needs nothing for
+it — Menu2 handles touch itself — but it is no longer true that this face only ever sees
+buttons.
 
 Dots are **crosses, not squares** (2·DOT−1 = 9 lit pixels, not 25) — that is what buys ~1,100 dots
 inside the luminance budget. `Drift`'s −2/+3 offsets are forced by the 10px pitch and 5px dot:

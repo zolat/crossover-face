@@ -1,5 +1,70 @@
 # Roadmap
 
+**Current:** done — the face runs on the Epix 2 family, with the hands drawn out of its own
+dots. One item is deliberately left open; see *Left on the table*.
+
+Out-of-band device work, not a phase of the performance roadmap that follows.
+
+- [x] Phase 0 — download the four Epix profiles, confirm rather than assume
+- [x] Phase 1 — put the screen behind a `Lattice` seam; crossover green through it
+- [x] Phase 2 — the 454 lattice
+- [x] Phase 3 — dot hands
+- [x] Phase 4 — the other three products
+- [x] Phase 5 — device-aware tooling
+
+## What shipped
+
+`manifest.xml` carries five products; `monkey.jungle` gives each one `Lattice` and one
+`HandStyle`. The Crossover's picture is unchanged — same lattice, same single backing colour,
+same suite green. The Epix draws its own hands out of the dot field, on by default, and keeps
+them lit through always-on because there they are the only thing saying the time.
+
+    screen  COLS  RADIUS  HUB  dots   devices
+    390       38     190   21  1112   instinctcrossoveramoled, epix2pro42mm
+    416       40     203   22  1272   epix2, epix2pro47mm
+    454       42     210   23  1380   epix2pro51mm
+
+103/103 on all five devices, simctl 43/43.
+
+## What was measured rather than assumed
+
+- **Cross-module `const` still folds.** The seam's whole premise. Strict typecheck loses the
+  *type* across it, so every constant carries `as Number` on both sides; the value folds
+  fine, and the Crossover measuring 1112 dots through the seam is the proof.
+- **Luminance is scale-invariant.** Dot density is `1/PITCH²` and each dot lights `2·DOT−1`,
+  so the all-lit fraction is 8.8% at 390 and 9.0% at 454. No theme needed re-measuring.
+- **Drawn hands cost 0.05-0.16 points**, worst theme 6.16% of the 10% cap, because they
+  recolour lit dots rather than adding lit area. Solid polygons would have cost 5.03% at 390.
+- **The per-dot hand test does not fit.** Eight float multiplies on 1544 dots tripped the
+  watchdog and the face would not load; inlining it did not save it. The per-ring angular
+  gate did.
+- **The window has to open by `Angle.MAX_TURN_ERROR`.** The cached position is a polynomial
+  approximation and the bar test is exact, so an exactly-sized window clips the hand by
+  0.00027 of a turn. Found by the agreement test on its first run, not by eye.
+
+## Left on the table
+
+- **The 454 lattice is one step short of native.** `COLS 44` — 1512 dots, a 12px rim
+  matching the Crossover's own 10px — trips the watchdog with the hands on. Bisected: 1388
+  runs, 1444 does not. 1380 ships, at a 22px rim. The lever is `PITCH`, which drags `DOT`,
+  `DotGrid.ARMS`, `Drift`'s offsets and the Python mirror with it — a phase, not an edit.
+- **Whether dot hands read as hands is a matter of taste and has not been settled on
+  hardware.** They are about three dots wide with no taper; the white hour hand reads
+  clearly in the mockups and the grey minute hand is weaker against a coloured field. Both
+  white measured 4.67% against white-and-grey's 4.50%, so the brighter option is affordable
+  if it is wanted.
+- **Nothing has run on a real Epix.** Everything here is the simulator, including the
+  watchdog trips — which the simulator enforces from the device profile's own count, so they
+  should be real, but the frame budget deserves a check on the wrist.
+- **`simctl.settings` labels do not follow the per-device string override.** It reads the
+  base `resources/strings/strings.xml`, so an Epix build's `handBacking` prints the
+  Crossover's wording. Cosmetic, in a tool, and not worth reimplementing resource resolution
+  in Python for.
+- **The Epix face crop is a percent or two out.** Good enough to see the face by, not good
+  enough to measure; `MatrixTest` is the luminance authority anyway.
+
+# Previously: Rain, next 12h (complete)
+
 **Current:** done — Rain, next 12h shipped; the frame A/B and the on-watch check are below.
 
 Out-of-band feature work, not a phase of the performance roadmap that follows: that one is
