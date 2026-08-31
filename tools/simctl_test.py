@@ -335,9 +335,26 @@ class SharedModeLocking(unittest.TestCase):
         self.assertIn("still holds", result.stderr)
 
     def test_holding_the_lock_tells_make_not_to_take_it(self):
-        self.assertEqual(self.runner._make_overrides(), [])
+        self.assertNotIn("SIM_LOCK=true", self.runner._make_overrides())
         self.runner.lock.acquire(timeout=3)
         self.assertIn("SIM_LOCK=true", self.runner._make_overrides())
+
+    def test_every_run_tells_make_which_device_it_is_for(self):
+        # The Makefile defaults DEVICE to the crossover, so a Runner for another
+        # watch used to compile the crossover's face and sideload it under the
+        # other device's id. That renders as a face too small for its screen -
+        # never as an error - so it is asserted rather than trusted.
+        for device in ("instinctcrossoveramoled", "epix2pro51mm"):
+            for target in (instances.shared(), instances.isolated("delta")):
+                overrides = Runner(target, device=device)._make_overrides()
+                self.assertIn(f"DEVICE={device}", overrides)
+
+    def test_the_binary_follows_the_device(self):
+        runner = Runner(instances.shared(), device="epix2pro51mm")
+        self.assertEqual(runner.prg, "bin/epix2pro51mm/CrossoverFace.prg")
+        # The stem is what names the persisted settings file, and it must not
+        # move with the device or CROSSOVERFACE.SET goes somewhere else.
+        self.assertEqual(paths.app_name(runner.prg), "CROSSOVERFACE")
 
     def test_an_isolated_run_never_touches_the_shared_lock(self):
         overrides = Runner(instances.isolated("alpha"))._make_overrides()

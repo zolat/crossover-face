@@ -12,13 +12,21 @@ module DotGrid {
     //! A cross lights 9 of the 25 pixels a filled square of the same extent
     //! would, so the same luminance buys a much finer lattice: at this pitch
     //! there are ~1100 dots against ~570 of squares, for less light.
-    const PITCH = 10;
-    const DOT = 5;
-    const COLS = 38;
-    const ROWS = 38;
+    //!
+    //! **The six numbers below are the face's only screen-dependent geometry,
+    //! and they live in `Lattice`** — one copy per screen size, one of them on
+    //! each device's source path. They are re-declared here rather than read
+    //! through, so everything downstream stays a compile-time `const` and the
+    //! render loop's rule holds: nothing computed that build() could compute
+    //! once. Point a device at a different `Lattice` and the ring bounds, the
+    //! marker windows, the sub-band edges and the dot count all follow.
+    const PITCH as Number = Lattice.PITCH;
+    const DOT as Number = Lattice.DOT;
+    const COLS as Number = Lattice.COLS;
+    const ROWS as Number = Lattice.ROWS;
 
-    const RADIUS = 190;
-    const HUB = 21;             //! Radius the physical hand pivot covers.
+    const RADIUS as Number = Lattice.RADIUS;
+    const HUB as Number = Lattice.HUB;    //! Where the hands cross; never legible.
 
     const RADIUS_SQ = RADIUS * RADIUS;
     const HUB_SQ = HUB * HUB;

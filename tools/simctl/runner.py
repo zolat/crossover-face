@@ -27,9 +27,9 @@ from simctl import instance as instances
 from simctl import paths, window
 from simctl.lock import SimulatorLock
 
-DEFAULT_PRG = "bin/CrossoverFace.prg"
-DEFAULT_TEST_PRG = "bin/CrossoverFace-test.prg"
-DEFAULT_DEVICE = "instinctcrossoveramoled"
+DEFAULT_DEVICE = paths.DEFAULT_DEVICE
+DEFAULT_PRG = paths.prg_for()
+DEFAULT_TEST_PRG = paths.prg_for(test=True)
 
 
 @dataclass
@@ -110,8 +110,13 @@ def read_crash(root: Path, newer_than: float | None = None) -> dict | None:
 class Runner:
     """Drives one instance: build, sideload, capture-until-ready, test."""
 
-    def __init__(self, target: instances.Instance, prg: str = DEFAULT_PRG,
+    def __init__(self, target: instances.Instance, prg: str | None = None,
                  device: str = DEFAULT_DEVICE):
+        # The binary follows the device unless a caller names one outright. Taking
+        # the crossover's path by default while accepting any device is how a
+        # 390 face used to get compiled and then sideloaded as a 454 one, with
+        # nothing to say so.
+        prg = prg if prg is not None else paths.prg_for(device)
         self.instance = target
         self.prg = prg
         self.device = device
@@ -133,20 +138,28 @@ class Runner:
         Command-line assignments beat the Makefile's ``:=``, so an isolated run reuses
         the real recipe: no lock (this instance is ours alone) and a pinned monkeydo.
         """
+        # DEVICE first, and unconditionally. The Makefile defaults it to the
+        # crossover, so without this a Runner built for another watch compiled the
+        # crossover's face and then sideloaded it under the other device's id -
+        # a silent mismatch that renders as a face too small for its screen
+        # rather than as any kind of error.
+        overrides = [f"DEVICE={self.device}"]
         if not self.instance.isolated:
             # Shared mode: if this process already holds the lock (sim_load keeps it, the
             # way `make sim` does), the recipe must not try to take it again. It would
             # find a live holder that is us, wait out the full timeout and fail - and a
             # run that produced no output parses as contention, so a self-inflicted stall
             # would be reported as another session's fault.
-            return ["SIM_LOCK=true"] if (self.lock and self.lock.held_by_us()) else []
+            if self.lock and self.lock.held_by_us():
+                overrides.append("SIM_LOCK=true")
+            return overrides
         # SDK and KEY are passed in because the Makefile resolves the SDK by running
         # connect-iq-sdk-manager, which keeps its licence agreement outside ~/.Garmin and
         # so reports "agreement is not accepted" under a sandboxed HOME. Resolving once
         # here, with the real environment, keeps the sandbox to what it is actually for:
         # the simulator's own runtime state. The trailing slash matters - the Makefile
         # writes $(SDK)bin/monkeyc with no separator.
-        return [
+        return overrides + [
             f"SDK={instances.sdk_path()}/",
             f"KEY={Path.home() / '.Garmin' / 'ConnectIQ' / 'developer_key.der'}",
             "SIM_LOCK=true",

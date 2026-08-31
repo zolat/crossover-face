@@ -8,7 +8,17 @@ DEVICE ?= instinctcrossoveramoled
 KEY    ?= $(HOME)/.Garmin/ConnectIQ/developer_key.der
 NAME   := CrossoverFace
 
-PRG := bin/$(NAME).prg
+## Build output is namespaced by device, because there are five of them now.
+## Flat, `make build` and `make build DEVICE=epix2pro51mm` overwrite each
+## other's .prg with nothing recording which watch it was compiled for — and
+## `make sim` would then sideload a 390 face onto a 454 screen and look merely
+## wrong rather than broken. The *stem* is unchanged on purpose: simctl derives
+## the persisted settings filename from it, so CROSSOVERFACE.SET stays put.
+##
+## The .iq is not namespaced. A store package carries every product at once,
+## which is why package: passes no -d.
+BIN := bin/$(DEVICE)
+PRG := $(BIN)/$(NAME).prg
 IQ  := bin/$(NAME).iq
 
 PUSH  := tools/mtp_push.py
@@ -29,7 +39,7 @@ all: build
 
 ## Debug build — for the simulator, and for the watch too. See install:.
 build:
-	@mkdir -p bin
+	@mkdir -p $(BIN)
 	"$(MONKEYC)" -f monkey.jungle -o $(PRG) -y "$(KEY)" -d $(DEVICE) -w
 
 ## Unit tests (source annotated with :test).
@@ -42,12 +52,12 @@ build:
 ## indistinguishable from a real failure. $$$$ is the recipe shell's own PID, so
 ## a session that dies leaves a lock the next one can see is stale.
 test:
-	@mkdir -p bin
-	"$(MONKEYC)" -f monkey.jungle -o bin/$(NAME)-test.prg -y "$(KEY)" -d $(DEVICE) -w -t
+	@mkdir -p $(BIN)
+	"$(MONKEYC)" -f monkey.jungle -o $(BIN)/$(NAME)-test.prg -y "$(KEY)" -d $(DEVICE) -w -t
 	@$(SIM_LOCK) acquire $$$$ || exit 1; \
 	trap '$(SIM_LOCK) release $$$$' EXIT INT TERM; \
 	$(MAKE) -s simulator-up; \
-	out=$$("$(MONKEYDO)" bin/$(NAME)-test.prg $(DEVICE) -t 2>&1); \
+	out=$$("$(MONKEYDO)" $(BIN)/$(NAME)-test.prg $(DEVICE) -t 2>&1); \
 	echo "$$out"; \
 	echo "$$out" | grep -q "^PASSED" && exit 0; \
 	echo; \

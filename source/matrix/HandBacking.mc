@@ -19,10 +19,10 @@ import Toybox.System;
 //! that explicitly via View.setClockHandPosition() before enabling this.
 module HandBacking {
 
-    const HALF_WIDTH = 14;
-    const COUNTERWEIGHT = 46;
-    const HOUR_REACH = 131;
-    const MINUTE_REACH = 176;
+    const HALF_WIDTH as Number = Lattice.HAND_HALF_WIDTH;
+    const COUNTERWEIGHT as Number = Lattice.HAND_COUNTERWEIGHT;
+    const HOUR_REACH as Number = Lattice.HOUR_REACH;
+    const MINUTE_REACH as Number = Lattice.MINUTE_REACH;
 
     //! Unit vectors for both hands: [hourX, hourY, minuteX, minuteY].
     //! Computed once per frame — the per-dot test is then just dot products.

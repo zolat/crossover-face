@@ -15,7 +15,11 @@ import Toybox.WatchUi;
 //! cannot drift apart silently — the mockups stay an honest preview.
 module MatrixTest {
 
-    const EXPECTED_DOTS = 1112;
+    //! What this lattice holds, read off the Lattice the build was given.
+    //! It is still a pin: Lattice states the count as a claim and the tests
+    //! below re-derive it from COLS, RADIUS and HUB, so a wrong figure in
+    //! either place fails rather than propagating.
+    const EXPECTED_DOTS as Number = Lattice.EXPECTED_DOTS;
 
     //! Garmin blanks an always-on face above this share of screen luminance.
     const BUDGET = 0.10;
@@ -23,7 +27,11 @@ module MatrixTest {
     //! Ceiling for what the dot cache may cost, in bytes. Deliberately loose:
     //! it is here to catch a new per-dot array, which would move the figure by
     //! thousands, not to hold the current number to the byte.
-    const CACHE_CEILING = 56000;
+    //! Five bytes a slot across four parallel arrays, plus half again for the
+    //! scratch a rebuild holds. Derived rather than fixed so a larger screen
+    //! does not fail this by being larger; what it still catches is a *fifth*
+    //! per-dot array, which moves the figure by a quarter.
+    const CACHE_CEILING as Number = EXPECTED_DOTS * 50;
 
     //! Lit pixels per dot. Dots are crosses: two DOT-long strokes sharing
     //! their centre pixel, so 2 * DOT - 1 — not DOT squared. Using the square
@@ -1047,8 +1055,13 @@ module MatrixTest {
     function driftKeepsDotsOnScreen(logger as Logger) as Boolean {
         var furthest = DotGrid.offsetAt(DotGrid.COLS - 1);
         var reach = furthest + Drift.MAX_OFFSET + (DotGrid.DOT / 2);
-        logger.debug("furthest lit pixel from centre: " + reach);
-        Test.assertMessage(reach <= 194, "drift pushes dots off the 390px screen");
+        // The last pixel the screen has, not the last it nominally spans: an
+        // even width has no centre pixel, so the centre rounds down and the
+        // far side is one short.
+        var edge = (Lattice.SCREEN / 2) - 1;
+        logger.debug("furthest lit pixel from centre: " + reach + " of " + edge);
+        Test.assertMessage(reach <= edge,
+            "drift pushes dots off the " + Lattice.SCREEN + "px screen");
         return true;
     }
 

@@ -7,6 +7,10 @@
     <iq:application id="d711a1ab-b218-4e0e-903d-3c13cfa466fe" type="watchface" name="@Strings.AppName" entry="CrossoverApp" launcherIcon="@Drawables.LauncherIcon" minApiLevel="5.0.0">
         <iq:products>
             <iq:product id="instinctcrossoveramoled"/>
+            <iq:product id="epix2"/>
+            <iq:product id="epix2pro42mm"/>
+            <iq:product id="epix2pro47mm"/>
+            <iq:product id="epix2pro51mm"/>
         </iq:products>
         <iq:permissions>
             <iq:uses-permission id="UserProfile"/>

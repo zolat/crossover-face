@@ -17,6 +17,36 @@ from pathlib import Path
 #: Subdirectory the simulator creates inside whatever temp directory it is given.
 SIM_DIRNAME = "com.garmin.connectiq"
 
+#: The watch this project started on, and still the default everywhere.
+DEFAULT_DEVICE = "instinctcrossoveramoled"
+
+#: The application name, which is also the PRG stem and so the .SET name.
+APP = "CrossoverFace"
+
+
+def prg_for(device: str = DEFAULT_DEVICE, *, test: bool = False) -> str:
+    """Where ``make build``/``make test`` leave the binary for a device.
+
+    Build output is namespaced by device (``bin/<device>/``) because the face now
+    targets five of them and a flat ``bin/`` let one overwrite another's ``.prg``
+    with nothing recording which watch it was compiled for. The *stem* is
+    deliberately unchanged: the simulator names an app's persisted settings after
+    it, so ``CROSSOVERFACE.SET`` stays where every other tool expects it.
+    """
+    suffix = "-test" if test else ""
+    return f"bin/{device}/{APP}{suffix}.prg"
+
+
+def settings_schema(repo: Path, prg: Path | str) -> Path:
+    """The settings schema ``monkeyc`` emits beside a build.
+
+    Resolved from the PRG's own directory rather than a fixed ``bin/``, so it
+    follows the device namespacing. It is build output, which is why callers are
+    expected to report "run `make build` first" rather than write unvalidated.
+    """
+    prg = Path(prg)
+    return repo / prg.parent / f"{prg.stem}-settings.json"
+
 
 def shared_tmpdir() -> Path:
     """The temp directory the machine's default simulator uses."""
