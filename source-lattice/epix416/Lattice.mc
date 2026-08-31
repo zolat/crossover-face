@@ -39,6 +39,16 @@ module Lattice {
     const ROWS as Number = 40;
 
     //! The lattice's own radius: half the screen, less a 5px margin.
+    //!
+    //! **203 rather than the 200 the other two lattices' rule would give.**
+    //! Elsewhere RADIUS is the lattice's own extent plus DOT; here that is 200,
+    //! and 200 makes the rings a pixel thinner — enough to drop ring 1's
+    //! thinnest rain sub-band from 6 dots to 5 and fail
+    //! onlyTheOuterTwoRingsResolveTwelveHoursInThreeBands. RADIUS only clips
+    //! the corners once it is past the extent, so taking the screen's own
+    //! half-less-5 instead costs nothing and buys the ring back. This is the
+    //! narrowest of the three lattices on that measure; a fourth screen size
+    //! should check it rather than assume.
     const RADIUS as Number = 203;
 
     //! Radius punched out of the middle. On the Crossover this is what the

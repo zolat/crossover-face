@@ -87,8 +87,13 @@ budget scale-invariant**: dot density is `1/PITCH²` whatever the radius and eac
 measured figure on every watch, and `frameLuminance()` needs no change because it already
 divides by the *lattice's* own `π·RADIUS²`.
 
-`COLS` is the largest even count whose outermost dot survives the drift inside `SCREEN/2 − 1`,
-and `RADIUS` is the lattice's extent plus `DOT`, which is the relation the Crossover has.
+`COLS` is the largest even count whose outermost dot survives the drift inside `SCREEN/2 − 1`.
+`RADIUS` is the lattice's extent plus `DOT` — the relation the Crossover has — **except at
+416, which takes 203 rather than 200**: past the extent `RADIUS` only clips the corners, but
+it still sets the ring thickness, and at 200 the rings lose a pixel each and ring 1's
+thinnest rain sub-band drops from 6 dots to 5, failing
+`onlyTheOuterTwoRingsResolveTwelveHoursInThreeBands`. That bar is scraped at 416 either way,
+so a fourth screen size should measure it rather than assume it.
 
 ### The 454 lattice is smaller than the screen allows, and the watchdog is why
 
