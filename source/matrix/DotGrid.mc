@@ -147,6 +147,15 @@ module DotGrid {
     //! Set while the cache does not yet describe the lattice.
     var stale as Boolean = true;
 
+    //! Bumped by every build(), so anything caching an index into the arrays
+    //! above can tell that they have been rewritten under it.
+    //!
+    //! A rebuild reuses the arrays when the lattice has not changed size, which
+    //! is every rebuild there is — so a stale cache of dot indices cannot be
+    //! spotted by comparing sizes or references. DateGlyph keeps such a cache;
+    //! this counter is how it knows.
+    var generation as Number = 0;
+
     //! Mark the cache for rebuilding, without doing the work here. Settings
     //! are reloaded from app callbacks, whose watchdog budget is far tighter
     //! than a view's; the rebuild belongs in onLayout, not in onStart.
@@ -564,5 +573,6 @@ module DotGrid {
         }
 
         stale = false;
+        generation++;
     }
 }

@@ -88,7 +88,8 @@ class SettingsMenu extends WatchUi.Menu2 {
 
     private function rotationLabel() as ResourceId {
         var labels = [Rez.Strings.RotationRadial,
-                      Rez.Strings.RotationUpright] as Array<ResourceId>;
+                      Rez.Strings.RotationUpright,
+                      Rez.Strings.RotationUprightDate] as Array<ResourceId>;
         return labels[StatMap.rotation];
     }
 
@@ -131,8 +132,9 @@ class SettingsMenuDelegate extends WatchUi.Menu2InputDelegate {
             push(new ChoiceMenu(Rez.Strings.RotationTitle,
                 StatMap.PROPERTY_ROTATION,
                 [Rez.Strings.RotationRadial,
-                 Rez.Strings.RotationUpright] as Array<ResourceId>,
-                sequential(2), StatMap.rotation));
+                 Rez.Strings.RotationUpright,
+                 Rez.Strings.RotationUprightDate] as Array<ResourceId>,
+                sequential(3), StatMap.rotation));
         } else if (id == :diagnostics) {
             // Nothing to open — re-reading it is the useful action, since the
             // figure moves while you are looking at it.

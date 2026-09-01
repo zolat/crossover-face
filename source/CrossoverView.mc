@@ -12,7 +12,7 @@ class CrossoverView extends WatchUi.WatchFace {
 
     //! The two prints, allocated once and refilled every frame. FrameGate copies
     //! the values it needs, so handing it the same buffer every frame is safe.
-    private var _fieldPrint as Array<Float> = new [4] as Array<Float>;
+    private var _fieldPrint as Array<Float> = new [5] as Array<Float>;
     private var _ringPrint as Array<Float> =
         new [StatMap.RINGS * FrameGate.PER_RING] as Array<Float>;
 
@@ -76,6 +76,24 @@ class CrossoverView extends WatchUi.WatchFace {
         // detail nobody is looking at.
         var backing = lowPower ? null : backingColour();
 
+        // The date watermark, brought up to date before anything reads it.
+        //
+        // Here rather than in fieldPrint(), because always-on never calls that
+        // — and the watermark stays on in always-on. It costs nothing there
+        // that it does not cost awake: a struck dot lights fewer pixels than
+        // the dot it replaces, so the mode measured against the burn-in budget
+        // can only come out lower.
+        //
+        // Off the mode, nothing is read at all: today() is arithmetic on the
+        // epoch second in the common case, but it is still two system calls
+        // that a face with the watermark off has no reason to pay.
+        var dating = (StatMap.rotation == StatMap.ROTATION_UPRIGHT_DATE);
+        var day = 0;
+        if (dating) {
+            day = DateGlyph.today();
+            DateGlyph.ensure(day);
+        }
+
         // What of this frame is worth drawing. Awake, most frames repeat the
         // one before and are not drawn at all; of the rest, almost all move a
         // single ring and only that ring is walked. Always-on never asks: a
@@ -85,7 +103,7 @@ class CrossoverView extends WatchUi.WatchFace {
         if (lowPower) {
             dirty = FrameGate.everything();
         } else {
-            if (!FrameGate.plan(fieldPrint(backing),
+            if (!FrameGate.plan(fieldPrint(backing, day),
                                 ringPrint(spans, markers, overs, blocks))) {
                 Diagnostics.recordSkip(System.getTimer() - started);
                 return;
@@ -118,9 +136,17 @@ class CrossoverView extends WatchUi.WatchFace {
     //! it is on, the hands cross every ring, so a minute is a whole-field
     //! change like the drift.
     //!
+    //! So is the day, and it belongs in *this* print rather than a ring's. The
+    //! watermark spans all four rings, and a dot that was struck yesterday and
+    //! is not today has four stray pixels on screen that only a clear removes —
+    //! a partial repaint would draw the cross's other stroke over them and
+    //! leave the dot looking normal, which is right, but the dots that went the
+    //! other way would keep both strokes. Zero when the watermark is off, so a
+    //! face without it never re-prints on a date change.
+    //!
     //! Filled into a buffer this view owns rather than returned fresh: it is
     //! built every frame, and FrameGate keeps values rather than the array.
-    function fieldPrint(backing as Number?) as Array<Float> {
+    function fieldPrint(backing as Number?, day as Number) as Array<Float> {
         var drift = Drift.current();
         var out = _fieldPrint;
         out[0] = drift[0].toFloat();
@@ -128,6 +154,7 @@ class CrossoverView extends WatchUi.WatchFace {
         out[2] = (backing == null) ? -1.0 : backing.toFloat();
         out[3] = (backing == null) ? 0.0
                                    : System.getClockTime().min.toFloat();
+        out[4] = day.toFloat();
         return out;
     }
 

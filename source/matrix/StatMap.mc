@@ -30,9 +30,16 @@ module StatMap {
     //! carries the same radial grain the rings do. Upright, every cross is the
     //! same `+` and the field reads as a plain lattice with the rings drawn on
     //! it. Both light nine pixels a dot, so neither costs luminance.
+    //!
+    //! The third is Upright with the day of the month written into it — see
+    //! DateGlyph. It is a *rotation* value because it is a choice about the
+    //! shape of the field's own dots and nothing else, and because the field it
+    //! is drawn on has to be the even one for a numeral to show in it at all.
+    //! Appended, never inserted: the stored value is an index.
     enum Rotation {
         ROTATION_RADIAL = 0,        //! Each cross follows its ring.
-        ROTATION_UPRIGHT = 1        //! Every cross stays upright.
+        ROTATION_UPRIGHT = 1,       //! Every cross stays upright.
+        ROTATION_UPRIGHT_DATE = 2   //! Upright, with today's date struck in.
     }
 
     //! Which set of colours the rings carry. The theme decides every colour
@@ -83,7 +90,7 @@ module StatMap {
         alwaysOnFill = readNumber(PROPERTY_ALWAYS_ON_FILL, ALWAYS_ON_FILL_SHOWN,
                                   ALWAYS_ON_FILL_SHOWN, ALWAYS_ON_FILL_HIDDEN);
         rotation = readNumber(PROPERTY_ROTATION, ROTATION_RADIAL,
-                              ROTATION_RADIAL, ROTATION_UPRIGHT);
+                              ROTATION_RADIAL, ROTATION_UPRIGHT_DATE);
 
         var defaults = [Source.SOURCE_STEPS, Source.SOURCE_INTENSITY_MINUTES,
                         Source.SOURCE_BATTERY, Source.SOURCE_BODY_BATTERY]
