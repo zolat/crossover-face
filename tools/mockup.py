@@ -260,12 +260,17 @@ WEAK_HELD_BACK = WEAK_ACTIVE
 # fall. Mirrors Palette.WEAK_UNKNOWN.
 WEAK_UNKNOWN = 0.25
 
-# The hourly forecast's geometry. Mirrors HourBands.mc: twelve blocks round the
-# ring, a gutter after each, three radial sub-bands across the ring's thickness.
+# The block ring's geometry. Mirrors HourBands.mc: twelve blocks round the ring,
+# a gutter after each, three radial sub-bands across the ring's thickness, and a
+# partial band whose *width* carries whatever the bands cannot. A block holds a
+# level from 0 to HOUR_LEVELS; what filled it is the source's business.
 HOURS = 12
 HOUR_BANDS = 3
+HOUR_LEVELS = 15
+HOUR_LEVELS_PER_BAND = HOUR_LEVELS // HOUR_BANDS
 HOUR_BLOCK_DEGREES = 22.5
 HOUR_FILL = HOUR_BLOCK_DEGREES / (360.0 / HOURS)
+HOUR_HALF_FILL = HOUR_FILL / 2
 
 
 def hour_block(position: float) -> int:
@@ -289,28 +294,59 @@ def band_edge(ring: int, tier: int) -> float:
     return edge * edge
 
 
-def hourly_colour(ring, position, dist_sq, tiers, always_on, held_back):
-    """One dot of a forecast ring. Mirrors MatrixRenderer's second inner loop.
+def level_for(percent):
+    """A percentage as a block level. Mirrors RainForecast.levelFor: truncating,
+    so a reading has to reach a full rung before it lights anything."""
+    if percent is None:
+        return None
+    if percent <= 0:
+        return 0
+    return min(HOUR_LEVELS, int(percent / 100.0 * HOUR_LEVELS))
 
-    `tiers` is twelve entries, each 0-HOUR_BANDS or None for an hour the
-    forecast said nothing about."""
+
+def full_bands_for(level: int) -> int:
+    """Whole sub-bands a level fills. Mirrors HourBands.fullBandsFor."""
+    return (level * HOUR_BANDS) // HOUR_LEVELS
+
+
+def partial_half_for(level: int) -> float:
+    """Half-width of the partial band's window, in wedge units. Mirrors
+    HourBands.partialHalfFor — no minimum, because on this lattice the geometry
+    already lights at least one dot at every level."""
+    return HOUR_HALF_FILL * (((level * HOUR_BANDS) % HOUR_LEVELS) / HOUR_LEVELS)
+
+
+def hourly_colour(ring, position, dist_sq, levels, always_on, held_back):
+    """One dot of a block ring. Mirrors MatrixRenderer's second inner loop.
+
+    `levels` is twelve entries, each 0-HOUR_LEVELS or None for a block the
+    source said nothing about. A level fills whole sub-bands outward and then
+    part of the way across the next band, centred in the block."""
     colour = THEME[ring % len(THEME)]
     if always_on:
         colour = scale(colour, LIFT)
     weak = WEAK_HELD_BACK if held_back else (
         WEAK_ALWAYS_ON if always_on else WEAK_ACTIVE)
-    if held_back or tiers is None:
-        # Held back, every hour reads known and dry — never unknown, which
+    if held_back or levels is None:
+        # Held back, every hour reads known and empty — never unknown, which
         # would draw the dim tier right round the ring and put data in the one
         # mode whose whole purpose is to carry none.
         return scale(colour, weak)
-    if not inside_block(position):
-        return scale(colour, weak)
-    tier = tiers[hour_block(position)]
-    if tier is None:
+    at = position * HOURS
+    block = int(at)
+    into = at - block
+    if into >= HOUR_FILL:
+        return scale(colour, weak)          # the gutter after the block
+    level = levels[block]
+    if level is None:
         return scale(colour, WEAK_UNKNOWN)
-    if tier > 0 and dist_sq <= band_edge(ring, tier):
+    bands = full_bands_for(level)
+    if bands > 0 and dist_sq <= band_edge(ring, bands):
         return colour
+    window = partial_half_for(level)
+    if (window > 0.0 and dist_sq <= band_edge(ring, bands + 1)
+            and abs(into - HOUR_HALF_FILL) < window):
+        return colour                       # the partial band
     return scale(colour, weak)
 
 
@@ -677,7 +713,10 @@ def main(outdir: str = "build/mockups") -> int:
     #     says when, how deep into the ring's own thickness says how likely.
     #     Two hours are left as None so the unknown tier is visible: a forecast
     #     that ran short must not read as a forecast of no rain.
-    hours = [0, 0, 1, 2, 3, 3, 2, 1, 0, 0, None, None]
+    # Percentages, so the scale is exercised as the watch would fill it: a
+    # 10% hour is a pip rather than the nothing the old four-step scale drew.
+    hours = [level_for(p) for p in
+             (0, 5, 10, 20, 35, 55, 75, 90, 100, 60, None, None)]
     hourly_assign = (SOURCE_RAIN_HOURS, 6, 2, 3)
     panels = []
     for label, kwargs in (("AWAKE", {}),
@@ -690,7 +729,20 @@ def main(outdir: str = "build/mockups") -> int:
                        composite(face)))
     path = os.path.join(outdir, "07b-rain-next-12h.png")
     sheet(panels, "Ring 1 = rain next 12h — one block per hour ahead, "
-                  "deeper = more likely; last two hours unforecast").save(path)
+                  "0/5/10/20/35/55/75/90/100/60%; last two unforecast"
+          ).save(path)
+    written.append(path)
+
+    # 7c. The scale itself, every level in turn, so the sixteen readings can be
+    #     compared side by side rather than inferred from one forecast.
+    panels = []
+    for first in (0, HOUR_LEVELS + 1 - HOURS):
+        levels = list(range(first, first + HOURS))
+        face = render(values, assign=hourly_assign, hourly={0: levels})
+        panels.append((f"LEVELS {levels[0]}-{levels[-1]}", composite(face)))
+    path = os.path.join(outdir, "07c-block-levels.png")
+    sheet(panels, "Every rung of the 16-step block scale: whole sub-bands "
+                  "outward, then width across the block").save(path)
     written.append(path)
 
     # 8. Past the goal — steps on ring 1, read as a second lap. Mirrors

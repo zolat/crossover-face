@@ -14,7 +14,7 @@ covers the working knowledge that spans files and is easy to break.
 ```sh
 make build      # debug .prg for the simulator
 make sim        # build, start the simulator if needed, sideload, stream println
-make test       # build with -t, run the 97-test suite (takes the simulator lock)
+make test       # build with -t, run the 100-test suite (takes the simulator lock)
 make test-lock  # self-test tools/sim_lock.sh
 make test-simctl # tests for tools/simctl (no simulator, no build needed)
 make package    # signed .iq for the store
@@ -354,32 +354,67 @@ but the rebuild it schedules must still land in `onLayout`, never `onStart`.
 
 ### One source does not report a span at all
 
-`SOURCE_RAIN_HOURS` ("Rain, next 12h") turns a ring into a twelve-hour forecast: the ring's
-360° is twelve 30° hour slots, a 22.5° block in each leaving a countable gutter, and how far
-a block reaches out through the ring's **own 42px thickness** is the chance — three radial
-sub-bands at 25/50/75%. Twelve disjoint blocks with a radial axis is not something two floats
-can say, so it reports `Source.EMPTY` as its span and its real payload travels beside it:
-`Source.fillHours()` → `StatMap.hourly()` → the view → both the print and the renderer. The
-same move a marker makes, and for the same reason.
+`SOURCE_RAIN_HOURS` ("Rain, next 12h") turns a ring into a twelve-hour forecast, and it is the
+first source to fill a shape the face now has a general name for: **blocks**. The ring's 360°
+is twelve 30° hour slots, a 22.5° block in each leaving a countable gutter, and how much of
+each block is filled is the reading. Twelve disjoint blocks with a radial axis is not something
+two floats can say, so it reports `Source.EMPTY` as its span and its real payload travels
+beside it: `Source.fillBlocks()` → `StatMap.blocks()` → the view → both the print and the
+renderer. The same move a marker makes, and for the same reason.
 
-Four things about it are load-bearing:
+**A block holds a level from 0 to `HourBands.LEVELS` (15), not a sub-band index.** The lattice
+caps the radial axis at three sub-bands and there is no arguing with it, but a block is also
+8–13 dots *wide*, and that axis was unused while every lit band was drawn full width. So level
+`L` fills `L * BANDS / LEVELS` bands: the whole part is that many full-width sub-bands, the
+remainder is the angular half-width of the next band out, centred in the block. Sixteen
+readings an hour rather than four — a 10% hour is a two-dot pip on its hour mark rather than
+the nothing the old 25/50/75 scale drew for it.
+
+Consequences worth knowing before touching it:
+
+- **The scale is linear in area and its top is 100%**, not "75% or more". A full ring means a
+  certainty and one whole sub-band means a third. `HourBands.fullBandsFor()` /
+  `partialHalfFor()` are the only place that curve lives.
+- **Level `LEVELS` is exactly the old top tier**, so the widened scale can draw nothing that
+  was not already drawable and **no luminance bound needed re-measuring**.
+  `eachSubBandLightsItsShareOfTheRing` asserts that equality rather than assuming it.
+- **There is no minimum window, and that was measured.** The obvious worry is that a level-1
+  window — a fifth of one band — falls between two dots and the bottom of the scale draws
+  nothing. On the offered rings it does not: the worst block at level 1 holds two dots on ring
+  0 and one on ring 1, and every level is monotonic in every block.
+  `everyNonZeroLevelLightsAtLeastOneDot` and `aLevelIsMonotonicInDotsLit` are what keep that
+  true; if either fails, a floor sized off `DotGrid.markerHalf` — which solves the same problem
+  for the temperature mark — is the fix, not a coarser scale.
+- **A block ring costs about 2.7ms more per drawn frame** than the whole-band fill did (87ms
+  against 85ms on ring 0's 436 dots, worst case, A/B'd out of one binary). The span loop is
+  byte-for-byte unchanged, so no other ring moved.
+
+Five things about the channel are load-bearing:
 
 - **The hour-hand anchoring is free.** The hand at local hour `H` points at clock position
   `H mod 12`, so the forecast `N` hours out belongs at `(H + N) mod 12` — which *is* that
   forecast hour's own hour-of-day, mod 12. `RainForecast` buckets an entry by its own local
   hour and it lands where the hand will be. **Nothing rotates anywhere.** Code that turns a
   table once an hour was written the hard way.
-- **The two packed words must be in the ring print.** An hourly ring's span is `EMPTY` on
+- **All three packed words must be in the ring print.** A block ring's span is `EMPTY` on
   every frame it draws and it carries no mark and no overflow, so without them nothing about
-  that ring ever changes and the gate never marks it dirty. `PER_RING` is 6 for this.
-- **It opts out of the delta redraw**, via `lastHourly` in the eligibility key — in *both*
+  that ring ever changes and the gate never marks it dirty. `PER_RING` is 7 for this. Three
+  words because a level is four bits: twelve blocks is 48 bits, and neither a Float nor a
+  Number round-trips that, so the levels take two words of six blocks each (`0xFFFFFF`) beside
+  the twelve known bits (`0xFFF`) — all three inside a Float's exact integer range.
+- **It opts out of the delta redraw**, via `lastBlocks` in the eligibility key — in *both*
   places that key is compared, the delta test and the `stableFor` update. The palette is
   keyed by ring rather than by source, so switching a ring in or out of the forecast moves
   nothing else in the key. The direction that rots is *leaving* it: the buffers hold blocks
   and gutters while the remembered spans describe `EMPTY`.
-- **`StatMap.noHourly()` reports every hour known and *dry*, not all zeroes.** Zero `known`
+- **`StatMap.noBlocks()` reports every block known and *empty*, not all zeroes.** Zero `known`
   means every hour is unknown, which draws the dim tier right round the ring — data, in the
   held-back mode whose entire purpose is to carry none.
+- **Nothing outside `Source.usesBlocks()` names the kind.** The renderer, the loader and the
+  picker all have to ask which *shape* a ring draws, and four copies of `== SOURCE_RAIN_HOURS`
+  is how the second block source ends up drawn as an empty span in three of them. A second one
+  is a case in `Source.fillBlocks()` and nothing else: `HourBands` owns the packing
+  (`raise`/`levelAt`) and the scale (`levelFromFraction`), and knows nothing about rain.
 
 Three sub-bands rather than four was measured, not chosen: four splits a 42px ring into
 10.5px bands that beat against the 10px lattice pitch, and ring 1 comes out 7.0/5.7/9.0/6.7
@@ -387,12 +422,15 @@ dots per block against three-way's 8.3/9.0/11.0. `DotGrid.bandEdges()` therefore
 **integer** thickness `ringBounds()` uses, never `markerWidths()`'s 42.25 — the float one puts
 ring 1's top edge inside ring 1's own outermost dots.
 
-It is offered on the **outer two rings only** (`Source.HOURLY_TOP_RING`), enforced in three
+It is offered on the **outer two rings only** (`Source.BLOCKS_TOP_RING`), enforced in three
 places that must agree: `StatMap.load()` maps it to Off elsewhere, the on-device picker walks
 `Source.offeredFor(ring)`, and `settings.xml` lists it in the `ring1`/`ring2` blocks alone.
 The justification is a claim about the lattice and is asserted as one —
 `onlyTheOuterTwoRingsResolveTwelveHoursInThreeBands` measures the worst (block, sub-band) at
-8 and 6 dots on rings 0 and 1, against 4 and 2 on rings 2 and 3.
+8 and 6 dots on rings 0 and 1, against 4 and 2 on rings 2 and 3. The level scale sharpens that
+only on the innermost ring, where sixteen (block, level) pairs light no dot at all; **ring 2
+draws every rung**, so its exclusion still rests on the dot count and on nothing else — worth
+knowing before anyone relaxes the cut.
 
 ### Every other source reports a span, not a level
 

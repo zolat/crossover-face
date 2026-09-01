@@ -1,12 +1,19 @@
 import Toybox.Lang;
 
-//! The hourly forecast's geometry: twelve blocks round the ring, three radial
-//! sub-bands across its thickness.
+//! The block ring's geometry: twelve blocks round the ring, three radial
+//! sub-bands across its thickness, and one partial band whose *width* carries
+//! whatever the bands cannot.
 //!
 //! Every other source lights an *arc* — one contiguous span, the whole way
-//! across the ring. This one lights twelve disjoint blocks, and how far each
-//! reaches outward is the reading. That is a second shape, not a wider span,
+//! across the ring. This one lights twelve disjoint blocks, and how much of
+//! each is filled is the reading. That is a second shape, not a wider span,
 //! so it gets its own definition here rather than bending StatMap's.
+//!
+//! **Nothing here is about rain.** The forecast is the first source to fill
+//! this shape, not the only one that can: a block is a level from 0 to LEVELS
+//! and where that level came from is Source's business. Anything with one
+//! reading per clock position — the next twelve hours of something, or twelve
+//! of something else — packs through raise() and draws through the same loop.
 //!
 //! **Where a block sits is not a rotation.** The hour hand at local hour `H`
 //! points at clock position `H mod 12`, so the forecast for `N` hours ahead
@@ -19,14 +26,14 @@ import Toybox.Lang;
 //! Like StatMap.litBetween(), the lit test below is the readable definition and
 //! MatrixRenderer inlines its body — the same trade, and the same obligation:
 //! theHourlyLitTestAgreesWithTheRenderer pins the two together at the block
-//! edge, the gutter edge and every sub-band edge, which is where a copied
-//! comparison drifts.
+//! edge, the gutter edge, every sub-band edge and both sides of the partial
+//! band's window, which is where a copied comparison drifts.
 module HourBands {
 
     //! Twelve hours ahead, one per hour mark on the dial.
     const HOURS = 12;
 
-    //! Three radial sub-bands: >=25% lights one, >=50% two, >=75% all three.
+    //! Three radial sub-bands across the ring's thickness.
     //!
     //! Three rather than four, and that was measured rather than chosen. A ring
     //! is 42px thick, so four sub-bands are 10.5px against the lattice's 10px
@@ -34,7 +41,112 @@ module HourBands {
     //! 7.0 / 5.7 / 9.0 / 6.7 dots per block, which reads as an uneven stack.
     //! Split three ways it is 8.3 / 9.0 / 11.0, and ring 0 is 11.0 / 12.3 /
     //! 13.0. The source has to work on either ring, so three wins.
+    //!
+    //! The lattice caps the *radial* axis at three and there is no arguing
+    //! with it. It does not cap the angular one anything like as hard — a
+    //! block is eight to thirteen dots wide — which is the axis LEVELS spends.
     const BANDS = 3;
+
+    //! The top of the scale. A block's level runs 0 to LEVELS inclusive, so
+    //! sixteen readings an hour where the sub-bands alone give four.
+    //!
+    //! **Linear in area, and the top of the scale is the whole block.** Level
+    //! L fills `L * BANDS / LEVELS` bands: the whole part is that many
+    //! full-width sub-bands, the remainder is the angular half-width of the
+    //! next band out. Level LEVELS is exactly the three full bands the old top
+    //! tier drew, which is what leaves every luminance bound where it was —
+    //! nothing this scale can draw was not already drawable.
+    //!
+    //! Sixteen rather than eight because the packing costs the same either
+    //! way: four bits a block is what fits six blocks in a word (see raise()),
+    //! and three bits would need the same two words for half the resolution.
+    const LEVELS = 15;
+
+    //! A block the source said nothing about. Not a level — levels run 0 to
+    //! LEVELS and 0 is a real answer meaning "known, and empty".
+    const UNKNOWN = -1;
+
+    // --- packing -------------------------------------------------------------
+    //
+    // Two words of levels and one of known bits, rather than a twelve-entry
+    // array: they ride in the frame print, which FrameGate compares as floats
+    // element by element, and they must survive that intact. Four bits a block
+    // over six blocks is 24 bits, so each levels word tops out at 0xFFFFFF and
+    // `known` at 0xFFF — all three inside the range a Float represents exactly,
+    // which theHourlyMasksSurviveTheFramePrint pins.
+    //
+    // Two words and not one because twelve blocks at four bits is 48 bits, and
+    // nothing here round-trips that: not a Float, not a Number.
+
+    const LEVEL_BITS = 4;
+    const LEVEL_MASK = 15;
+    const BLOCKS_PER_WORD = 6;
+
+    //! How many words of levels a full set of blocks takes. Two.
+    const LEVEL_WORDS = HOURS / BLOCKS_PER_WORD;
+
+    //! Which levels word holds this block, and how far into it.
+    function wordOf(block as Number) as Number {
+        return block / BLOCKS_PER_WORD;
+    }
+
+    function shiftOf(block as Number) as Number {
+        return (block % BLOCKS_PER_WORD) * LEVEL_BITS;
+    }
+
+    //! Raise this block to `level` in a two-word levels array, never lower it.
+    //!
+    //! **Never lowered, and that is not an optimisation.** A source may offer
+    //! two entries for one block — Garmin should give one forecast an hour, but
+    //! nothing documents it — and "how much in this hour" has an obvious answer
+    //! there: whichever said more. Taking the maximum is also what makes the
+    //! merge order-independent, so a reordered source array cannot change the
+    //! picture.
+    //!
+    //! Subtracting the existing bits rather than masking them out: they are
+    //! exactly the bits being replaced, so the subtraction clears them, and it
+    //! avoids leaning on how Monkey C widens a bitwise complement.
+    function raise(words as Array<Number>, block as Number,
+                   level as Number) as Void {
+        var word = wordOf(block);
+        var shift = shiftOf(block);
+        var packed = words[word];
+        var existing = (packed >> shift) & LEVEL_MASK;
+        if (level <= existing) {
+            return;
+        }
+        words[word] = packed - (existing << shift) + (level << shift);
+    }
+
+    //! This block's level, or UNKNOWN.
+    //!
+    //! Takes the two words loose rather than as an array, because the renderer
+    //! reads them straight out of StatMap's flat channel and the tests build
+    //! them by hand — neither has an array to hand at that point.
+    function levelAt(lo as Number, hi as Number, known as Number,
+                     block as Number) as Number {
+        if (((known >> block) & 1) == 0) {
+            return UNKNOWN;
+        }
+        var packed = (block < BLOCKS_PER_WORD) ? lo : hi;
+        return (packed >> shiftOf(block)) & LEVEL_MASK;
+    }
+
+    //! A 0.0-1.0 reading as a level, so a second source filling this shape
+    //! reuses the scale rather than re-deriving it.
+    //!
+    //! Truncating, which is what makes an all-but-empty block read empty: a
+    //! reading has to reach a full 1/LEVELS of the scale before it lights
+    //! anything. Anything else would put a pip on every block of a dry day.
+    function levelFromFraction(fraction as Float) as Number {
+        if (fraction <= 0.0) {
+            return 0;
+        }
+        var level = (fraction * LEVELS).toNumber();
+        return (level > LEVELS) ? LEVELS : level;
+    }
+
+    // --- the fill ------------------------------------------------------------
 
     //! How much of each hour's 30 degrees the block occupies. The rest is a
     //! dark gutter, which is what keeps the hours countable rather than
@@ -52,14 +164,55 @@ module HourBands {
     //! into the wedge is at or past this is in the gutter.
     const FILL = HOUR_BLOCK_DEGREES / WEDGE_DEGREES;
 
-    //! A block the forecast said nothing about. Not a tier — tiers are 0-3 and
-    //! 0 is a real answer meaning "known, and dry".
-    const UNKNOWN = -1;
+    //! The middle of the block, which the partial band grows out from in both
+    //! directions.
+    //!
+    //! Centred rather than hugging the hour tick. A two-dot pip then sits over
+    //! its own hour rather than leaning into the boundary it shares with the
+    //! hour before, and the partial band keeps the symmetry every full band
+    //! below it already has.
+    const HALF_FILL = FILL / 2.0;
+
+    //! The level that fills exactly one whole sub-band and no more. BANDS
+    //! divides LEVELS, so the band edges land on levels rather than between
+    //! them and "one band" is sayable without a magic number.
+    const LEVELS_PER_BAND = LEVELS / BANDS;
+
+    //! How many whole sub-bands a level fills, 0 to BANDS.
+    function fullBandsFor(level as Number) as Number {
+        return (level * BANDS) / LEVELS;
+    }
+
+    //! How far into the *next* band out the level reaches, 0.0 to below 1.0.
+    //!
+    //! Zero means the level lands exactly on a band edge and there is no
+    //! partial band at all — which is what level 0 and level LEVELS both do,
+    //! from opposite ends.
+    function partialFractionFor(level as Number) as Float {
+        return ((level * BANDS) % LEVELS).toFloat() / LEVELS;
+    }
+
+    //! Half the width of the partial band's window, in wedge units. Zero when
+    //! the level has no partial band.
+    //!
+    //! **There is no minimum width here, and that was measured rather than
+    //! assumed.** The obvious worry is that a level-1 window — a fifth of a
+    //! band — falls clean between two dots of a square lattice and the bottom
+    //! of the scale draws nothing, which is the one failure this scale exists
+    //! to prevent. On the offered rings it does not happen: the worst block at
+    //! level 1 holds two dots on ring 0 and one on ring 1, and every level is
+    //! monotonic in every block. everyNonZeroLevelLightsAtLeastOneDot is what
+    //! keeps that true; if it ever fails, a floor sized off DotGrid.markerHalf
+    //! — which solves this same problem for the temperature mark — is the fix,
+    //! not a coarser scale.
+    function partialHalfFor(level as Number) as Float {
+        return HALF_FILL * partialFractionFor(level);
+    }
 
     //! Which hour block a position falls in.
     //!
     //! Positions run 0.0 up to but not including 1.0, so this cannot exceed
-    //! HOURS - 1 — but the renderer's table carries a thirteenth entry
+    //! HOURS - 1 — but the renderer's tables carry a thirteenth entry
     //! mirroring the first anyway, because float arithmetic near the wrap is
     //! exactly the kind of thing that yields a 12 once on a watch and never in
     //! a test.
@@ -77,33 +230,28 @@ module HourBands {
         return (at - at.toNumber()) < FILL;
     }
 
-    //! The tier packed into `levels` for this block, or UNKNOWN.
+    //! Is a dot lit, given the per-block tables the renderer precomputes?
     //!
-    //! Two words rather than one three-bit field per block: twelve blocks of
-    //! three bits is 36 bits, which no Float round-trips, and both of these
-    //! have to survive FrameGate's element-wise float comparison intact.
-    //! Packed this way `levels` tops out at 0xFFFFFF and `known` at 0xFFF, both
-    //! inside a Float's exact integer range.
-    function tierOf(levels as Number, known as Number,
-                    block as Number) as Number {
-        if (((known >> block) & 1) == 0) {
-            return UNKNOWN;
-        }
-        return (levels >> (block * 2)) & 3;
-    }
-
-    //! Is a dot lit, given the per-block outer edges the renderer precomputes?
-    //!
-    //! `edges[b]` is the squared radius a dot must be within to be lit in block
-    //! b — zero for a block that is dry or unknown, since no dot's squared
-    //! radius is below the hub's. This is the shape MatrixRenderer inlines.
+    //! `fullEdges[b]` is the squared radius a dot must be within to be lit
+    //! anywhere across the block's width — zero for a block that is empty or
+    //! unknown, since no dot's squared radius is below the hub's.
+    //! `partEdges[b]` is the same for the one partial band beyond it, and
+    //! `partLo`/`partHi` are the two sides of the window that band is drawn
+    //! through. This is the shape MatrixRenderer inlines.
     function litAt(position as Float, radiusSq as Number,
-                   edges as Array<Number>) as Boolean {
+                   fullEdges as Array<Number>, partEdges as Array<Number>,
+                   partLo as Array<Float>,
+                   partHi as Array<Float>) as Boolean {
         var at = position * HOURS;
         var block = at.toNumber();
-        if ((at - block) >= FILL) {
+        var into = at - block;
+        if (into >= FILL) {
             return false;                   //! the gutter after the block
         }
-        return radiusSq <= edges[block];
+        if (radiusSq <= fullEdges[block]) {
+            return true;
+        }
+        return radiusSq <= partEdges[block] &&
+               into > partLo[block] && into < partHi[block];
     }
 }

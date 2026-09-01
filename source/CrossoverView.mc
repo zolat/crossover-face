@@ -63,7 +63,7 @@ class CrossoverView extends WatchUi.WatchFace {
         // the mode nobody is reading closely. It comes back on a wrist raise.
         var markers = lowPower ? StatMap.noMarkers()
                                : StatMap.markers(spans, overs);
-        // The hourly forecast, read once and handed to both the print and the
+        // The block channel, read once and handed to both the print and the
         // renderer. The renderer must never read the clock for itself: an hour
         // rolling over between the two would leave the gate certain a ring had
         // not moved while the renderer drew a different picture, and the ring
@@ -71,7 +71,7 @@ class CrossoverView extends WatchUi.WatchFace {
         //
         // Held back like the spans rather than like the marks, because it is
         // the ring's data rather than an annotation on it.
-        var hourly = hideFills ? StatMap.noHourly() : StatMap.hourly();
+        var blocks = hideFills ? StatMap.noBlocks() : StatMap.blocks();
         // Backing is awake-only: in always-on it would cost luminance for a
         // detail nobody is looking at.
         var backing = lowPower ? null : backingColour();
@@ -86,7 +86,7 @@ class CrossoverView extends WatchUi.WatchFace {
             dirty = FrameGate.everything();
         } else {
             if (!FrameGate.plan(fieldPrint(backing),
-                                ringPrint(spans, markers, overs, hourly))) {
+                                ringPrint(spans, markers, overs, blocks))) {
                 Diagnostics.recordSkip(System.getTimer() - started);
                 return;
             }
@@ -100,7 +100,7 @@ class CrossoverView extends WatchUi.WatchFace {
         var palette = hideFills
             ? Palette.heldBack
             : (lowPower ? Palette.alwaysOn : Palette.active);
-        MatrixRenderer.draw(dc, spans, markers, overs, hourly, palette,
+        MatrixRenderer.draw(dc, spans, markers, overs, blocks, palette,
                             lowPower ? Palette.rampAlwaysOn : Palette.rampActive,
                             backing, dirty, FrameGate.clears);
         Diagnostics.record(System.getTimer() - started);
@@ -132,7 +132,7 @@ class CrossoverView extends WatchUi.WatchFace {
     }
 
     //! Everything that can change one ring without touching the others: its
-    //! span, its mark, its over flag and its hourly forecast — PER_RING values
+    //! span, its mark, its over flag and its packed blocks — PER_RING values
     //! each, laid out flat.
     //!
     //! The marks have to be in here. The current temperature moves while the
@@ -146,11 +146,11 @@ class CrossoverView extends WatchUi.WatchFace {
     //! today, but that leaves redrawing correct only for as long as the dot
     //! exists, so the flags are named here in their own right.
     //!
-    //! And so does the hourly pair, for the sharpest reason of the three: an
-    //! hourly ring's span is EMPTY on every frame it ever draws, and it carries
-    //! no mark and no overflow. Without its two words in here nothing about that
-    //! ring ever changes, and the forecast would only appear when the periodic
-    //! repair happened to fire.
+    //! And so do the block words, for the sharpest reason of the three: a
+    //! block ring's span is EMPTY on every frame it ever draws, and it carries
+    //! no mark and no overflow. Without its three words in here nothing about
+    //! that ring ever changes, and the forecast would only appear when the
+    //! periodic repair happened to fire.
     //!
     //! Not private, so the redraw tests can call it. What either print leaves
     //! out is invisible from anywhere else: the ring simply stops updating,
@@ -158,20 +158,21 @@ class CrossoverView extends WatchUi.WatchFace {
     function ringPrint(spans as Array<Array<Float> >,
                        markers as Array<Float>,
                        overs as Array<Boolean>,
-                       hourly as Array<Number>) as Array<Float> {
+                       blocks as Array<Number>) as Array<Float> {
         var out = _ringPrint;
         for (var i = 0; i < StatMap.RINGS; i++) {
             var at = i * FrameGate.PER_RING;
-            var packed = i * StatMap.HOURLY_VALUES;
+            var packed = i * StatMap.BLOCK_VALUES;
             out[at] = spans[i][0];
             out[at + 1] = spans[i][1];
             out[at + 2] = markers[i];
             out[at + 3] = overs[i] ? 1.0 : 0.0;
-            // Both words are inside a Float's exact integer range by
-            // construction — 0xFFFFFF and 0xFFF — so this round trip loses
-            // nothing, and the gate's element-wise compare sees every bit.
-            out[at + 4] = hourly[packed].toFloat();
-            out[at + 5] = hourly[packed + 1].toFloat();
+            // All three words are inside a Float's exact integer range by
+            // construction — 0xFFFFFF, 0xFFFFFF and 0xFFF — so this round trip
+            // loses nothing, and the gate's element-wise compare sees every bit.
+            out[at + 4] = blocks[packed].toFloat();
+            out[at + 5] = blocks[packed + 1].toFloat();
+            out[at + 6] = blocks[packed + 2].toFloat();
         }
         return out;
     }

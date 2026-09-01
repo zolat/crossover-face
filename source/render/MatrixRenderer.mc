@@ -29,14 +29,16 @@ import Toybox.Lang;
 //! dot is chosen once per ring by DotGrid.markedDot() and drawn after the loop,
 //! so the loop itself never learns marks exist.
 //!
-//! A ring may also carry the **hourly rain forecast**, which is the one source
-//! that does not light an arc. Its ring is twelve blocks of 30 degrees, one per
-//! hour ahead, and how far each block reaches out through the ring's own
-//! thickness is the chance of rain in that hour. That needs a radius as well as
-//! an angle, so it gets its own loop rather than a branch in the one below, and
-//! its payload arrives beside the spans rather than inside them. It never
-//! deltas: it changes once an hour, and evaluating the previous frame's
-//! lit-ness per dot would cost more than the draws it saved.
+//! A ring may also carry **blocks** rather than an arc — twelve of them, one
+//! per clock position, each filled from the ring's inner edge outward through
+//! its three sub-bands and then partway across its own width. That is a level
+//! per block on a sixteen-step scale, and it needs a radius and a window as
+//! well as an angle, so it gets its own loop rather than a branch in the one
+//! below, and its payload arrives beside the spans rather than inside them.
+//! The renderer never learns *which* source filled those blocks — today the
+//! twelve-hour rain forecast, tomorrow whatever else has one reading an hour.
+//! It never deltas: it changes once an hour, and evaluating the previous
+//! frame's lit-ness per dot would cost more than the draws it saved.
 //!
 //! A ring may also be *over* — past a goal it can beat, running a second lap.
 //! That costs the dot loop nothing at all. Such a ring is full by definition, so
@@ -142,33 +144,38 @@ module MatrixRenderer {
     //! second copy of every value.
     var stableFor as Array<Number> = [] as Array<Number>;
 
-    //! Whether each ring drew the hourly forecast last time.
+    //! Whether each ring drew blocks rather than a span last time.
     //!
     //! Part of the key above, and it has to be, because the palette is keyed by
     //! *ring* rather than by source: switching a ring from battery to the
     //! forecast changes neither of its two colours, so nothing else in the key
-    //! moves. The direction that bites is the other one — hourly back to
+    //! moves. The direction that bites is the other one — blocks back to
     //! battery leaves blocks, gutters and dim dots in a buffer while the
-    //! remembered spans describe the EMPTY span an hourly ring reports, and a
+    //! remembered spans describe the EMPTY span a block ring reports, and a
     //! delta would skip every dot that is unlit under both.
-    var lastHourly as Array<Boolean> = [] as Array<Boolean>;
+    var lastBlocks as Array<Boolean> = [] as Array<Boolean>;
 
-    //! Per-block scratch for an hourly ring: the squared radius each block is
-    //! lit out to, and the colour its unlit dots take.
+    //! Per-block scratch for a block ring: how far out each block is lit at
+    //! full width, how far out its one partial band reaches, the two sides of
+    //! that band's window, and the colour its unlit dots take.
     //!
-    //! Resolved twelve times per drawn hourly ring instead of once per dot, so
-    //! the inner loop is left with one array lookup and one comparison. Both
-    //! carry a thirteenth entry mirroring the first: a position is 0.0 up to
-    //! but not including 1.0 by construction, so the block index cannot reach
-    //! 12 — but float arithmetic near the wrap is exactly the kind of thing
-    //! that produces one once on a watch and never in a test, and a spare slot
-    //! is cheaper than a bounds check on every dot.
-    var hourEdge as Array<Number> = [] as Array<Number>;
-    var hourUnlit as Array<Number> = [] as Array<Number>;
+    //! Resolved twelve times per drawn block ring instead of once per dot, so
+    //! the inner loop is left with an array lookup and a comparison for the
+    //! full bands and three more for the partial one. Every table carries a
+    //! thirteenth entry mirroring the first: a position is 0.0 up to but not
+    //! including 1.0 by construction, so the block index cannot reach 12 — but
+    //! float arithmetic near the wrap is exactly the kind of thing that
+    //! produces one once on a watch and never in a test, and a spare slot is
+    //! cheaper than a bounds check on every dot.
+    var blockFull as Array<Number> = [] as Array<Number>;
+    var blockPart as Array<Number> = [] as Array<Number>;
+    var blockLo as Array<Float> = [] as Array<Float>;
+    var blockHi as Array<Float> = [] as Array<Float>;
+    var blockUnlit as Array<Number> = [] as Array<Number>;
 
     function draw(dc as Dc, spans as Array<Array<Float> >,
                   markers as Array<Float>, overs as Array<Boolean>,
-                  hourly as Array<Number>,
+                  blocks as Array<Number>,
                   palette as Array<Number>, ramp as Array<Number>,
                   backing as Number?,
                   dirty as Array<Boolean>, clears as Boolean) as Void {
@@ -203,7 +210,7 @@ module MatrixRenderer {
             lastBacking = new [StatMap.RINGS] as Array<Number>;
             lastOver = new [StatMap.RINGS] as Array<Boolean>;
             lastRamp = new [StatMap.RINGS] as Array<Boolean>;
-            lastHourly = new [StatMap.RINGS] as Array<Boolean>;
+            lastBlocks = new [StatMap.RINGS] as Array<Boolean>;
             stableFor = new [StatMap.RINGS] as Array<Number>;
             for (var ring = 0; ring < StatMap.RINGS; ring++) {
                 drawnMark[ring] = -1;
@@ -217,13 +224,16 @@ module MatrixRenderer {
                 lastBacking[ring] = -1;
                 lastOver[ring] = false;
                 lastRamp[ring] = false;
-                lastHourly[ring] = false;
+                lastBlocks[ring] = false;
                 stableFor[ring] = 0;
             }
         }
-        if (hourEdge.size() != HourBands.HOURS + 1) {
-            hourEdge = new [HourBands.HOURS + 1] as Array<Number>;
-            hourUnlit = new [HourBands.HOURS + 1] as Array<Number>;
+        if (blockFull.size() != HourBands.HOURS + 1) {
+            blockFull = new [HourBands.HOURS + 1] as Array<Number>;
+            blockPart = new [HourBands.HOURS + 1] as Array<Number>;
+            blockLo = new [HourBands.HOURS + 1] as Array<Float>;
+            blockHi = new [HourBands.HOURS + 1] as Array<Float>;
+            blockUnlit = new [HourBands.HOURS + 1] as Array<Number>;
         }
         if (clears && drawnMark.size() == StatMap.RINGS) {
             // The screen is black; nothing is on it to rub out.
@@ -330,31 +340,50 @@ module MatrixRenderer {
                 strong = overColour[ring];
             }
             var isRamp = (rings[ring] == Source.SOURCE_TEMPERATURE);
-            var isHourly = (rings[ring] == Source.SOURCE_RAIN_HOURS);
+            var isBlocks = Source.usesBlocks(rings[ring]);
             var last = ringStart[ring + 1];
 
-            // Twelve blocks resolved once, not once per dot. A block reaching
-            // tier t is lit out to that sub-band's squared edge; tier 0 and an
-            // unknown hour are lit to zero, which no dot can be inside since
-            // none sits closer to the centre than the hub.
-            if (isHourly) {
-                var levels = hourly[ring * StatMap.HOURLY_VALUES];
-                var known = hourly[ring * StatMap.HOURLY_VALUES + 1];
+            // Twelve blocks resolved once, not once per dot. A level fills
+            // whole sub-bands out to their squared edges, and then part of the
+            // way across the next band out — an edge and a window, both of
+            // which the dot loop only has to compare against. A zero edge is
+            // lit to nothing, which no dot can be inside since none sits
+            // closer to the centre than the hub, so level 0 and an unknown
+            // block need no branch of their own down there.
+            if (isBlocks) {
+                var lo = blocks[ring * StatMap.BLOCK_VALUES];
+                var hi = blocks[ring * StatMap.BLOCK_VALUES + 1];
+                var known = blocks[ring * StatMap.BLOCK_VALUES + 2];
                 var edgeBase = ring * HourBands.BANDS;
                 var dim = dimColour[ring];
                 for (var b = 0; b < HourBands.HOURS; b++) {
-                    var tier = HourBands.tierOf(levels, known, b);
-                    if (tier == HourBands.UNKNOWN) {
-                        hourEdge[b] = 0;
-                        hourUnlit[b] = dim;
-                    } else {
-                        hourEdge[b] = (tier == 0)
-                            ? 0 : bandEdge[edgeBase + tier - 1];
-                        hourUnlit[b] = weak;
+                    var level = HourBands.levelAt(lo, hi, known, b);
+                    if (level == HourBands.UNKNOWN) {
+                        blockFull[b] = 0;
+                        blockPart[b] = 0;
+                        blockLo[b] = 0.0;
+                        blockHi[b] = 0.0;
+                        blockUnlit[b] = dim;
+                        continue;
                     }
+                    var full = HourBands.fullBandsFor(level);
+                    var window = HourBands.partialHalfFor(level);
+                    blockFull[b] = (full == 0) ? 0 : bandEdge[edgeBase + full - 1];
+                    // A level landing exactly on a band edge has no partial
+                    // band, and that is also what keeps the lookup in range:
+                    // the top of the scale fills every band, so there is no
+                    // band above it to read.
+                    blockPart[b] = (window > 0.0)
+                        ? bandEdge[edgeBase + full] : 0;
+                    blockLo[b] = HourBands.HALF_FILL - window;
+                    blockHi[b] = HourBands.HALF_FILL + window;
+                    blockUnlit[b] = weak;
                 }
-                hourEdge[HourBands.HOURS] = hourEdge[0];
-                hourUnlit[HourBands.HOURS] = hourUnlit[0];
+                blockFull[HourBands.HOURS] = blockFull[0];
+                blockPart[HourBands.HOURS] = blockPart[0];
+                blockLo[HourBands.HOURS] = blockLo[0];
+                blockHi[HourBands.HOURS] = blockHi[0];
+                blockUnlit[HourBands.HOURS] = blockUnlit[0];
             }
 
             // Is this ring's span the only thing that moved since it was last
@@ -366,23 +395,23 @@ module MatrixRenderer {
             //
             // `clears` rules a delta out on its own: the screen has just been
             // blacked, so nothing is on it to keep.
-            // An hourly ring opts out of the delta outright. The delta exists
+            // A block ring opts out of the delta outright. The delta exists
             // to spare the two drawLine calls on a ring whose edge moves about
             // five dots a second; this one moves once an hour, and when it does
             // the change is a whole block or several. Evaluating the previous
-            // lit-ness per dot would need a second block index, a second table
-            // lookup and a second radius test — roughly doubling the expensive
-            // half of the loop, every frame the ring is walked, to save draws on
-            // a once-an-hour event.
+            // lit-ness per dot would need a second set of five tables and a
+            // second window test — more than doubling the expensive half of the
+            // loop, every frame the ring is walked, to save draws on a
+            // once-an-hour event.
             //
-            // Because it never deltas, its masks need not join the key below:
-            // being in the frame print is what makes the ring dirty, and a
-            // dirty hourly ring is always repainted in full.
-            var delta = !clears && !isHourly && stableFor[ring] >= 2 &&
+            // Because it never deltas, its packed words need not join the key
+            // below: being in the frame print is what makes the ring dirty, and
+            // a dirty block ring is always repainted in full.
+            var delta = !clears && !isBlocks && stableFor[ring] >= 2 &&
                         lastWeak[ring] == weak && lastStrong[ring] == strong &&
                         lastOver[ring] == overs[ring] &&
                         lastRamp[ring] == isRamp &&
-                        lastHourly[ring] == isHourly &&
+                        lastBlocks[ring] == isBlocks &&
                         lastBacking[ring] == backingKey;
             var fromA = lastFrom[ring];
             var toA = lastTo[ring];
@@ -405,14 +434,14 @@ module MatrixRenderer {
                                lastStrong[ring] == strong &&
                                lastOver[ring] == overs[ring] &&
                                lastRamp[ring] == isRamp &&
-                               lastHourly[ring] == isHourly &&
+                               lastBlocks[ring] == isBlocks &&
                                lastBacking[ring] == backingKey)
                             ? stableFor[ring] + 1 : 1;
             lastWeak[ring] = weak;
             lastStrong[ring] = strong;
             lastOver[ring] = overs[ring];
             lastRamp[ring] = isRamp;
-            lastHourly[ring] = isHourly;
+            lastBlocks[ring] = isBlocks;
             lastBacking[ring] = backingKey;
             priorFrom[ring] = fromA;
             priorTo[ring] = toA;
@@ -427,15 +456,15 @@ module MatrixRenderer {
             // temperature rather than with the frame.
             markAt[ring] = DotGrid.markedDotFor(ring, markers[ring]);
 
-            // The hourly forecast walks its ring in its own loop, and the span
-            // loop below is left byte-for-byte as it was. A branch inside that
-            // one would be paid on all ~1100 dots to serve a ring that may not
-            // exist, and the statement it guards is the innermost in the face.
+            // A block ring walks in its own loop, and the span loop below is
+            // left byte-for-byte as it was. A branch inside that one would be
+            // paid on all ~1100 dots to serve a ring that may not exist, and
+            // the statement it guards is the innermost in the face.
             //
             // `continue` is safe here because markAt is already assigned and
             // nothing else follows the dot loop inside the ring loop; the marks
             // are drawn in their own pass afterwards.
-            if (isHourly) {
+            if (isBlocks) {
                 for (var i = ringStart[ring]; i < last; i++) {
                     var dx = xs[i];
                     var dy = ys[i];
@@ -446,16 +475,23 @@ module MatrixRenderer {
                     } else {
                         // HourBands.litAt()'s body, inlined — the same trade
                         // litBetween gets, and the same obligation: HourBands
-                        // keeps the readable definition and a test pins the
-                        // two together at the block, gutter and band edges.
+                        // keeps the readable definition and a test pins the two
+                        // together at the block edge, the gutter, every band
+                        // edge and both sides of the partial band's window.
                         var at = positionOf[i] * HourBands.HOURS;
                         var block = at.toNumber();
-                        if ((at - block) >= HourBands.FILL) {
+                        var into = at - block;
+                        var radiusSq = dx * dx + dy * dy;
+                        if (into >= HourBands.FILL) {
                             colour = weak;              //! the gutter
-                        } else if (dx * dx + dy * dy <= hourEdge[block]) {
+                        } else if (radiusSq <= blockFull[block]) {
                             colour = strong;
+                        } else if (radiusSq <= blockPart[block] &&
+                                   into > blockLo[block] &&
+                                   into < blockHi[block]) {
+                            colour = strong;            //! the partial band
                         } else {
-                            colour = hourUnlit[block];
+                            colour = blockUnlit[block];
                         }
                     }
                     if (colour != lastColour) {

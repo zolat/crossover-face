@@ -39,7 +39,9 @@ module Source {
         SOURCE_SECONDS = 7,
         SOURCE_OFF = 8,
         //! The next twelve hours of rain: where round the ring says *when*,
-        //! how far out into the ring's own thickness says *how likely*.
+        //! and how much of that hour's block is filled says *how likely* —
+        //! outward through the ring's three sub-bands, then wider across the
+        //! block, for sixteen readings an hour. See HourBands.
         //!
         //! **Appended after Off, which looks wrong and is the whole point.**
         //! Stored settings are list indices, so a new source inserted anywhere
@@ -120,13 +122,13 @@ module Source {
                 // two floats can say, and widening the span so it could would
                 // make every consumer of one branch on shape. So this source
                 // lights nothing *through the span* and reports its real
-                // payload beside it, in fillHours() below — the same move
+                // payload beside it, in fillBlocks() below — the same move
                 // marker() makes, for the same reason.
                 //
                 // EMPTY rather than StatMap.NEVER_LIT: sourceTablesCoverEveryKind
                 // holds every kind's span inside 0.0-1.0, and NEVER_LIT sits
                 // out at 2.0 deliberately. Both light nothing here, because the
-                // hourly ring never reads its span at all.
+                // block ring never reads its span at all.
                 return EMPTY;
             case SOURCE_INTENSITY_MINUTES:
                 return goal(WatchData.intensityMinutes(), awake);
@@ -225,13 +227,33 @@ module Source {
         return NO_MARKER;
     }
 
-    //! The outermost ring the hourly forecast may be assigned to.
+    //! The outermost ring a block source may be assigned to.
     //!
-    //! It needs twelve blocks, each three sub-bands deep, and only the outer
-    //! two rings have the dots: 436 and 340, which at a 22.5-degree block is
-    //! 26.7 and 20.0 dots an hour. Ring 2 has 224 and ring 3 has 112, where a
-    //! sub-band is one or two dots wide and the hours stop being countable.
-    const HOURLY_TOP_RING = 1;
+    //! It needs twelve blocks, each three sub-bands deep and a good handful of
+    //! dots wide, and only the outer two rings have them: 436 and 340 dots,
+    //! which at a 22.5-degree block is 26.7 and 20.0 dots an hour. Ring 2 has
+    //! 224 and ring 3 has 112, where a sub-band is one or two dots wide and the
+    //! hours stop being countable.
+    //!
+    //! The block *level* sharpens that on the ring where it bites hardest.
+    //! Its bottom rungs are a fraction of one band's width, and on the
+    //! innermost ring sixteen (block, level) pairs light no dot at all — the
+    //! scale is not merely cramped down there, part of it is invisible. Ring 2
+    //! draws every rung, so its exclusion rests on the dot count above and on
+    //! nothing else. onlyTheOuterTwoRingsResolveTwelveHoursInThreeBands
+    //! measures both.
+    const BLOCKS_TOP_RING = 1;
+
+    //! Does this source draw twelve blocks rather than a span?
+    //!
+    //! **The predicate, not the enum value.** A block source is a shape, and
+    //! the renderer, the loader, the picker and the gate all have to ask which
+    //! shape a ring is drawing. Asking `== SOURCE_RAIN_HOURS` in four places is
+    //! how the second block source ends up drawn as an empty span in three of
+    //! them, so nothing outside this function names the kind.
+    function usesBlocks(source as Number) as Boolean {
+        return source == SOURCE_RAIN_HOURS;
+    }
 
     //! May this source be assigned to this ring? Index 0 is the outermost.
     //!
@@ -239,7 +261,7 @@ module Source {
     //! the loader, the on-device picker and settings.xml — and three copies of
     //! a rule is how the three stop agreeing.
     function allowedOn(source as Number, ring as Number) as Boolean {
-        return !(source == SOURCE_RAIN_HOURS && ring > HOURLY_TOP_RING);
+        return !(usesBlocks(source) && ring > BLOCKS_TOP_RING);
     }
 
     //! The sources this particular ring may be assigned to, in picker order.
@@ -253,25 +275,34 @@ module Source {
         return out;
     }
 
-    //! This ring's packed hourly forecast: levels at `at`, known at `at + 1`.
+    //! This ring's packed blocks: two words of levels, then the known bits.
     //!
-    //! Two slots filled from **one** refresh, so the two halves of a block can
-    //! never come from different samples — the same correctness argument
-    //! WeatherData makes for taking its three readings from one call.
+    //! Three slots filled from **one** refresh, so no two blocks can come from
+    //! different samples — the same correctness argument WeatherData makes for
+    //! taking its three readings from one call.
     //!
-    //! The early return is what keeps this free for every face that has no ring
-    //! assigned to the forecast: it is called four times a frame, in the
-    //! preamble that runs before the gate decides, and a face without the
-    //! source never reads a clock for it.
-    function fillHours(source as Number, out as Array<Number>,
-                       at as Number) as Void {
-        if (source != SOURCE_RAIN_HOURS) {
-            out[at] = 0;
-            out[at + 1] = 0;
-            return;
+    //! The early return is what keeps this free for every face with no ring
+    //! assigned to a block source: it is called four times a frame, in the
+    //! preamble that runs before the gate decides, and a face without one never
+    //! reads a clock for it.
+    //!
+    //! A second block source is a second case here and nothing else. The
+    //! channel, the packing and the drawing are already shape-shaped rather
+    //! than rain-shaped.
+    function fillBlocks(source as Number, out as Array<Number>,
+                        at as Number) as Void {
+        switch (source) {
+            case SOURCE_RAIN_HOURS:
+                RainForecast.refresh();
+                out[at] = RainForecast.levels[0];
+                out[at + 1] = RainForecast.levels[1];
+                out[at + 2] = RainForecast.known;
+                return;
+            default:
+                out[at] = 0;
+                out[at + 1] = 0;
+                out[at + 2] = 0;
+                return;
         }
-        RainForecast.refresh();
-        out[at] = RainForecast.levels;
-        out[at + 1] = RainForecast.known;
     }
 }

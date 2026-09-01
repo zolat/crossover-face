@@ -1634,13 +1634,13 @@ module MatrixTest {
         var none = noOvers();
         // The view refills one buffer every frame, so a copy has to be taken
         // before asking for the next print — exactly as FrameGate does.
-        var before = copyOf(view.ringPrint(spans, at12, none, noHours()));
-        var after = copyOf(view.ringPrint(spans, at18, none, noHours()));
+        var before = copyOf(view.ringPrint(spans, at12, none, emptyBlocks()));
+        var after = copyOf(view.ringPrint(spans, at18, none, emptyBlocks()));
         logger.debug("the ring print is " + before.size() + " values");
         Test.assertMessage(!FrameGate.same(before, after),
             "a mark that moved must change the ring print");
         Test.assertMessage(
-            FrameGate.same(before, view.ringPrint(spans, at12, none, noHours())),
+            FrameGate.same(before, view.ringPrint(spans, at12, none, emptyBlocks())),
             "an unchanged mark must leave the ring print alone");
 
         // And it must move *that ring's* slice, not merely the frame: a mark
@@ -2048,14 +2048,14 @@ module MatrixTest {
             marks[i] = Source.NO_MARKER;
         }
 
-        var under = copyOf(view.ringPrint(spans, marks, noOvers(), noHours()));
-        var over = copyOf(view.ringPrint(spans, marks, allOvers(), noHours()));
+        var under = copyOf(view.ringPrint(spans, marks, noOvers(), emptyBlocks()));
+        var over = copyOf(view.ringPrint(spans, marks, allOvers(), emptyBlocks()));
         logger.debug("the ring print is " + under.size() + " values");
         Test.assertMessage(!FrameGate.same(under, over),
             "crossing the goal must change the ring print — the span alone " +
             "cannot tell a lap of 0.05 from a fill of 0.05");
         Test.assertMessage(
-            FrameGate.same(under, view.ringPrint(spans, marks, noOvers(), noHours())),
+            FrameGate.same(under, view.ringPrint(spans, marks, noOvers(), emptyBlocks())),
             "an unchanged flag must leave the ring print alone");
         return true;
     }
@@ -2106,15 +2106,15 @@ module MatrixTest {
                         as Array<Number>;
         for (var r = 0; r < rotations.size(); r++) {
             StatMap.rotation = rotations[r];
-            MatrixRenderer.draw(dc, spans, marks, overs, noHours(), Palette.active,
+            MatrixRenderer.draw(dc, spans, marks, overs, emptyBlocks(), Palette.active,
                                 Palette.rampActive, null,
                                 FrameGate.everything(), true);
-            MatrixRenderer.draw(dc, spans, marks, overs, noHours(), Palette.active,
+            MatrixRenderer.draw(dc, spans, marks, overs, emptyBlocks(), Palette.active,
                                 Palette.rampActive, Palette.BACKING_WHITE,
                                 FrameGate.everything(), true);
             // And again drawing one ring into what is already there, which is
             // the path a moved span actually takes.
-            MatrixRenderer.draw(dc, spans, marks, overs, noHours(), Palette.active,
+            MatrixRenderer.draw(dc, spans, marks, overs, emptyBlocks(), Palette.active,
                                 Palette.rampActive, null,
                                 onlyRingDirty(1), false);
             logger.debug("rotation " + StatMap.rotation + " drew an over field");
@@ -2160,7 +2160,7 @@ module MatrixTest {
         }
 
         // A full frame first, so there is something on screen to preserve.
-        MatrixRenderer.draw(dc, spans, marks, overs, noHours(), Palette.active,
+        MatrixRenderer.draw(dc, spans, marks, overs, emptyBlocks(), Palette.active,
                             Palette.rampActive, null,
                             FrameGate.everything(), true);
         for (var ring = 0; ring < StatMap.RINGS; ring++) {
@@ -2169,7 +2169,7 @@ module MatrixTest {
         }
 
         // Now one ring only. The other three must not be touched at all.
-        MatrixRenderer.draw(dc, spans, marks, overs, noHours(), Palette.active,
+        MatrixRenderer.draw(dc, spans, marks, overs, emptyBlocks(), Palette.active,
                             Palette.rampActive, null,
                             onlyRingDirty(2), false);
         Test.assertMessage(MatrixRenderer.walked[2],
@@ -2184,7 +2184,7 @@ module MatrixTest {
 
         // A mark appears on ring 1. Nothing was there before, so nothing to rub out.
         marks[1] = 0.25;
-        MatrixRenderer.draw(dc, spans, marks, overs, noHours(), Palette.active,
+        MatrixRenderer.draw(dc, spans, marks, overs, emptyBlocks(), Palette.active,
                             Palette.rampActive, null,
                             onlyRingDirty(1), false);
         var first = DotGrid.markedDotFor(1, 0.25);
@@ -2195,7 +2195,7 @@ module MatrixTest {
         // The mark moves. The cell it left must be rubbed out, or 16 pixels of
         // it survive under the cross that replaces it.
         marks[1] = 0.75;
-        MatrixRenderer.draw(dc, spans, marks, overs, noHours(), Palette.active,
+        MatrixRenderer.draw(dc, spans, marks, overs, emptyBlocks(), Palette.active,
                             Palette.rampActive, null,
                             onlyRingDirty(1), false);
         Test.assertMessage(MatrixRenderer.erased >= 1,
@@ -2214,7 +2214,7 @@ module MatrixTest {
         // single slot it would rub out the new cell twice and leave sixteen
         // stray pixels of the old mark under a nine-pixel cross.
         var moved = DotGrid.markedDotFor(1, 0.75);
-        MatrixRenderer.draw(dc, spans, marks, overs, noHours(), Palette.active,
+        MatrixRenderer.draw(dc, spans, marks, overs, emptyBlocks(), Palette.active,
                             Palette.rampActive, null,
                             onlyRingDirty(1), false);
         Test.assertMessage(MatrixRenderer.erased >= 2,
@@ -2226,7 +2226,7 @@ module MatrixTest {
         // A ring that is not redrawn keeps the mark it has on screen: nothing
         // rubbed it out, so the renderer must not forget it either.
         var standing = MatrixRenderer.drawnMark[1];
-        MatrixRenderer.draw(dc, spans, marks, overs, noHours(), Palette.active,
+        MatrixRenderer.draw(dc, spans, marks, overs, emptyBlocks(), Palette.active,
                             Palette.rampActive, null,
                             onlyRingDirty(3), false);
         Test.assertEqualMessage(MatrixRenderer.drawnMark[1], standing,
@@ -2234,7 +2234,7 @@ module MatrixTest {
             "must not lose track of where it is");
 
         // And a clear wipes the slate: nothing is on screen to rub out.
-        MatrixRenderer.draw(dc, spans, marks, overs, noHours(), Palette.active,
+        MatrixRenderer.draw(dc, spans, marks, overs, emptyBlocks(), Palette.active,
                             Palette.rampActive, null,
                             FrameGate.everything(), true);
         Test.assertEqualMessage(MatrixRenderer.erased, 0,
@@ -2899,11 +2899,11 @@ module MatrixTest {
         return DotGrid.ringStart[ring + 1] - DotGrid.ringStart[ring];
     }
 
-    //! Every ring's hourly channel empty, which is exactly what
-    //! StatMap.hourly() reports for a ring assigned to anything else. The
-    //! neutral input for every test that is not about the forecast.
-    function noHours() as Array<Number> {
-        var out = new [StatMap.RINGS * StatMap.HOURLY_VALUES] as Array<Number>;
+    //! Every ring's block channel empty, which is exactly what
+    //! StatMap.blocks() reports for a ring assigned to anything else. The
+    //! neutral input for every test that is not about the block ring.
+    function emptyBlocks() as Array<Number> {
+        var out = new [StatMap.RINGS * StatMap.BLOCK_VALUES] as Array<Number>;
         for (var i = 0; i < out.size(); i++) {
             out[i] = 0;
         }
@@ -2925,10 +2925,10 @@ module MatrixTest {
     function settleBuffers(dc as Graphics.Dc, spans as Array<Array<Float> >,
                            overs as Array<Boolean>, backing as Number?) as Void {
         var marks = noMarks();
-        MatrixRenderer.draw(dc, spans, marks, overs, noHours(), Palette.active,
+        MatrixRenderer.draw(dc, spans, marks, overs, emptyBlocks(), Palette.active,
                             Palette.rampActive, backing,
                             FrameGate.everything(), true);
-        MatrixRenderer.draw(dc, spans, marks, overs, noHours(), Palette.active,
+        MatrixRenderer.draw(dc, spans, marks, overs, emptyBlocks(), Palette.active,
                             Palette.rampActive, backing,
                             FrameGate.everything(), true);
     }
@@ -2970,7 +2970,7 @@ module MatrixTest {
         settleBuffers(dc, spans, overs, null);
 
         var moved = everySpan(0.0, 0.55);
-        MatrixRenderer.draw(dc, moved, noMarks(), overs, noHours(), Palette.active,
+        MatrixRenderer.draw(dc, moved, noMarks(), overs, emptyBlocks(), Palette.active,
                             Palette.rampActive, null, onlyRingDirty(2), false);
 
         var whole = ringSize(2);
@@ -3009,10 +3009,10 @@ module MatrixTest {
 
         // Two moves in a row, the way a seconds ring actually advances.
         var second = everySpan(0.0, 0.40);
-        MatrixRenderer.draw(dc, second, noMarks(), overs, noHours(), Palette.active,
+        MatrixRenderer.draw(dc, second, noMarks(), overs, emptyBlocks(), Palette.active,
                             Palette.rampActive, null, onlyRingDirty(2), false);
         var third = everySpan(0.0, 0.50);
-        MatrixRenderer.draw(dc, third, noMarks(), overs, noHours(), Palette.active,
+        MatrixRenderer.draw(dc, third, noMarks(), overs, emptyBlocks(), Palette.active,
                             Palette.rampActive, null, onlyRingDirty(2), false);
 
         // The buffer this third draw lands in was last written with `first`,
@@ -3052,18 +3052,18 @@ module MatrixTest {
         // Same span, but the ring has gone past its goal — which swaps both
         // tiers underneath the loop.
         overs[2] = true;
-        MatrixRenderer.draw(dc, spans, noMarks(), overs, noHours(), Palette.active,
+        MatrixRenderer.draw(dc, spans, noMarks(), overs, emptyBlocks(), Palette.active,
                             Palette.rampActive, null, onlyRingDirty(2), false);
         Test.assertEqualMessage(MatrixRenderer.painted, whole,
             "the over flag swapped both tiers and the ring was not fully " +
             "repainted — every unchanged dot is showing a colour that is gone");
-        MatrixRenderer.draw(dc, spans, noMarks(), overs, noHours(), Palette.active,
+        MatrixRenderer.draw(dc, spans, noMarks(), overs, emptyBlocks(), Palette.active,
                             Palette.rampActive, null, onlyRingDirty(2), false);
         Test.assertEqualMessage(MatrixRenderer.painted, whole,
             "the second buffer still holds the old tiers, so the repeat draw " +
             "must be full as well — this is what HOLD is for");
         // And only then does the delta come back.
-        MatrixRenderer.draw(dc, spans, noMarks(), overs, noHours(), Palette.active,
+        MatrixRenderer.draw(dc, spans, noMarks(), overs, emptyBlocks(), Palette.active,
                             Palette.rampActive, null, onlyRingDirty(2), false);
         Test.assertMessage(MatrixRenderer.painted < whole,
             "with both buffers holding the new tiers the ring may delta again");
@@ -3084,7 +3084,7 @@ module MatrixTest {
         var spans = everySpan(0.0, 0.50);
         var overs = noOvers();
         settleBuffers(dc, spans, overs, null);
-        MatrixRenderer.draw(dc, spans, noMarks(), overs, noHours(), Palette.active,
+        MatrixRenderer.draw(dc, spans, noMarks(), overs, emptyBlocks(), Palette.active,
                             Palette.rampActive, null,
                             FrameGate.everything(), true);
         Test.assertEqualMessage(MatrixRenderer.painted, DotGrid.count,
@@ -3114,12 +3114,12 @@ module MatrixTest {
 
         var marks = noMarks();
         marks[2] = 0.20;
-        MatrixRenderer.draw(dc, spans, marks, overs, noHours(), Palette.active,
+        MatrixRenderer.draw(dc, spans, marks, overs, emptyBlocks(), Palette.active,
                             Palette.rampActive, null, onlyRingDirty(2), false);
         // The mark moves, on a span that did not. Nothing changed tier, so the
         // only dots owed a cross are the cells the erase blacked.
         marks[2] = 0.80;
-        MatrixRenderer.draw(dc, spans, marks, overs, noHours(), Palette.active,
+        MatrixRenderer.draw(dc, spans, marks, overs, emptyBlocks(), Palette.active,
                             Palette.rampActive, null, onlyRingDirty(2), false);
         logger.debug("mark move: erased " + MatrixRenderer.erased +
                      ", painted " + MatrixRenderer.painted);
@@ -3138,77 +3138,137 @@ module MatrixTest {
     // Rain, next 12h
     // ------------------------------------------------------------------
 
-    //! The worst (block, sub-band) a ring may hold and still be offered the
-    //! forecast. Measured on this lattice at a 22.5-degree block: rings 0 and 1
-    //! floor at 8 and 6 dots, rings 2 and 3 at 4 and 2. Six is what separates
-    //! them, and onlyTheOuterTwoRingsResolveTwelveHoursInThreeBands is what
-    //! holds Source.HOURLY_TOP_RING to that measurement rather than to taste.
+    //! The worst (block, sub-band) a ring may hold and still be offered a
+    //! block source. Measured on this lattice at a 22.5-degree block: rings 0
+    //! and 1 floor at 8 and 6 dots, rings 2 and 3 at 4 and 2. Six is what
+    //! separates them, and onlyTheOuterTwoRingsResolveTwelveHoursInThreeBands
+    //! is what holds Source.BLOCKS_TOP_RING to that measurement rather than to
+    //! taste.
     const MIN_BAND_DOTS = 6;
 
-    //! Twelve tiers packed the way RainForecast packs them: [levels, known].
-    //! A tier of HourBands.UNKNOWN leaves that hour's bit clear.
-    function packHours(tiers as Array<Number>) as Array<Number> {
-        var levels = 0;
+    //! Twelve levels packed the way a block source packs them:
+    //! [levels low, levels high, known]. A level of HourBands.UNKNOWN leaves
+    //! that block's known bit clear.
+    function packBlocks(levels as Array<Number>) as Array<Number> {
+        var words = [0, 0] as Array<Number>;
         var known = 0;
         for (var b = 0; b < HourBands.HOURS; b++) {
-            if (tiers[b] != HourBands.UNKNOWN) {
-                levels = RainForecast.withTier(levels, b, tiers[b]);
+            if (levels[b] != HourBands.UNKNOWN) {
+                HourBands.raise(words, b, levels[b]);
                 known = known | (1 << b);
             }
         }
-        return [levels, known] as Array<Number>;
+        return [words[0], words[1], known] as Array<Number>;
     }
 
-    function everyHourAt(tier as Number) as Array<Number> {
+    function everyBlockAt(level as Number) as Array<Number> {
         var out = new [HourBands.HOURS] as Array<Number>;
         for (var b = 0; b < HourBands.HOURS; b++) {
-            out[b] = tier;
+            out[b] = level;
         }
         return out;
     }
 
-    //! The hourly channel with one ring carrying these twelve tiers.
-    function hoursFor(ring as Number, tiers as Array<Number>) as Array<Number> {
-        var packed = packHours(tiers);
-        var out = noHours();
-        out[ring * StatMap.HOURLY_VALUES] = packed[0];
-        out[ring * StatMap.HOURLY_VALUES + 1] = packed[1];
+    //! The block channel with one ring carrying these twelve levels.
+    function blocksFor(ring as Number,
+                       levels as Array<Number>) as Array<Number> {
+        var packed = packBlocks(levels);
+        var out = emptyBlocks();
+        out[ring * StatMap.BLOCK_VALUES] = packed[0];
+        out[ring * StatMap.BLOCK_VALUES + 1] = packed[1];
+        out[ring * StatMap.BLOCK_VALUES + 2] = packed[2];
         return out;
     }
 
-    //! The per-block edge table, built the way MatrixRenderer builds it. The
-    //! geometry tests below read the field through this and HourBands.litAt(),
-    //! which is the definition the renderer inlines.
-    function hourEdgesFor(ring as Number, tiers as Array<Number>)
-            as Array<Number> {
-        // These read the cache directly rather than through the renderer,
-        // which is what usually builds it.
-        DotGrid.ensureBuilt();
-        var packed = packHours(tiers);
-        var out = new [HourBands.HOURS + 1] as Array<Number>;
-        var base = ring * HourBands.BANDS;
-        for (var b = 0; b < HourBands.HOURS; b++) {
-            var tier = HourBands.tierOf(packed[0], packed[1], b);
-            out[b] = (tier == HourBands.UNKNOWN || tier == 0)
-                ? 0 : DotGrid.bandEdge[base + tier - 1];
-        }
-        out[HourBands.HOURS] = out[0];
-        return out;
-    }
+    //! The four per-block tables MatrixRenderer resolves before its dot loop,
+    //! rebuilt here by the same rules.
+    //!
+    //! A class rather than four returned arrays because two of them are
+    //! Numbers and two are Floats, which do not travel together in one array
+    //! under strict typing — and because more than one table has to exist at
+    //! once: the sub-band measurements below compare a level against the one
+    //! below it. The geometry tests read the field through this and
+    //! HourBands.litAt(), which is the definition the renderer inlines.
+    class BlockTables {
+        var full as Array<Number>;
+        var part as Array<Number>;
+        var lo as Array<Float>;
+        var hi as Array<Float>;
 
-    function litHourDots(ring as Number, edges as Array<Number>) as Number {
-        DotGrid.ensureBuilt();
-        var n = 0;
-        for (var i = DotGrid.ringStart[ring];
-                i < DotGrid.ringStart[ring + 1]; i++) {
-            var dx = DotGrid.xs[i];
-            var dy = DotGrid.ys[i];
-            if (HourBands.litAt(DotGrid.positionOf[i], dx * dx + dy * dy,
-                                edges)) {
-                n++;
+        function initialize(ring as Number, levels as Array<Number>) {
+            // These read the cache directly rather than through the renderer,
+            // which is what usually builds it.
+            DotGrid.ensureBuilt();
+            var packed = packBlocks(levels);
+            var slots = HourBands.HOURS + 1;
+            full = new [slots] as Array<Number>;
+            part = new [slots] as Array<Number>;
+            lo = new [slots] as Array<Float>;
+            hi = new [slots] as Array<Float>;
+            var base = ring * HourBands.BANDS;
+            for (var b = 0; b < HourBands.HOURS; b++) {
+                var level = HourBands.levelAt(packed[0], packed[1], packed[2],
+                                              b);
+                if (level == HourBands.UNKNOWN) {
+                    full[b] = 0;
+                    part[b] = 0;
+                    lo[b] = 0.0;
+                    hi[b] = 0.0;
+                    continue;
+                }
+                var bands = HourBands.fullBandsFor(level);
+                var window = HourBands.partialHalfFor(level);
+                full[b] = (bands == 0) ? 0 : DotGrid.bandEdge[base + bands - 1];
+                part[b] = (window > 0.0) ? DotGrid.bandEdge[base + bands] : 0;
+                lo[b] = HourBands.HALF_FILL - window;
+                hi[b] = HourBands.HALF_FILL + window;
             }
+            full[HourBands.HOURS] = full[0];
+            part[HourBands.HOURS] = part[0];
+            lo[HourBands.HOURS] = lo[0];
+            hi[HourBands.HOURS] = hi[0];
         }
-        return n;
+
+        function lit(position as Float, radiusSq as Number) as Boolean {
+            return HourBands.litAt(position, radiusSq, full, part, lo, hi);
+        }
+
+        //! How many of this ring's dots the tables light.
+        function litDots(ring as Number) as Number {
+            var n = 0;
+            for (var i = DotGrid.ringStart[ring];
+                    i < DotGrid.ringStart[ring + 1]; i++) {
+                var dx = DotGrid.xs[i];
+                var dy = DotGrid.ys[i];
+                if (lit(DotGrid.positionOf[i], dx * dx + dy * dy)) {
+                    n++;
+                }
+            }
+            return n;
+        }
+
+        //! How many dots each block lights, twelve entries.
+        function litPerBlock(ring as Number) as Array<Number> {
+            var out = new [HourBands.HOURS] as Array<Number>;
+            for (var b = 0; b < HourBands.HOURS; b++) {
+                out[b] = 0;
+            }
+            for (var i = DotGrid.ringStart[ring];
+                    i < DotGrid.ringStart[ring + 1]; i++) {
+                var position = DotGrid.positionOf[i];
+                var dx = DotGrid.xs[i];
+                var dy = DotGrid.ys[i];
+                if (lit(position, dx * dx + dy * dy)) {
+                    out[HourBands.blockOf(position)]++;
+                }
+            }
+            return out;
+        }
+    }
+
+    //! Every block at one level, on one ring.
+    function tablesAt(ring as Number, level as Number) as BlockTables {
+        return new BlockTables(ring, everyBlockAt(level));
     }
 
     //! The anchoring claim, asserted directly and without a clock.
@@ -3268,61 +3328,119 @@ module MatrixTest {
         return true;
     }
 
-    //! The scale: a quarter lights one sub-band, three quarters lights them all.
+    //! The scale runs the whole way to a certainty, in sixteen steps.
+    //!
+    //! The sub-bands used to *be* the scale, so a chance had four readings and
+    //! anything at or above 75% drew the same full ring. Now the bands are the
+    //! coarse axis and the width of the partial band is the fine one, so the
+    //! top of the scale means what it says: a full block is 100%, one whole
+    //! sub-band is a third, and 10% is a level rather than nothing.
     (:test)
-    function aQuarterChanceLightsOneBandAndThreeQuartersLightsAll(
-            logger as Logger) as Boolean {
-        Test.assertEqualMessage(RainForecast.tierFor(0), 0, "0% is dry");
-        Test.assertEqualMessage(RainForecast.tierFor(24), 0, "24% is still dry");
-        Test.assertEqualMessage(RainForecast.tierFor(25), 1, "25% lights one");
-        Test.assertEqualMessage(RainForecast.tierFor(49), 1, "49% lights one");
-        Test.assertEqualMessage(RainForecast.tierFor(50), 2, "50% lights two");
-        Test.assertEqualMessage(RainForecast.tierFor(74), 2, "74% lights two");
-        Test.assertEqualMessage(RainForecast.tierFor(75), 3,
-            "75% lights all three");
-        Test.assertEqualMessage(RainForecast.tierFor(100), HourBands.BANDS,
-            "a certainty must clamp to the outermost band, not overflow it");
-        Test.assertEqualMessage(RainForecast.tierFor(-5), 0,
+    function aPercentageChanceLandsOnTheRightLevel(logger as Logger)
+            as Boolean {
+        Test.assertEqualMessage(RainForecast.levelFor(0), 0, "0% is dry");
+        Test.assertEqualMessage(RainForecast.levelFor(6), 0,
+            "below one step of the scale still reads dry, or a day of " +
+            "two-percent hours draws a ring of pips");
+        Test.assertEqualMessage(RainForecast.levelFor(10), 1,
+            "10% is the reading this scale exists for: a level, not nothing");
+        Test.assertEqualMessage(RainForecast.levelFor(50),
+            HourBands.LEVELS / 2, "half a chance is half the scale");
+        Test.assertEqualMessage(RainForecast.levelFor(100), HourBands.LEVELS,
+            "a certainty must reach the top of the scale, not overflow it");
+        Test.assertEqualMessage(RainForecast.levelFor(-5), 0,
             "a nonsense reading must not index below the scale");
+
+        // Monotonic the whole way up, and every level reachable — a scale with
+        // a rung nothing maps to is a rung the face can never draw.
+        var seen = new [HourBands.LEVELS + 1] as Array<Boolean>;
+        for (var i = 0; i <= HourBands.LEVELS; i++) {
+            seen[i] = false;
+        }
+        var previous = 0;
+        for (var percent = 0; percent <= 100; percent++) {
+            var level = RainForecast.levelFor(percent);
+            Test.assertMessage(level >= previous,
+                percent + "% read lower than " + (percent - 1) + "%");
+            Test.assertMessage(level >= 0 && level <= HourBands.LEVELS,
+                percent + "% left the scale entirely at " + level);
+            seen[level] = true;
+            previous = level;
+        }
+        for (var i = 0; i <= HourBands.LEVELS; i++) {
+            Test.assertMessage(seen[i],
+                "no percentage reaches level " + i + ", so the face can " +
+                "never draw it");
+        }
+
+        // The band edges land on levels rather than between them, which is
+        // what lets a test say "exactly one sub-band" without a magic number.
+        Test.assertEqualMessage(
+            HourBands.LEVELS_PER_BAND * HourBands.BANDS, HourBands.LEVELS,
+            "BANDS must divide LEVELS, or no level fills a whole band");
+        for (var band = 0; band <= HourBands.BANDS; band++) {
+            var level = band * HourBands.LEVELS_PER_BAND;
+            Test.assertEqualMessage(HourBands.fullBandsFor(level), band,
+                "level " + level + " must fill exactly " + band + " bands");
+            Test.assertEqualMessage(HourBands.partialHalfFor(level), 0.0,
+                "level " + level + " lands on a band edge, so it must have " +
+                "no partial band at all");
+        }
         return true;
     }
 
-    //! Both packed words have to survive the frame print's float round trip.
+    //! All three packed words have to survive the frame print's float round
+    //! trip.
     //!
     //! FrameGate compares prints element by element as floats, so a bit lost
     //! here is a forecast change the gate cannot see — the ring would simply
-    //! stop updating, which looks like nothing going wrong at all.
+    //! stop updating, which looks like nothing going wrong at all. Four bits a
+    //! block is what forces two levels words: twelve blocks at four bits is 48,
+    //! and nothing here round-trips that.
     (:test)
     function theHourlyMasksSurviveTheFramePrint(logger as Logger) as Boolean {
-        var tiers = new [HourBands.HOURS] as Array<Number>;
+        var levels = new [HourBands.HOURS] as Array<Number>;
         for (var b = 0; b < HourBands.HOURS; b++) {
-            tiers[b] = b % (HourBands.BANDS + 1);
+            levels[b] = b % (HourBands.LEVELS + 1);
         }
-        var packed = packHours(tiers);
-        for (var i = 0; i < 2; i++) {
+        var packed = packBlocks(levels);
+        for (var i = 0; i < packed.size(); i++) {
             var through = packed[i].toFloat().toNumber();
             Test.assertEqualMessage(through, packed[i],
                 "word " + i + " lost a bit through the print: " + packed[i] +
                 " came back as " + through);
         }
 
-        // And the worst case, which is what bounds the claim: every hour at
-        // the top tier, every hour known.
-        var full = packHours(everyHourAt(HourBands.BANDS));
-        Test.assertEqualMessage(full[0].toFloat().toNumber(), full[0],
-            "a full levels word must round-trip exactly");
-        Test.assertEqualMessage(full[1], RainForecast.ALL_KNOWN,
+        // And the worst case, which is what bounds the claim: every block at
+        // the top of the scale, every block known.
+        var full = packBlocks(everyBlockAt(HourBands.LEVELS));
+        for (var i = 0; i < HourBands.LEVEL_WORDS; i++) {
+            Test.assertEqualMessage(full[i], 0xFFFFFF,
+                "every block at the top level is what fills a levels word");
+            Test.assertEqualMessage(full[i].toFloat().toNumber(), full[i],
+                "a full levels word must round-trip exactly");
+        }
+        Test.assertEqualMessage(full[HourBands.LEVEL_WORDS],
+            RainForecast.ALL_KNOWN,
             "twelve known hours is what ALL_KNOWN means");
-        Test.assertEqualMessage(full[1].toFloat().toNumber(), full[1],
+        Test.assertEqualMessage(
+            full[HourBands.LEVEL_WORDS].toFloat().toNumber(),
+            full[HourBands.LEVEL_WORDS],
             "a full known word must round-trip exactly");
 
         // Unpacking returns what went in.
         for (var b = 0; b < HourBands.HOURS; b++) {
             Test.assertEqualMessage(
-                HourBands.tierOf(packed[0], packed[1], b), tiers[b],
-                "block " + b + " did not survive packing");
+                HourBands.levelAt(packed[0], packed[1], packed[2], b),
+                levels[b], "block " + b + " did not survive packing");
         }
-        logger.debug("levels " + packed[0] + ", known " + packed[1]);
+        // And the print carries a slot for each of them.
+        Test.assertEqualMessage(FrameGate.PER_RING,
+            4 + StatMap.BLOCK_VALUES,
+            "the ring print must carry every block word beside the span, " +
+            "the mark and the over flag");
+        logger.debug("levels " + packed[0] + "/" + packed[1] + ", known " +
+                     packed[2]);
         return true;
     }
 
@@ -3330,13 +3448,15 @@ module MatrixTest {
     (:test)
     function anHourWithNoForecastReadsAsUnknownRatherThanDry(logger as Logger)
             as Boolean {
-        var tiers = everyHourAt(0);
-        tiers[4] = HourBands.UNKNOWN;
-        var packed = packHours(tiers);
+        var levels = everyBlockAt(0);
+        levels[4] = HourBands.UNKNOWN;
+        var packed = packBlocks(levels);
 
-        Test.assertEqualMessage(HourBands.tierOf(packed[0], packed[1], 4),
+        Test.assertEqualMessage(
+            HourBands.levelAt(packed[0], packed[1], packed[2], 4),
             HourBands.UNKNOWN, "an hour with no forecast must read as unknown");
-        Test.assertEqualMessage(HourBands.tierOf(packed[0], packed[1], 3), 0,
+        Test.assertEqualMessage(
+            HourBands.levelAt(packed[0], packed[1], packed[2], 3), 0,
             "an hour forecast dry must read as dry, which is a real answer");
         Test.assertMessage(HourBands.UNKNOWN != 0,
             "unknown must not be the same value as dry");
@@ -3385,21 +3505,40 @@ module MatrixTest {
     //! arrive in.
     (:test)
     function aBusyHourTakesTheHigherChance(logger as Logger) as Boolean {
-        var rising = RainForecast.withTier(0, 5, 1);
-        rising = RainForecast.withTier(rising, 5, 3);
-        var falling = RainForecast.withTier(0, 5, 3);
-        falling = RainForecast.withTier(falling, 5, 1);
-        Test.assertEqualMessage((rising >> 10) & 3, 3,
+        var rising = [0, 0] as Array<Number>;
+        HourBands.raise(rising, 5, 4);
+        HourBands.raise(rising, 5, 13);
+        var falling = [0, 0] as Array<Number>;
+        HourBands.raise(falling, 5, 13);
+        HourBands.raise(falling, 5, 4);
+        Test.assertEqualMessage(
+            HourBands.levelAt(rising[0], rising[1], 0xFFF, 5), 13,
             "the higher reading must win when it arrives second");
-        Test.assertEqualMessage(rising, falling,
+        Test.assertEqualMessage(rising[0], falling[0],
+            "the merge must not depend on the order the forecast arrives in");
+        Test.assertEqualMessage(rising[1], falling[1],
             "the merge must not depend on the order the forecast arrives in");
 
-        // And it touches nothing else.
-        var packed = RainForecast.withTier(packHours(everyHourAt(1))[0], 7, 3);
+        // And it touches nothing else — including the other word, which is the
+        // half of this that only exists because a block's level is four bits.
+        var packed = packBlocks(everyBlockAt(1));
+        var words = [packed[0], packed[1]] as Array<Number>;
+        HourBands.raise(words, 7, HourBands.LEVELS);
         for (var b = 0; b < HourBands.HOURS; b++) {
-            Test.assertEqualMessage((packed >> (b * 2)) & 3, (b == 7) ? 3 : 1,
+            Test.assertEqualMessage(
+                HourBands.levelAt(words[0], words[1], 0xFFF, b),
+                (b == 7) ? HourBands.LEVELS : 1,
                 "writing block 7 disturbed block " + b);
         }
+
+        // A block in the *high* word, so neither word is written by luck.
+        var high = [0, 0] as Array<Number>;
+        HourBands.raise(high, 11, 9);
+        Test.assertEqualMessage(high[0], 0,
+            "block 11 lives in the high word and must not touch the low one");
+        Test.assertEqualMessage(
+            HourBands.levelAt(high[0], high[1], 0xFFF, 11), 9,
+            "block 11 did not land in the high word");
         return true;
     }
 
@@ -3411,19 +3550,18 @@ module MatrixTest {
     //! say so rather than fail.
     (:test)
     function everyHourBlockLeavesADarkGutter(logger as Logger) as Boolean {
-        var edges = hourEdgesFor(0, everyHourAt(HourBands.BANDS));
-        for (var ring = 0; ring <= Source.HOURLY_TOP_RING; ring++) {
-            var ringEdges = hourEdgesFor(ring, everyHourAt(HourBands.BANDS));
+        var edges = tablesAt(0, HourBands.LEVELS);
+        for (var ring = 0; ring <= Source.BLOCKS_TOP_RING; ring++) {
+            var tables = tablesAt(ring, HourBands.LEVELS);
             var gutter = 0;
             for (var i = DotGrid.ringStart[ring];
                     i < DotGrid.ringStart[ring + 1]; i++) {
                 var position = DotGrid.positionOf[i];
                 var dx = DotGrid.xs[i];
                 var dy = DotGrid.ys[i];
-                var lit = HourBands.litAt(position, dx * dx + dy * dy,
-                                          ringEdges);
-                // Every block is at the top tier, so inside a block is lit and
-                // outside one is not. Nothing else can decide it.
+                var lit = tables.lit(position, dx * dx + dy * dy);
+                // Every block is at the top of the scale, so inside a block is
+                // lit and outside one is not. Nothing else can decide it.
                 Test.assertEqualMessage(lit, HourBands.insideBlock(position),
                     "ring " + ring + " dot " + i + " at " + position +
                     " disagrees with its own block test");
@@ -3439,35 +3577,44 @@ module MatrixTest {
                              " dots in the gutters");
             }
         }
-        Test.assertEqualMessage(edges[HourBands.HOURS], edges[0],
-            "the spare block must mirror the first, or a position that " +
-            "rounds to 12 reads someone else's forecast");
+        // Every table's spare thirteenth entry mirrors the first, or a
+        // position that rounds to 12 reads someone else's forecast.
+        Test.assertEqualMessage(edges.full[HourBands.HOURS], edges.full[0],
+            "the spare block's full edge does not mirror the first");
+        Test.assertEqualMessage(edges.part[HourBands.HOURS], edges.part[0],
+            "the spare block's partial edge does not mirror the first");
+        Test.assertEqualMessage(edges.lo[HourBands.HOURS], edges.lo[0],
+            "the spare block's window does not mirror the first");
+        Test.assertEqualMessage(edges.hi[HourBands.HOURS], edges.hi[0],
+            "the spare block's window does not mirror the first");
         return true;
     }
 
-    //! Each sub-band lights its own share of the ring, and the top tier lights
-    //! every dot the blocks cover.
+    //! Each sub-band lights its own share of the ring, and the top of the
+    //! scale lights every dot the blocks cover.
     (:test)
     function eachSubBandLightsItsShareOfTheRing(logger as Logger) as Boolean {
-        for (var ring = 0; ring <= Source.HOURLY_TOP_RING; ring++) {
-            var dry = litHourDots(ring, hourEdgesFor(ring, everyHourAt(0)));
+        for (var ring = 0; ring <= Source.BLOCKS_TOP_RING; ring++) {
+            var dry = tablesAt(ring, 0).litDots(ring);
             Test.assertEqualMessage(dry, 0,
                 "a dry forecast must light nothing on ring " + ring);
 
             var previous = 0;
-            for (var tier = 1; tier <= HourBands.BANDS; tier++) {
-                var lit = litHourDots(ring,
-                                      hourEdgesFor(ring, everyHourAt(tier)));
+            for (var band = 1; band <= HourBands.BANDS; band++) {
+                var lit = tablesAt(ring, band * HourBands.LEVELS_PER_BAND)
+                    .litDots(ring);
                 Test.assertMessage(lit > previous,
-                    "ring " + ring + " tier " + tier + " lit " + lit +
-                    " dots against tier " + (tier - 1) + "'s " + previous +
+                    "ring " + ring + " band " + band + " lit " + lit +
+                    " dots against band " + (band - 1) + "'s " + previous +
                     " — each sub-band must add to the one below it");
                 previous = lit;
             }
 
-            // The top tier is the whole block, edge to edge: no dead rim
-            // inside the ring, which is why bandEdges() forces the outermost
-            // edge to the ring's own rather than stacking three steps.
+            // The top of the scale is the whole block, edge to edge: no dead
+            // rim inside the ring, which is why bandEdges() forces the
+            // outermost edge to the ring's own rather than stacking three
+            // steps. It is also the luminance argument — the widened scale
+            // draws nothing the old top tier could not.
             var inside = 0;
             for (var i = DotGrid.ringStart[ring];
                     i < DotGrid.ringStart[ring + 1]; i++) {
@@ -3476,15 +3623,84 @@ module MatrixTest {
                 }
             }
             Test.assertEqualMessage(previous, inside,
-                "ring " + ring + ": the top tier must light every dot its " +
+                "ring " + ring + ": the top level must light every dot its " +
                 "blocks cover, but lit " + previous + " of " + inside);
             logger.debug("ring " + ring + ": " + inside + " dots under the " +
                          "blocks, of " + ringSize(ring));
 
-            var unknown = litHourDots(ring,
-                hourEdgesFor(ring, everyHourAt(HourBands.UNKNOWN)));
+            var unknown = tablesAt(ring, HourBands.UNKNOWN).litDots(ring);
             Test.assertEqualMessage(unknown, 0,
                 "an unknown hour must light nothing on ring " + ring);
+        }
+        return true;
+    }
+
+    //! **The feature, asserted.** Every level above dry lights at least one dot
+    //! in every block on every ring the source is offered on.
+    //!
+    //! The bottom of the scale is a window a fifth of one sub-band wide, and
+    //! dots on a square lattice are not evenly spaced along a ring — so the
+    //! failure this guards against is the whole point going quiet: a 10% hour
+    //! that draws exactly nothing, which is indistinguishable from the dry
+    //! hour the old four-step scale drew for it. On this lattice the geometry
+    //! delivers it with no minimum window at all; if that ever stops being
+    //! true, a floor sized off DotGrid.markerHalf is the fix rather than a
+    //! coarser scale.
+    (:test)
+    function everyNonZeroLevelLightsAtLeastOneDot(logger as Logger) as Boolean {
+        for (var ring = 0; ring <= Source.BLOCKS_TOP_RING; ring++) {
+            var worst = -1;
+            for (var level = 1; level <= HourBands.LEVELS; level++) {
+                var perBlock = tablesAt(ring, level).litPerBlock(ring);
+                for (var b = 0; b < HourBands.HOURS; b++) {
+                    Test.assertMessage(perBlock[b] > 0,
+                        "ring " + ring + " block " + b + " at level " + level +
+                        " lights nothing, so the bottom of the scale is " +
+                        "invisible there");
+                    if (worst < 0 || perBlock[b] < worst) {
+                        worst = perBlock[b];
+                    }
+                }
+            }
+            logger.debug("ring " + ring + ": thinnest lit block holds " +
+                         worst + " dots");
+        }
+
+        // The sibling invariant, and the one a minimum window would break: an
+        // hour known and dry lights nothing at all. A scale whose floor leaked
+        // a pip onto a dry hour would be worse than the one it replaced.
+        for (var ring = 0; ring <= Source.BLOCKS_TOP_RING; ring++) {
+            var perBlock = tablesAt(ring, 0).litPerBlock(ring);
+            for (var b = 0; b < HourBands.HOURS; b++) {
+                Test.assertEqualMessage(perBlock[b], 0,
+                    "ring " + ring + " block " + b + " lit a dot for a dry " +
+                    "hour");
+            }
+        }
+        return true;
+    }
+
+    //! More is never less: raising a level cannot unlight a dot in any block.
+    //!
+    //! The partial band grows out from the middle of its block while the full
+    //! bands grow outward from the ring's inner edge, so the shape a level
+    //! draws changes on two axes at once. Monotonic per *block* rather than in
+    //! total, because a total can hide one block going backwards behind
+    //! another going forwards — and a block is what a wearer reads.
+    (:test)
+    function aLevelIsMonotonicInDotsLit(logger as Logger) as Boolean {
+        for (var ring = 0; ring <= Source.BLOCKS_TOP_RING; ring++) {
+            var previous = tablesAt(ring, 0).litPerBlock(ring);
+            for (var level = 1; level <= HourBands.LEVELS; level++) {
+                var current = tablesAt(ring, level).litPerBlock(ring);
+                for (var b = 0; b < HourBands.HOURS; b++) {
+                    Test.assertMessage(current[b] >= previous[b],
+                        "ring " + ring + " block " + b + " fell from " +
+                        previous[b] + " dots at level " + (level - 1) +
+                        " to " + current[b] + " at level " + level);
+                }
+                previous = current;
+            }
         }
         return true;
     }
@@ -3495,7 +3711,7 @@ module MatrixTest {
     //! the lattice rather than left in a comment: every block of every
     //! sub-band on a permitted ring holds at least MIN_BAND_DOTS dots, and the
     //! rings below the cut do not. If the lattice ever changes, this says
-    //! whether Source.HOURLY_TOP_RING still means what it claims to.
+    //! whether Source.BLOCKS_TOP_RING still means what it claims to.
     (:test)
     function onlyTheOuterTwoRingsResolveTwelveHoursInThreeBands(
             logger as Logger) as Boolean {
@@ -3503,8 +3719,9 @@ module MatrixTest {
             var worst = -1;
             for (var band = 1; band <= HourBands.BANDS; band++) {
                 // The dots this band adds over the one inside it.
-                var inner = hourEdgesFor(ring, everyHourAt(band - 1));
-                var outer = hourEdgesFor(ring, everyHourAt(band));
+                var inner = tablesAt(ring,
+                    (band - 1) * HourBands.LEVELS_PER_BAND);
+                var outer = tablesAt(ring, band * HourBands.LEVELS_PER_BAND);
                 var perBlock = new [HourBands.HOURS] as Array<Number>;
                 for (var b = 0; b < HourBands.HOURS; b++) {
                     perBlock[b] = 0;
@@ -3515,8 +3732,8 @@ module MatrixTest {
                     var dx = DotGrid.xs[i];
                     var dy = DotGrid.ys[i];
                     var radiusSq = dx * dx + dy * dy;
-                    if (HourBands.litAt(position, radiusSq, outer) &&
-                            !HourBands.litAt(position, radiusSq, inner)) {
+                    if (outer.lit(position, radiusSq) &&
+                            !inner.lit(position, radiusSq)) {
                         perBlock[HourBands.blockOf(position)]++;
                     }
                 }
@@ -3528,7 +3745,7 @@ module MatrixTest {
             }
             logger.debug("ring " + ring + ": worst sub-band holds " + worst +
                          " dots");
-            if (ring <= Source.HOURLY_TOP_RING) {
+            if (ring <= Source.BLOCKS_TOP_RING) {
                 Test.assertMessage(worst >= MIN_BAND_DOTS,
                     "ring " + ring + " is offered the forecast but its " +
                     "thinnest sub-band holds only " + worst + " dots");
@@ -3536,7 +3753,32 @@ module MatrixTest {
                 Test.assertMessage(worst < MIN_BAND_DOTS,
                     "ring " + ring + " holds " + worst + " dots in its " +
                     "thinnest sub-band, so it could carry the forecast — " +
-                    "Source.HOURLY_TOP_RING is now costing a ring for nothing");
+                    "Source.BLOCKS_TOP_RING is now costing a ring for nothing");
+
+                // And what the widened scale adds to the same claim, on the
+                // ring where it bites hardest: on the innermost ring sixteen
+                // (block, level) pairs light no dot at all, so the scale would
+                // not merely be cramped down there, part of it would be
+                // invisible. Ring 2 draws every rung — its exclusion still
+                // rests on the sub-band measurement above and on nothing else,
+                // which is worth knowing before anyone relaxes the cut.
+                var blind = 0;
+                for (var level = 1; level <= HourBands.LEVELS; level++) {
+                    var perBlock = tablesAt(ring, level).litPerBlock(ring);
+                    for (var b = 0; b < HourBands.HOURS; b++) {
+                        if (perBlock[b] == 0) {
+                            blind++;
+                        }
+                    }
+                }
+                logger.debug("ring " + ring + ": " + blind +
+                             " (block, level) pairs light nothing");
+                if (ring == StatMap.RINGS - 1) {
+                    Test.assertMessage(blind > 0,
+                        "the innermost ring now draws every rung of the " +
+                        "scale, so the sub-band measurement above is the " +
+                        "only thing keeping any ring out");
+                }
             }
         }
         return true;
@@ -3544,36 +3786,49 @@ module MatrixTest {
 
     //! HourBands.litAt() is what MatrixRenderer inlines, so it has to agree
     //! with the parts it is assembled from — at the block edge, at the gutter
-    //! edge and at every sub-band edge, which is where a copied comparison
-    //! drifts. The direct analogue of litTestsAgreeAtTheBoundaries.
+    //! edge, at every sub-band edge and at both sides of the partial band's
+    //! window, which is where a copied comparison drifts. The direct analogue
+    //! of litTestsAgreeAtTheBoundaries.
     (:test)
     function theHourlyLitTestAgreesWithTheRenderer(logger as Logger)
             as Boolean {
-        var tiers = new [HourBands.HOURS] as Array<Number>;
+        var levels = new [HourBands.HOURS] as Array<Number>;
         for (var b = 0; b < HourBands.HOURS; b++) {
-            tiers[b] = b % (HourBands.BANDS + 1);
+            levels[b] = b % (HourBands.LEVELS + 1);
         }
         var ring = 0;
-        var edges = hourEdgesFor(ring, tiers);
+        var tables = new BlockTables(ring, levels);
         var probes = 0;
         for (var b = 0; b < HourBands.HOURS; b++) {
             var base = b.toFloat() / HourBands.HOURS;
-            var offsets = [0.0, 0.0001, HourBands.FILL / HourBands.HOURS,
-                           (HourBands.FILL - 0.0001) / HourBands.HOURS,
-                           0.9999 / HourBands.HOURS] as Array<Float>;
+            // Straddling every edge that decides an answer: the block's two
+            // ends, the gutter, and — the new ones — both sides of the window
+            // the partial band is drawn through.
+            var wedge = 1.0 / HourBands.HOURS;
+            var offsets = [
+                0.0, 0.0001,
+                (tables.lo[b] - 0.0001) * wedge, (tables.lo[b] + 0.0001) * wedge,
+                HourBands.HALF_FILL * wedge,
+                (tables.hi[b] - 0.0001) * wedge, (tables.hi[b] + 0.0001) * wedge,
+                HourBands.FILL * wedge,
+                (HourBands.FILL - 0.0001) * wedge,
+                0.9999 * wedge] as Array<Float>;
             for (var o = 0; o < offsets.size(); o++) {
                 var position = base + offsets[o];
-                if (position >= 1.0) {
+                if (position >= 1.0 || position < base) {
                     continue;
                 }
                 Test.assertEqualMessage(HourBands.blockOf(position), b,
                     "position " + position + " left its own block");
+                var into = position * HourBands.HOURS - b;
                 for (var band = 0; band < HourBands.BANDS; band++) {
                     var edge = DotGrid.bandEdge[ring * HourBands.BANDS + band];
                     var inside = HourBands.insideBlock(position) &&
-                                 edge <= edges[b];
+                        (edge <= tables.full[b] ||
+                         (edge <= tables.part[b] && into > tables.lo[b] &&
+                          into < tables.hi[b]));
                     Test.assertEqualMessage(
-                        HourBands.litAt(position, edge, edges), inside,
+                        tables.lit(position, edge), inside,
                         "litAt disagrees with its own parts at block " + b +
                         " band " + band + ", position " + position);
                     probes++;
@@ -3605,11 +3860,10 @@ module MatrixTest {
                 "ring " + ring + ": the unfilled tier must be darker than " +
                 "the band");
         }
-        // And the gutters are never lit, so even at the top tier an hourly
-        // ring lights strictly fewer dots than a full one.
-        for (var ring = 0; ring <= Source.HOURLY_TOP_RING; ring++) {
-            var lit = litHourDots(ring,
-                                  hourEdgesFor(ring, everyHourAt(HourBands.BANDS)));
+        // And the gutters are never lit, so even at the top of the scale a
+        // block ring lights strictly fewer dots than a full one.
+        for (var ring = 0; ring <= Source.BLOCKS_TOP_RING; ring++) {
+            var lit = tablesAt(ring, HourBands.LEVELS).litDots(ring);
             if (HourBands.FILL < 1.0) {
                 Test.assertMessage(lit < ringSize(ring),
                     "ring " + ring + " lit all " + lit + " of its dots, so " +
@@ -3635,9 +3889,9 @@ module MatrixTest {
         var overs = noOvers();
 
         var dry = copyOf(view.ringPrint(spans, marks, overs,
-                                        hoursFor(0, everyHourAt(0))));
+                                        blocksFor(0, everyBlockAt(0))));
         var wet = copyOf(view.ringPrint(spans, marks, overs,
-                                        hoursFor(0, everyHourAt(2))));
+                                        blocksFor(0, everyBlockAt(2))));
         Test.assertMessage(!FrameGate.same(dry, wet),
             "the forecast changed and the ring print did not");
         Test.assertMessage(FrameGate.ringMoved(dry, wet, 0),
@@ -3651,10 +3905,21 @@ module MatrixTest {
         // An hour going from dry to unknown is also a change, and the one a
         // print of levels alone would miss: the levels word is 0 either way.
         var unknown = copyOf(view.ringPrint(spans, marks, overs,
-            hoursFor(0, everyHourAt(HourBands.UNKNOWN))));
+            blocksFor(0, everyBlockAt(HourBands.UNKNOWN))));
         Test.assertMessage(FrameGate.ringMoved(dry, unknown, 0),
             "dry and unknown share a levels word, so the known word is the " +
             "only thing that can tell the gate they differ");
+
+        // And a change confined to the *high* levels word, which is the half
+        // of the print that only exists because a level is four bits. A print
+        // carrying one word would call this ring unchanged.
+        var lateLevels = everyBlockAt(0);
+        lateLevels[HourBands.HOURS - 1] = HourBands.LEVELS;
+        var late = copyOf(view.ringPrint(spans, marks, overs,
+                                         blocksFor(0, lateLevels)));
+        Test.assertMessage(FrameGate.ringMoved(dry, late, 0),
+            "a change in the last block lives in the high levels word alone, " +
+            "and the gate must still see it");
         return true;
     }
 
@@ -3666,23 +3931,26 @@ module MatrixTest {
     //! carry none. Known-and-dry is the reading that draws a plain field.
     (:test)
     function heldBackAlwaysOnShowsNoHourlyBands(logger as Logger) as Boolean {
-        var held = StatMap.noHourly();
+        var held = StatMap.noBlocks();
         for (var ring = 0; ring < StatMap.RINGS; ring++) {
-            var levels = held[ring * StatMap.HOURLY_VALUES];
-            var known = held[ring * StatMap.HOURLY_VALUES + 1];
-            Test.assertEqualMessage(levels, 0,
+            var lo = held[ring * StatMap.BLOCK_VALUES];
+            var hi = held[ring * StatMap.BLOCK_VALUES + 1];
+            var known = held[ring * StatMap.BLOCK_VALUES + 2];
+            Test.assertEqualMessage(lo, 0,
+                "held back, no hour may be lit on ring " + ring);
+            Test.assertEqualMessage(hi, 0,
                 "held back, no hour may be lit on ring " + ring);
             Test.assertEqualMessage(known, RainForecast.ALL_KNOWN,
                 "held back, every hour must read as known — all zeroes here " +
                 "would draw the unknown tier right round the ring");
             for (var b = 0; b < HourBands.HOURS; b++) {
-                Test.assertEqualMessage(HourBands.tierOf(levels, known, b), 0,
+                Test.assertEqualMessage(HourBands.levelAt(lo, hi, known, b), 0,
                     "held back, block " + b + " must read as dry rather than " +
                     "unknown");
             }
         }
-        Test.assertEqualMessage(litHourDots(0, hourEdgesFor(0, everyHourAt(0))),
-            0, "the held-back field must light nothing at all");
+        Test.assertEqualMessage(tablesAt(0, 0).litDots(0), 0,
+            "the held-back field must light nothing at all");
         return true;
     }
 
@@ -3704,7 +3972,7 @@ module MatrixTest {
         var spans = everySpan(0.0, 0.0);
         var marks = noMarks();
         var overs = noOvers();
-        var hours = hoursFor(0, everyHourAt(2));
+        var hours = blocksFor(0, everyBlockAt(2));
 
         // Two cleared draws first, so a delta would be eligible by now on any
         // ordinary source.
@@ -3746,13 +4014,13 @@ module MatrixTest {
         var saved = StatMap.rings[0];
         var marks = noMarks();
         var overs = noOvers();
-        var hours = hoursFor(0, everyHourAt(2));
+        var hours = blocksFor(0, everyBlockAt(2));
         var spans = everySpan(0.0, 0.5);
 
         // An ordinary source, settled into both buffers so a delta is live.
         StatMap.rings[0] = Source.SOURCE_BATTERY;
         settleBuffers(dc, spans, overs, null);
-        MatrixRenderer.draw(dc, spans, marks, overs, noHours(), Palette.active,
+        MatrixRenderer.draw(dc, spans, marks, overs, emptyBlocks(), Palette.active,
                             Palette.rampActive, null, onlyRingDirty(0), false);
         Test.assertMessage(MatrixRenderer.painted < ringSize(0),
             "the ordinary source must be deltaing by now, or this test " +
@@ -3771,12 +4039,12 @@ module MatrixTest {
 
         // Back out of it. This is the direction that would rot.
         StatMap.rings[0] = Source.SOURCE_BATTERY;
-        MatrixRenderer.draw(dc, spans, marks, overs, noHours(), Palette.active,
+        MatrixRenderer.draw(dc, spans, marks, overs, emptyBlocks(), Palette.active,
                             Palette.rampActive, null, onlyRingDirty(0), false);
         Test.assertEqualMessage(MatrixRenderer.painted, ringSize(0),
             "leaving the forecast must repaint the ring whole, or the old " +
             "blocks stay in a buffer");
-        MatrixRenderer.draw(dc, spans, marks, overs, noHours(), Palette.active,
+        MatrixRenderer.draw(dc, spans, marks, overs, emptyBlocks(), Palette.active,
                             Palette.rampActive, null, onlyRingDirty(0), false);
         Test.assertEqualMessage(MatrixRenderer.painted, ringSize(0),
             "and again, because both buffers held the forecast");
@@ -3809,7 +4077,7 @@ module MatrixTest {
                     carries = true;
                 }
             }
-            Test.assertEqualMessage(carries, ring <= Source.HOURLY_TOP_RING,
+            Test.assertEqualMessage(carries, ring <= Source.BLOCKS_TOP_RING,
                 "ring " + ring + " is offered the forecast when it should " +
                 "not be, or is not offered it when it should");
 
@@ -3842,7 +4110,7 @@ module MatrixTest {
         }
         Config.reload();
         for (var ring = 0; ring < StatMap.RINGS; ring++) {
-            var expected = (ring <= Source.HOURLY_TOP_RING)
+            var expected = (ring <= Source.BLOCKS_TOP_RING)
                 ? Source.SOURCE_RAIN_HOURS : Source.SOURCE_OFF;
             Test.assertEqualMessage(StatMap.rings[ring], expected,
                 "ring " + ring + " stored as the forecast read back as " +
