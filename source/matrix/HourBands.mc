@@ -160,18 +160,37 @@ module HourBands {
 
     const WEDGE_DEGREES = 360.0 / HOURS;
 
-    //! The block's share of its wedge, in position units: a dot whose fraction
-    //! into the wedge is at or past this is in the gutter.
+    //! The block's share of its wedge, in position units.
     const FILL = HOUR_BLOCK_DEGREES / WEDGE_DEGREES;
 
-    //! The middle of the block, which the partial band grows out from in both
-    //! directions.
+    //! How far into its wedge a block starts — half the gutter, so the other
+    //! half falls after it.
     //!
-    //! Centred rather than hugging the hour tick. A two-dot pip then sits over
-    //! its own hour rather than leaning into the boundary it shares with the
-    //! hour before, and the partial band keeps the symmetry every full band
-    //! below it already has.
-    const HALF_FILL = FILL / 2.0;
+    //! **The block is centred in its hour slot, and it did not used to be.** It
+    //! sat at the leading edge, starting exactly on hour mark H with the whole
+    //! gutter bunched up before mark H+1. That put every block's centre 11.25
+    //! degrees after its mark where the slot's centre is 15 — 3.75 degrees
+    //! anticlockwise, about 12px of arc on the outer ring, and plainly visible
+    //! on the watch against the printed dial.
+    //!
+    //! Centred, each hour mark sits in the middle of a 7.5-degree gutter and
+    //! each block sits in the middle of the arc the hour hand sweeps during
+    //! that hour — so the hand is inside its own block from :07.5 to :52.5,
+    //! symmetric, rather than leaving early at :45.
+    const LEAD = (1.0 - FILL) / 2.0;
+
+    //! Where the block ends, so the gutter test is two comparisons rather than
+    //! an addition per dot.
+    const TRAIL = LEAD + FILL;
+
+    //! The middle of the block, which the partial band grows out from in both
+    //! directions — and which is **exactly the middle of the wedge**.
+    //!
+    //! `LEAD + FILL/2` reduces to `1/2` for any FILL at all, because LEAD is
+    //! defined as half of what FILL leaves over. That is the whole point of
+    //! centring: the block's centre is the slot's centre whatever the block
+    //! width, so HOUR_BLOCK_DEGREES stays the one knob it claims to be.
+    const BLOCK_CENTRE = LEAD + FILL / 2.0;
 
     //! The level that fills exactly one whole sub-band and no more. BANDS
     //! divides LEVELS, so the band edges land on levels rather than between
@@ -195,18 +214,28 @@ module HourBands {
     //! Half the width of the partial band's window, in wedge units. Zero when
     //! the level has no partial band.
     //!
-    //! **There is no minimum width here, and that was measured rather than
-    //! assumed.** The obvious worry is that a level-1 window — a fifth of a
-    //! band — falls clean between two dots of a square lattice and the bottom
+    //! **There is no minimum width here, and that was measured twice rather
+    //! than assumed.** The obvious worry is that a level-1 window — a fifth of
+    //! a band — falls clean between two dots of a square lattice and the bottom
     //! of the scale draws nothing, which is the one failure this scale exists
-    //! to prevent. On the offered rings it does not happen: the worst block at
-    //! level 1 holds two dots on ring 0 and one on ring 1, and every level is
-    //! monotonic in every block. everyNonZeroLevelLightsAtLeastOneDot is what
-    //! keeps that true; if it ever fails, a floor sized off DotGrid.markerHalf
-    //! — which solves this same problem for the temperature mark — is the fix,
-    //! not a coarser scale.
+    //! to prevent. On the offered rings it does not happen: every block lights
+    //! at least one dot at every level, monotonically, which
+    //! everyNonZeroLevelLightsAtLeastOneDot and aLevelIsMonotonicInDotsLit keep
+    //! true.
+    //!
+    //! Centring the block (see LEAD) made that closer than it was, and a floor
+    //! was measured again there rather than assumed to help. It does not: it
+    //! puts blocks 1, 4, 7 and 10 with their centres on the lattice's 45-degree
+    //! diagonals, where dots sit further apart, so level 1 draws 1 dot at those
+    //! four hours and 3 at the rest. A floor of a lattice pitch or less changes
+    //! nothing at all, and one of 1.4 pitches evens level 1 up to 3-4 dots —
+    //! which is exactly what level 2 draws, collapsing two rungs into one. A
+    //! lost rung costs more than the unevenness, so the floor stays out. If
+    //! either test ever does fail, a floor sized off DotGrid.markerHalf — which
+    //! solves this same problem for the temperature mark — is the fix, and it
+    //! has to be checked against level 2 rather than only against zero.
     function partialHalfFor(level as Number) as Float {
-        return HALF_FILL * partialFractionFor(level);
+        return (FILL / 2.0) * partialFractionFor(level);
     }
 
     //! Which hour block a position falls in.
@@ -221,13 +250,14 @@ module HourBands {
         return (at >= HOURS) ? (HOURS - 1) : at;
     }
 
-    //! Is this position inside its block, rather than in the gutter after it?
+    //! Is this position inside its block, rather than in a gutter?
     //!
-    //! The block occupies the *leading* part of each wedge, so every boundary
-    //! lands on an hour mark and the blocks line up with the dial.
+    //! The block sits in the middle of its wedge, so there is gutter on both
+    //! sides of it and the hour marks fall in the middle of those gutters.
     function insideBlock(position as Float) as Boolean {
         var at = position * HOURS;
-        return (at - at.toNumber()) < FILL;
+        var into = at - at.toNumber();
+        return into >= LEAD && into < TRAIL;
     }
 
     //! Is a dot lit, given the per-block tables the renderer precomputes?
@@ -245,8 +275,8 @@ module HourBands {
         var at = position * HOURS;
         var block = at.toNumber();
         var into = at - block;
-        if (into >= FILL) {
-            return false;                   //! the gutter after the block
+        if (into < LEAD || into >= TRAIL) {
+            return false;                   //! a gutter, either side
         }
         if (radiusSq <= fullEdges[block]) {
             return true;

@@ -375,8 +375,8 @@ module MatrixRenderer {
                     // band above it to read.
                     blockPart[b] = (window > 0.0)
                         ? bandEdge[edgeBase + full] : 0;
-                    blockLo[b] = HourBands.HALF_FILL - window;
-                    blockHi[b] = HourBands.HALF_FILL + window;
+                    blockLo[b] = HourBands.BLOCK_CENTRE - window;
+                    blockHi[b] = HourBands.BLOCK_CENTRE + window;
                     blockUnlit[b] = weak;
                 }
                 blockFull[HourBands.HOURS] = blockFull[0];
@@ -482,8 +482,9 @@ module MatrixRenderer {
                         var block = at.toNumber();
                         var into = at - block;
                         var radiusSq = dx * dx + dy * dy;
-                        if (into >= HourBands.FILL) {
-                            colour = weak;              //! the gutter
+                        if (into < HourBands.LEAD ||
+                                into >= HourBands.TRAIL) {
+                            colour = weak;              //! a gutter, either side
                         } else if (radiusSq <= blockFull[block]) {
                             colour = strong;
                         } else if (radiusSq <= blockPart[block] &&

@@ -14,7 +14,7 @@ covers the working knowledge that spans files and is easy to break.
 ```sh
 make build      # debug .prg for the simulator
 make sim        # build, start the simulator if needed, sideload, stream println
-make test       # build with -t, run the 100-test suite (takes the simulator lock)
+make test       # build with -t, run the 101-test suite (takes the simulator lock)
 make test-lock  # self-test tools/sim_lock.sh
 make test-simctl # tests for tools/simctl (no simulator, no build needed)
 make package    # signed .iq for the store
@@ -356,8 +356,8 @@ but the rebuild it schedules must still land in `onLayout`, never `onStart`.
 
 `SOURCE_RAIN_HOURS` ("Rain, next 12h") turns a ring into a twelve-hour forecast, and it is the
 first source to fill a shape the face now has a general name for: **blocks**. The ring's 360°
-is twelve 30° hour slots, a 22.5° block in each leaving a countable gutter, and how much of
-each block is filled is the reading. Twelve disjoint blocks with a radial axis is not something
+is twelve 30° hour slots, a 22.5° block **centred in each** leaving a countable gutter that
+straddles the hour mark, and how much of each block is filled is the reading. Twelve disjoint blocks with a radial axis is not something
 two floats can say, so it reports `Source.EMPTY` as its span and its real payload travels
 beside it: `Source.fillBlocks()` → `StatMap.blocks()` → the view → both the print and the
 renderer. The same move a marker makes, and for the same reason.
@@ -375,6 +375,20 @@ Consequences worth knowing before touching it:
 - **The scale is linear in area and its top is 100%**, not "75% or more". A full ring means a
   certainty and one whole sub-band means a third. `HourBands.fullBandsFor()` /
   `partialHalfFor()` are the only place that curve lives.
+- **The block is centred in its slot, and it was not always.** It used to sit at the wedge's
+  *leading* edge — starting exactly on hour mark `H`, with the whole gutter bunched up before
+  mark `H+1`. That put every block 3.75° anticlockwise of its slot's centre, about 12px of arc
+  on the outer ring: invisible to every test the face had, and obvious on the wrist against the
+  printed dial. `HourBands.LEAD` is the half-gutter that fixes it, and
+  `everyBlockIsCentredInItsHourSlot` is what holds it — written against the *symmetry* of the
+  lit arc, so `HOUR_BLOCK_DEGREES` stays a free choice. `BLOCK_CENTRE` is then exactly 0.5 for
+  any block width, because `LEAD` is by definition half of what `FILL` leaves over.
+- **Centring costs the bottom rung its evenness**, and a floor does not buy it back. It puts
+  blocks 1, 4, 7 and 10 with their centres on the lattice's 45° diagonals, where dots sit
+  further apart, so level 1 draws 1 dot at those four hours and 3 at the rest. A minimum window
+  of a lattice pitch or less changes nothing; 1.4 pitches evens level 1 to 3–4 dots, which is
+  exactly what level 2 draws — collapsing two rungs into one. Every rung above 1 came out
+  *more* even than before, and ring 1's full block is now a flat 21 dots across all twelve.
 - **Level `LEVELS` is exactly the old top tier**, so the widened scale can draw nothing that
   was not already drawable and **no luminance bound needed re-measuring**.
   `eachSubBandLightsItsShareOfTheRing` asserts that equality rather than assuming it.

@@ -270,7 +270,13 @@ HOUR_LEVELS = 15
 HOUR_LEVELS_PER_BAND = HOUR_LEVELS // HOUR_BANDS
 HOUR_BLOCK_DEGREES = 22.5
 HOUR_FILL = HOUR_BLOCK_DEGREES / (360.0 / HOURS)
-HOUR_HALF_FILL = HOUR_FILL / 2
+# The block sits in the MIDDLE of its wedge, so half the gutter falls either
+# side and each hour mark lands in the middle of a gutter. Mirrors
+# HourBands.LEAD/TRAIL/BLOCK_CENTRE — and note LEAD + FILL/2 is exactly 0.5 for
+# any FILL, which is what centring buys.
+HOUR_LEAD = (1.0 - HOUR_FILL) / 2
+HOUR_TRAIL = HOUR_LEAD + HOUR_FILL
+HOUR_CENTRE = HOUR_LEAD + HOUR_FILL / 2
 
 
 def hour_block(position: float) -> int:
@@ -280,7 +286,8 @@ def hour_block(position: float) -> int:
 def inside_block(position: float) -> bool:
     """False in the gutter after the block. Mirrors HourBands.insideBlock."""
     at = position * HOURS
-    return (at - int(at)) < HOUR_FILL
+    into = at - int(at)
+    return HOUR_LEAD <= into < HOUR_TRAIL
 
 
 def band_edge(ring: int, tier: int) -> float:
@@ -313,7 +320,7 @@ def partial_half_for(level: int) -> float:
     """Half-width of the partial band's window, in wedge units. Mirrors
     HourBands.partialHalfFor — no minimum, because on this lattice the geometry
     already lights at least one dot at every level."""
-    return HOUR_HALF_FILL * (((level * HOUR_BANDS) % HOUR_LEVELS) / HOUR_LEVELS)
+    return (HOUR_FILL / 2) * (((level * HOUR_BANDS) % HOUR_LEVELS) / HOUR_LEVELS)
 
 
 def hourly_colour(ring, position, dist_sq, levels, always_on, held_back):
@@ -335,8 +342,8 @@ def hourly_colour(ring, position, dist_sq, levels, always_on, held_back):
     at = position * HOURS
     block = int(at)
     into = at - block
-    if into >= HOUR_FILL:
-        return scale(colour, weak)          # the gutter after the block
+    if not (HOUR_LEAD <= into < HOUR_TRAIL):
+        return scale(colour, weak)          # a gutter, either side of the block
     level = levels[block]
     if level is None:
         return scale(colour, WEAK_UNKNOWN)
@@ -345,7 +352,7 @@ def hourly_colour(ring, position, dist_sq, levels, always_on, held_back):
         return colour
     window = partial_half_for(level)
     if (window > 0.0 and dist_sq <= band_edge(ring, bands + 1)
-            and abs(into - HOUR_HALF_FILL) < window):
+            and abs(into - HOUR_CENTRE) < window):
         return colour                       # the partial band
     return scale(colour, weak)
 

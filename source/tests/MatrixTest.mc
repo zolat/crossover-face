@@ -3220,8 +3220,8 @@ module MatrixTest {
                 var window = HourBands.partialHalfFor(level);
                 full[b] = (bands == 0) ? 0 : DotGrid.bandEdge[base + bands - 1];
                 part[b] = (window > 0.0) ? DotGrid.bandEdge[base + bands] : 0;
-                lo[b] = HourBands.HALF_FILL - window;
-                hi[b] = HourBands.HALF_FILL + window;
+                lo[b] = HourBands.BLOCK_CENTRE - window;
+                hi[b] = HourBands.BLOCK_CENTRE + window;
             }
             full[HourBands.HOURS] = full[0];
             part[HourBands.HOURS] = part[0];
@@ -3542,8 +3542,9 @@ module MatrixTest {
         return true;
     }
 
-    //! Every hour block leaves a dark gutter after it, so the hours stay
-    //! countable rather than merging into one arc.
+    //! Every hour block leaves a dark gutter on **both** sides of it, so the
+    //! hours stay countable rather than merging into one arc — and so the hour
+    //! marks themselves sit in the middle of those gutters.
     //!
     //! Written against HOUR_BLOCK_DEGREES rather than against 22.5: widening
     //! the block to a full 30 is a legitimate design choice, and this must then
@@ -3575,6 +3576,21 @@ module MatrixTest {
                     "cannot be counted");
                 logger.debug("ring " + ring + ": " + gutter +
                              " dots in the gutters");
+                // And the gutter straddles the hour mark rather than sitting
+                // wholly on one side of it, which is what centring the block
+                // means. Positions either side of a mark, both dark.
+                for (var b = 0; b < HourBands.HOURS; b++) {
+                    var mark = b.toFloat() / HourBands.HOURS;
+                    var step = 0.0001;
+                    Test.assertMessage(
+                        !HourBands.insideBlock(mark + step),
+                        "hour mark " + b + " must sit in a gutter, but the " +
+                        "position just after it is inside a block");
+                    var before = (b == 0) ? (1.0 - step) : (mark - step);
+                    Test.assertMessage(!HourBands.insideBlock(before),
+                        "hour mark " + b + " must sit in a gutter, but the " +
+                        "position just before it is inside a block");
+                }
             }
         }
         // Every table's spare thirteenth entry mirrors the first, or a
@@ -3631,6 +3647,86 @@ module MatrixTest {
             var unknown = tablesAt(ring, HourBands.UNKNOWN).litDots(ring);
             Test.assertEqualMessage(unknown, 0,
                 "an unknown hour must light nothing on ring " + ring);
+        }
+        return true;
+    }
+
+    //! **The alignment, asserted.** A block sits centred in its hour slot.
+    //!
+    //! It did not used to. The block sat at the *leading* edge of its wedge,
+    //! starting exactly on hour mark H with the whole 7.5-degree gutter bunched
+    //! before mark H+1 — putting every block's centre 3.75 degrees anticlockwise
+    //! of its slot's centre, about 12px of arc on the outer ring. That is small
+    //! enough to survive every test the face had and large enough to be obvious
+    //! on the wrist against the printed dial, which is exactly the kind of thing
+    //! a measurement has to hold from now on.
+    //!
+    //! Written against the *symmetry* rather than against 3.75 degrees, so
+    //! widening HOUR_BLOCK_DEGREES stays a free choice and this keeps meaning
+    //! what it says.
+    (:test)
+    function everyBlockIsCentredInItsHourSlot(logger as Logger) as Boolean {
+        // The definition: the lit arc answers the same either side of the
+        // slot's midpoint, at every distance out to and past its edge.
+        var wedge = 1.0 / HourBands.HOURS;
+        for (var b = 0; b < HourBands.HOURS; b++) {
+            var centre = (b + HourBands.BLOCK_CENTRE) * wedge;
+            for (var step = 0; step <= 60; step++) {
+                var out = (step * 0.008) * wedge;
+                var before = centre - out;
+                var after = centre + out;
+                if (before < 0.0 || after >= 1.0) {
+                    continue;
+                }
+                Test.assertEqualMessage(
+                    HourBands.insideBlock(before),
+                    HourBands.insideBlock(after),
+                    "block " + b + " is lopsided " + out + " either side of " +
+                    "its slot centre, so it does not sit between its hours");
+            }
+        }
+
+        // BLOCK_CENTRE is the wedge's own centre, and that is not a coincidence
+        // to be re-derived: LEAD is half of what FILL leaves over, so
+        // LEAD + FILL/2 is half a wedge for any block width at all.
+        Test.assertEqualMessage(HourBands.BLOCK_CENTRE, 0.5,
+            "a centred block puts its middle at the middle of its wedge");
+        Test.assertEqualMessage(
+            HourBands.LEAD, 1.0 - HourBands.TRAIL,
+            "the gutter must be split evenly, or the block is not centred");
+
+        // And the dots agree with the definition: the lit arc's centre of mass
+        // lands on the slot's midpoint rather than short of it.
+        for (var ring = 0; ring <= Source.BLOCKS_TOP_RING; ring++) {
+            var tables = tablesAt(ring, HourBands.LEVELS);
+            var sum = 0.0;
+            var lit = 0;
+            for (var i = DotGrid.ringStart[ring];
+                    i < DotGrid.ringStart[ring + 1]; i++) {
+                var position = DotGrid.positionOf[i];
+                var dx = DotGrid.xs[i];
+                var dy = DotGrid.ys[i];
+                if (!tables.lit(position, dx * dx + dy * dy)) {
+                    continue;
+                }
+                var at = position * HourBands.HOURS;
+                sum += at - at.toNumber();
+                lit++;
+            }
+            var centroid = sum / lit;
+            var drift = (centroid - HourBands.BLOCK_CENTRE).abs();
+            logger.debug("ring " + ring + ": lit centroid at " +
+                         (centroid * HourBands.WEDGE_DEGREES) +
+                         " degrees into a " + HourBands.WEDGE_DEGREES +
+                         " degree slot, over " + lit + " dots");
+            // A tenth of a degree. The lattice is not perfectly even round a
+            // ring, so this cannot be exact — but the bug it replaces was
+            // 3.75 degrees, nearly forty times this.
+            Test.assertMessage(
+                drift * HourBands.WEDGE_DEGREES < 0.1,
+                "ring " + ring + "'s lit dots sit " +
+                (drift * HourBands.WEDGE_DEGREES) +
+                " degrees off the middle of their hour slots");
         }
         return true;
     }
@@ -3807,11 +3903,15 @@ module MatrixTest {
             var wedge = 1.0 / HourBands.HOURS;
             var offsets = [
                 0.0, 0.0001,
+                (HourBands.LEAD - 0.0001) * wedge,
+                HourBands.LEAD * wedge,
+                (HourBands.LEAD + 0.0001) * wedge,
                 (tables.lo[b] - 0.0001) * wedge, (tables.lo[b] + 0.0001) * wedge,
-                HourBands.HALF_FILL * wedge,
+                HourBands.BLOCK_CENTRE * wedge,
                 (tables.hi[b] - 0.0001) * wedge, (tables.hi[b] + 0.0001) * wedge,
-                HourBands.FILL * wedge,
-                (HourBands.FILL - 0.0001) * wedge,
+                (HourBands.TRAIL - 0.0001) * wedge,
+                HourBands.TRAIL * wedge,
+                (HourBands.TRAIL + 0.0001) * wedge,
                 0.9999 * wedge] as Array<Float>;
             for (var o = 0; o < offsets.size(); o++) {
                 var position = base + offsets[o];
