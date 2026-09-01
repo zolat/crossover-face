@@ -108,10 +108,12 @@ module DotGrid {
 
     //! Squared outer radius of each radial sub-band, flat: ring * BANDS + band.
     //!
-    //! What the hourly forecast reads instead of a span. A block reaching tier
-    //! t lights every dot in its ring out to bandEdge[ring * BANDS + t - 1],
-    //! so the renderer's radial test is one array lookup and one comparison
-    //! against dx*dx + dy*dy, which the dot loop already has to hand.
+    //! What a block ring reads instead of a span. A block filling t whole
+    //! sub-bands lights every dot in its ring out to
+    //! bandEdge[ring * BANDS + t - 1], so the renderer's radial test is one
+    //! array lookup and one comparison against dx*dx + dy*dy, which the dot
+    //! loop already has to hand. The partial band beyond it reads the next
+    //! entry along and adds a window across the block's width.
     //!
     //! Per *ring*, twelve numbers in all — not per dot. A per-dot band index
     //! would be a fifth parallel array of 1112 entries for something two

@@ -86,18 +86,18 @@ module FrameGate {
     var _rings as Array<Float>? = null;
 
     //! Values per ring in the ring print: span start, span end, mark, over,
-    //! and the hourly forecast's two packed words.
+    //! and the block channel's three packed words.
     //!
-    //! The hourly pair has to be here or its source does not work at all. An
-    //! hourly ring's span, mark and over flag never move — the span is EMPTY
-    //! every frame — so without these two the ring would never be marked dirty,
-    //! and a forecast change would surface only when the periodic repair fired.
+    //! The block words have to be here or their source does not work at all. A
+    //! block ring's span, mark and over flag never move — the span is EMPTY
+    //! every frame — so without them the ring would never be marked dirty, and
+    //! a forecast change would surface only when the periodic repair fired.
     //!
     //! Their own slots rather than borrowed span ones: `spans[ring]` flows
     //! straight into the renderer's from/to and its remembered deltas, and a
     //! number that means two different things depending on the ring is exactly
     //! the sort of thing that reads fine and breaks a year later.
-    const PER_RING = 6;
+    const PER_RING = 7;
 
     //! Work out what this frame has to draw. True when that is anything at all.
     //!

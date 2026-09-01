@@ -1,21 +1,25 @@
 # Roadmap
 
-**Current:** done — Rain, next 12h shipped; the frame A/B and the on-watch check are below.
+**Current:** done — the block ring is graded sixteen ways; the on-watch check is still below.
 
 Out-of-band feature work, not a phase of the performance roadmap that follows: that one is
 complete and this does not extend it.
 
 - [x] Rain, next 12h — an hourly forecast in one ring
+- [x] Block levels — width as the second axis, so a block reads sixteen ways rather than four
 
-Plan: `~/.claude/plans/i-want-to-plan-starry-graham.md`
+Plans: `~/.claude/plans/i-want-to-plan-starry-graham.md`,
+`~/.claude/plans/encapsulated-finding-owl.md`
 
 ## What it is
 
 A ring's 360 degrees become twelve 30-degree hour slots, one per hour ahead. A 22.5-degree
 block in each leaves a countable gutter. How far a block reaches out through the ring's own
-42px thickness is the chance of rain: three radial sub-bands at 25/50/75%. An hour the
-forecast said nothing about draws a fourth tier at 0.25, darker than the 0.55 unfilled one,
-so "no data" cannot read as "forecast says dry".
+42px thickness is the chance of rain — and then how far it spreads *across* the block's own
+width. A block holds a level from 0 to 15: the whole part of `L * BANDS / LEVELS` is that
+many full-width sub-bands, the remainder is the angular half-width of the next band out,
+centred in the block. An hour the forecast said nothing about draws a fourth tier at 0.25,
+darker than the 0.55 unfilled one, so "no data" cannot read as "forecast says dry".
 
 ## What the measurements settled
 
@@ -32,7 +36,32 @@ Four is clean on ring 0 and lumpy on ring 1. The source must work on either, so 
 **The outer two rings only, and that is a lattice fact rather than taste.** The worst
 (block, sub-band) holds 8 dots on ring 0 and 6 on ring 1, against 4 on ring 2 and 2 on ring
 3. `onlyTheOuterTwoRingsResolveTwelveHoursInThreeBands` asserts it, so if the lattice ever
-changes the test says whether `Source.HOURLY_TOP_RING` still means what it claims.
+changes the test says whether `Source.BLOCKS_TOP_RING` still means what it claims. The
+level scale sharpens this only on the innermost ring, where sixteen (block, level) pairs
+light no dot at all — ring 2 draws every rung, so its exclusion still rests on the dot count
+and on nothing else.
+
+**Width is worth eleven readings an hour, and it is free.** The three sub-bands cap the
+radial axis; the angular one was untouched, with every lit band drawn full width across 8-13
+dots. Level 15 is exactly the three full bands the old top tier drew, so nothing the widened
+scale can draw was already impossible and **no luminance bound needed re-measuring**. Dots
+lit in the worst block, per level:
+
+| ring | level 1 | 5 | 10 | 15 |
+|---|---|---|---|---|
+| 0 (outer) | 2 | 8 | 17 | 27 |
+| 1 | 1 | 6 | 13 | 20 |
+
+**No minimum window, and that was measured rather than assumed.** The obvious worry is that
+a level-1 window — a fifth of one sub-band — falls clean between two dots of a square
+lattice, so the bottom of the scale draws nothing and 10% is indistinguishable from the dry
+hour it used to be. On the offered rings the geometry already delivers it, monotonically;
+`everyNonZeroLevelLightsAtLeastOneDot` and `aLevelIsMonotonicInDotsLit` hold it there. A
+floor sized off `DotGrid.markerHalf` is the fix if that ever changes, not a coarser scale.
+
+**The block loop costs 2.7ms more.** 87.3/87.8/87.8ms against 85.9/84.3/85.4 for the old
+whole-band fill, on ring 0's 436 dots at the worst level, A/B'd out of one binary under one
+load. The span loop is byte-for-byte unchanged, so no other ring moved.
 
 **The hour-hand anchoring costs nothing.** The hand at local hour H points at clock position
 H mod 12, so the forecast N hours out belongs at (H + N) mod 12 — which is that forecast
@@ -42,12 +71,13 @@ the largest thing this turned out not to need.
 
 ## Left on the table
 
-- **Nothing has been seen.** `screencapture -l` still returns *could not create image from
-  window*, which is the ROADMAP's existing note about Screen Recording permission, and the
-  Mac display slept during this session besides. Every claim about what the face *looks*
-  like rests on `tools/mockup.py`'s panel and on dot counts asserted in the suite, not on a
-  render anybody looked at. Granting the permission and re-running
-  `python3 -m simctl.window shot` is the first thing to do next.
+- ~~**Nothing has been seen.**~~ Settled: the face has now been screenshotted awake with a
+  graded forecast on the outer ring, and the lit pixels per block were counted off the
+  capture — 0% and 5% dark, 10% a two-dot pip, monotone round to 100%, the unforecast hour
+  on the dim tier. The earlier *could not create image from window* was the Mac display
+  asleep, not a missing permission; `caffeinate -u` wakes it, `-d` only stops it sleeping
+  again. It needed a temporary stub for the forecast and a forced ring assignment, so the
+  *data path* from `Weather` is still unexercised — see the last bullet.
 - **The gutter's alignment is unexamined.** Blocks occupy the *leading* 22.5 degrees of each
   wedge, so every boundary lands on an hour mark and the hour hand sits in its own block
   from :00 to :45 and in the gutter after that. Centring the block instead keeps the hand
