@@ -4028,13 +4028,19 @@ module MatrixTest {
         var marks = noMarks();
         var overs = noOvers();
         var spans = everySpan(0.0, 0.5);
+        // Hoisted, and deliberately: main renamed this helper while this branch
+        // was open, so every call to it is a line the merge has to touch. One
+        // is a resolution; four is four chances to leave one behind, and the
+        // one left behind does not conflict - it dangles, and only a build
+        // with -t says so.
+        var hours = noHours();
 
         // Settled with no hands, so a delta is live and this test can show
         // that turning them on stops it. ringSize() reads the dot cache, so it
         // cannot be asked before something has built it.
         settleBuffers(dc, spans, overs, null);
         var whole = ringSize(0);
-        MatrixRenderer.draw(dc, spans, marks, overs, noHours(), Palette.active,
+        MatrixRenderer.draw(dc, spans, marks, overs, hours, Palette.active,
                             Palette.rampActive, null, onlyRingDirty(0), false);
         Test.assertMessage(MatrixRenderer.painted < whole,
             "the hands-off ring must be deltaing by now, or this test cannot " +
@@ -4042,7 +4048,7 @@ module MatrixTest {
 
         // Hands on.
         for (var draw = 0; draw < 2; draw++) {
-            MatrixRenderer.draw(dc, spans, marks, overs, noHours(),
+            MatrixRenderer.draw(dc, spans, marks, overs, hours,
                                 Palette.active, Palette.rampActive,
                                 Palette.BACKING_WHITE, onlyRingDirty(0), false);
             Test.assertEqualMessage(MatrixRenderer.painted, whole,
@@ -4052,7 +4058,7 @@ module MatrixTest {
 
         // Hands off again. This is the direction that would rot.
         for (var draw = 0; draw < 2; draw++) {
-            MatrixRenderer.draw(dc, spans, marks, overs, noHours(),
+            MatrixRenderer.draw(dc, spans, marks, overs, hours,
                                 Palette.active, Palette.rampActive, null,
                                 onlyRingDirty(0), false);
             Test.assertEqualMessage(MatrixRenderer.painted, whole,
@@ -4062,7 +4068,7 @@ module MatrixTest {
 
         // And a third draw with nothing moving is deltaing again, so the
         // repaints above were the change and not a permanent loss of the delta.
-        MatrixRenderer.draw(dc, spans, marks, overs, noHours(), Palette.active,
+        MatrixRenderer.draw(dc, spans, marks, overs, hours, Palette.active,
                             Palette.rampActive, null, onlyRingDirty(0), false);
         Test.assertMessage(MatrixRenderer.painted < whole,
             "the delta must come back once the backing has settled");
