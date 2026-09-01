@@ -724,16 +724,28 @@ module MatrixTest {
         Test.assertEqualMessage(StatMap.rotation, StatMap.ROTATION_RADIAL,
             "an out-of-range value must fall back to following the rings");
 
-        Properties.setValue(StatMap.PROPERTY_ROTATION,
-                            StatMap.ROTATION_UPRIGHT);
-        Config.reload();
-        Test.assertEqualMessage(StatMap.rotation, StatMap.ROTATION_UPRIGHT,
-            "a valid value must be honoured");
+        // Every value the enum names, including the newest — the clamp is
+        // written against the top of the enum and a value added without
+        // raising it is simply unreachable, with no other symptom.
+        var valid = [StatMap.ROTATION_UPRIGHT, StatMap.ROTATION_UPRIGHT_DATE]
+                    as Array<Number>;
+        for (var i = 0; i < valid.size(); i++) {
+            Properties.setValue(StatMap.PROPERTY_ROTATION, valid[i]);
+            Config.reload();
+            Test.assertEqualMessage(StatMap.rotation, valid[i],
+                "rotation " + valid[i] + " must be honoured");
 
-        // The menu reads its sub-label straight off the setting, so an
-        // unhandled value would index past the end of the label table.
-        var menu = new SettingsMenu();
-        menu.onShow();
+            // The menu reads its sub-label straight off the setting, so an
+            // unhandled value would index past the end of the label table.
+            var menu = new SettingsMenu();
+            menu.onShow();
+        }
+
+        Properties.setValue(StatMap.PROPERTY_ROTATION,
+                            StatMap.ROTATION_UPRIGHT_DATE + 1);
+        Config.reload();
+        Test.assertEqualMessage(StatMap.rotation, StatMap.ROTATION_RADIAL,
+            "one past the top of the enum must still fall back");
 
         Properties.setValue(StatMap.PROPERTY_ROTATION,
                             StatMap.ROTATION_RADIAL);
@@ -1148,6 +1160,412 @@ module MatrixTest {
     //! Every settings row that shows a value, by index. The rings row is not
     //! here: it opens a sub-menu and carries no value of its own.
     const MENU_VALUE_ROWS = [0, 1, 2, 3, 5] as Array<Number>;
+
+    // --- the date watermark --------------------------------------------------
+
+    //! The day the tests draw. Two digits with no repeated one, so a glyph
+    //! written into the wrong half of the window cannot pass by symmetry.
+    const GLYPH_DAY = 15;
+
+    //! How many pixels a set bit of the font is worth: SCALE cells each way,
+    //! one dot apiece.
+    const GLYPH_CELLS_PER_BIT = DateGlyph.SCALE * DateGlyph.SCALE;
+
+    function bitsSet(value as Number) as Number {
+        var n = 0;
+        for (var b = 0; b < DateGlyph.FONT_BITS; b++) {
+            if (((value >> b) & 1) == 1) {
+                n++;
+            }
+        }
+        return n;
+    }
+
+    //! The window has to sit where every one of its cells holds a dot.
+    //!
+    //! It does not have to — a hole would simply draw a gap in the numeral —
+    //! but a hole is invisible to every other test here and obvious on the
+    //! wrist, and the placement was chosen on the promise of 140 out of 140.
+    //! Nudge ORIGIN_ROW two rows further down and this is what says so.
+    (:test)
+    function everyWatermarkCellHoldsADot(logger as Logger) as Boolean {
+        Config.reload();
+        DotGrid.ensureBuilt();
+        DateGlyph.buildCells();
+
+        Test.assertEqualMessage(DateGlyph.cells, DateGlyph.CELLS,
+            "the watermark window has cells with no dot in them — it has been " +
+            "moved onto the rim or over the hand pivot");
+
+        var seen = new [DateGlyph.CELLS] as Array<Boolean>;
+        for (var i = 0; i < DateGlyph.CELLS; i++) {
+            seen[i] = false;
+        }
+        for (var k = 0; k < DateGlyph.cells; k++) {
+            var at = DateGlyph.cellAt[k];
+            Test.assertMessage(at >= 0 && at < DateGlyph.CELLS,
+                "cell " + at + " is outside the window");
+            Test.assertMessage(!seen[at], "cell " + at + " claimed twice");
+            seen[at] = true;
+        }
+        logger.debug("watermark window: " + DateGlyph.cells + " of " +
+                     DateGlyph.CELLS + " cells hold a dot");
+        return true;
+    }
+
+    //! The struck dots arrive in the order the renderer walks them, and each
+    //! ring's slice of them is where firstFor says it is.
+    //!
+    //! Both halves matter and they fail differently. Out of order, the
+    //! renderer's cursor stops matching and the numeral loses dots from
+    //! wherever the order first breaks. A wrong slice boundary draws one ring's
+    //! share of the watermark while another ring is being redrawn, which is a
+    //! numeral that appears in pieces as the rings tick.
+    (:test)
+    function theWatermarkIndexIsSortedAndRingGrouped(logger as Logger) as Boolean {
+        Config.reload();
+        DotGrid.ensureBuilt();
+        DateGlyph.ensure(GLYPH_DAY);
+
+        Test.assertMessage(DateGlyph.lit > 0,
+            "the watermark struck no dots at all");
+        for (var i = 1; i < DateGlyph.lit; i++) {
+            Test.assertMessage(DateGlyph.index[i] > DateGlyph.index[i - 1],
+                "the struck dots are not in ascending index order at " + i);
+        }
+
+        Test.assertEqualMessage(DateGlyph.firstFor[0], 0,
+            "the first ring's slice must start at the beginning");
+        Test.assertEqualMessage(DateGlyph.firstFor[StatMap.RINGS],
+            DateGlyph.lit, "the last slice must end at the total");
+        for (var ring = 0; ring < StatMap.RINGS; ring++) {
+            for (var k = DateGlyph.firstFor[ring];
+                     k < DateGlyph.firstFor[ring + 1]; k++) {
+                var dot = DateGlyph.index[k];
+                Test.assertMessage(dot >= DotGrid.ringStart[ring] &&
+                                   dot < DotGrid.ringStart[ring + 1],
+                    "dot " + dot + " is in ring " + ring + "'s slice but not " +
+                    "in ring " + ring);
+            }
+            logger.debug("ring " + ring + " strikes " +
+                (DateGlyph.firstFor[ring + 1] - DateGlyph.firstFor[ring]) +
+                " dots");
+        }
+        return true;
+    }
+
+    //! The cursor walk and the readable definition agree on every dot.
+    //!
+    //! The renderer does not ask DateGlyph whether a dot is struck: it walks a
+    //! sorted list with a cursor, which is one integer comparison per dot
+    //! against a call and a division. That is the same trade
+    //! StatMap.litBetween() gets, and it carries the same obligation — the
+    //! readable definition stays, and this holds the fast path to it.
+    (:test)
+    function theWatermarkMatchesItsReadableDefinition(logger as Logger) as Boolean {
+        Config.reload();
+        DotGrid.ensureBuilt();
+        DateGlyph.ensure(GLYPH_DAY);
+
+        var struck = new [DotGrid.count] as Array<Boolean>;
+        for (var i = 0; i < DotGrid.count; i++) {
+            struck[i] = false;
+        }
+        for (var k = 0; k < DateGlyph.lit; k++) {
+            struck[DateGlyph.index[k]] = true;
+        }
+        for (var i = 0; i < DotGrid.count; i++) {
+            Test.assertEqualMessage(struck[i], DateGlyph.isGlyphDot(i),
+                "dot " + i + " at (" + DotGrid.xs[i] + ", " + DotGrid.ys[i] +
+                ") disagrees: the list says " + struck[i] +
+                ", isGlyphDot says " + DateGlyph.isGlyphDot(i));
+        }
+        return true;
+    }
+
+    //! The renderer strikes exactly the watermark's dots, ring by ring.
+    //!
+    //! Per ring rather than only in total, because the cursor is re-seeded from
+    //! firstFor at the top of every ring and carrying it on from the ring
+    //! before would still add up to the right number overall while drawing the
+    //! numeral in the wrong rings.
+    (:test)
+    function theRendererStrikesExactlyTheWatermarkDots(logger as Logger) as Boolean {
+        Config.reload();
+        DotGrid.ensureBuilt();
+
+        var bitmap = Graphics.createBufferedBitmap(
+            {:width => 64, :height => 64}).get();
+        if (!(bitmap instanceof Graphics.BufferedBitmap)) {
+            logger.debug("no buffered bitmap available; draw not exercised");
+            return true;
+        }
+        var dc = bitmap.getDc();
+        var spans = everySpan(0.0, 0.5);
+        var overs = allOvers();
+        var turning = StatMap.rotation;
+
+        StatMap.rotation = StatMap.ROTATION_UPRIGHT_DATE;
+        DateGlyph.ensure(GLYPH_DAY);
+        MatrixRenderer.draw(dc, spans, noMarks(), overs, emptyBlocks(),
+                            Palette.active, Palette.rampActive, null,
+                            FrameGate.everything(), true);
+        Test.assertEqualMessage(MatrixRenderer.struck, DateGlyph.lit,
+            "a full redraw must strike every dot the watermark names");
+
+        // A clear rules the delta out, which is what makes the count below a
+        // statement about the cursor rather than about which dots moved.
+        for (var ring = 0; ring < StatMap.RINGS; ring++) {
+            MatrixRenderer.draw(dc, spans, noMarks(), overs, emptyBlocks(),
+                                Palette.active, Palette.rampActive, null,
+                                onlyRingDirty(ring), true);
+            var expected = DateGlyph.firstFor[ring + 1] -
+                           DateGlyph.firstFor[ring];
+            Test.assertEqualMessage(MatrixRenderer.struck, expected,
+                "ring " + ring + " alone must strike its own slice");
+        }
+
+        // And neither of the other two rotations strikes anything, whatever
+        // DateGlyph happens to be holding.
+        var quiet = [StatMap.ROTATION_RADIAL, StatMap.ROTATION_UPRIGHT]
+                    as Array<Number>;
+        for (var r = 0; r < quiet.size(); r++) {
+            StatMap.rotation = quiet[r];
+            MatrixRenderer.draw(dc, spans, noMarks(), overs, emptyBlocks(),
+                                Palette.active, Palette.rampActive, null,
+                                FrameGate.everything(), true);
+            Test.assertEqualMessage(MatrixRenderer.struck, 0,
+                "rotation " + quiet[r] + " must draw the plain field");
+        }
+
+        StatMap.rotation = turning;
+        return true;
+    }
+
+    //! A block ring draws the watermark too.
+    //!
+    //! Its dots are walked in a second loop that the span loop's changes do not
+    //! reach, and the first version of the forecast ring was drawn as an empty
+    //! span in three places for exactly that kind of reason. A ring on the
+    //! twelve-hour forecast with the watermark under it is one line of the
+    //! numeral simply missing.
+    (:test)
+    function aBlockRingStrikesItsShareOfTheWatermark(logger as Logger) as Boolean {
+        Config.reload();
+        DotGrid.ensureBuilt();
+
+        var bitmap = Graphics.createBufferedBitmap(
+            {:width => 64, :height => 64}).get();
+        if (!(bitmap instanceof Graphics.BufferedBitmap)) {
+            logger.debug("no buffered bitmap available; draw not exercised");
+            return true;
+        }
+        var dc = bitmap.getDc();
+        var turning = StatMap.rotation;
+        var was = StatMap.rings[0];
+        StatMap.rotation = StatMap.ROTATION_UPRIGHT_DATE;
+        StatMap.rings[0] = Source.SOURCE_RAIN_HOURS;
+        DateGlyph.ensure(GLYPH_DAY);
+
+        MatrixRenderer.draw(dc, everySpan(0.0, 0.5), noMarks(), allOvers(),
+                            emptyBlocks(), Palette.active, Palette.rampActive,
+                            null, onlyRingDirty(0), true);
+        Test.assertEqualMessage(MatrixRenderer.struck,
+            DateGlyph.firstFor[1] - DateGlyph.firstFor[0],
+            "the block loop must strike the same dots the span loop would");
+
+        StatMap.rings[0] = was;
+        StatMap.rotation = turning;
+        return true;
+    }
+
+    //! Rolling the date does not rebuild the lattice.
+    //!
+    //! The same claim rotationDoesNotReachTheCache makes, and it matters more
+    //! here: the watermark changes on its own, once a day, on whatever frame
+    //! happens to be next. A rebuild there is ~1100 dots of work inside an
+    //! onUpdate, which is the budget the face has already tripped once.
+    (:test)
+    function theDateDoesNotReachTheCache(logger as Logger) as Boolean {
+        Config.reload();
+        DotGrid.ensureBuilt();
+        DateGlyph.ensure(1);
+
+        var generation = DotGrid.generation;
+        var arms = new [DotGrid.count] as Array<Number>;
+        for (var i = 0; i < DotGrid.count; i++) {
+            arms[i] = DotGrid.armOf[i];
+        }
+
+        for (var day = 2; day <= 31; day++) {
+            DateGlyph.ensure(day);
+            Test.assertEqualMessage(DotGrid.generation, generation,
+                "day " + day + " rebuilt the dot cache");
+        }
+        for (var i = 0; i < DotGrid.count; i++) {
+            Test.assertEqualMessage(DotGrid.armOf[i], arms[i],
+                "dot " + i + " changed orientation with the date");
+        }
+        return true;
+    }
+
+    //! A rebuilt lattice invalidates the cells the watermark cached.
+    //!
+    //! build() reuses its arrays when the lattice has not changed size, which
+    //! is every rebuild there is — so nothing about the arrays themselves says
+    //! they have been rewritten, and a cache of dot *indices* into them cannot
+    //! notice. DotGrid.generation is the only thing that can, and this is what
+    //! holds DateGlyph to reading it.
+    (:test)
+    function aRebuiltLatticeRefreshesTheWatermark(logger as Logger) as Boolean {
+        Config.reload();
+        DotGrid.ensureBuilt();
+        DateGlyph.ensure(GLYPH_DAY);
+        var before = DateGlyph.builtFor;
+
+        DotGrid.build();
+        Test.assertMessage(DotGrid.generation != before,
+            "build() must move the generation counter");
+        DateGlyph.ensure(GLYPH_DAY);
+        Test.assertEqualMessage(DateGlyph.builtFor, DotGrid.generation,
+            "the watermark kept cells from before the rebuild");
+        return true;
+    }
+
+    //! Midnight clears the screen.
+    //!
+    //! A dot that was struck yesterday and is not today has four pixels on
+    //! screen that a repaint will not remove: the repaint draws the cross's
+    //! other stroke, which is exactly the four. Only a clear takes them off,
+    //! and the day being in the *field* print is what asks for one.
+    (:test)
+    function aDateChangeClearsTheField(logger as Logger) as Boolean {
+        FrameGate.forget();
+        var rings = stillRings();
+        var field = stillField();
+        field[4] = 15.0;
+        for (var i = 0; i < FrameGate.HOLD; i++) {
+            FrameGate.plan(field, rings);
+        }
+        Test.assertMessage(!FrameGate.plan(field, rings),
+            "an unchanged frame must skip before the date is moved");
+
+        var tomorrow = stillField();
+        tomorrow[4] = 16.0;
+        Test.assertMessage(FrameGate.plan(tomorrow, rings),
+            "the frame the date changes on must be drawn");
+        Test.assertMessage(FrameGate.clears,
+            "and drawn from black — a repaint leaves yesterday's strokes");
+        for (var ring = 0; ring < StatMap.RINGS; ring++) {
+            Test.assertMessage(FrameGate.dirty[ring],
+                "ring " + ring + " must be redrawn: the watermark crosses all " +
+                "four");
+        }
+        return true;
+    }
+
+    //! Striking a dot can only take light away, so nothing needs re-measuring.
+    //!
+    //! Every other thing the face draws had to be weighed against the 10%
+    //! always-on budget. This one does not, and the reason is arithmetic rather
+    //! than a measurement: a struck dot draws one of the two strokes it drew
+    //! before, so its lit pixels are a strict subset of what they were and the
+    //! frame's total can only fall. That argument holds only while a strike
+    //! really is one stroke of a cross the field already draws — this is what
+    //! says so.
+    (:test)
+    function strikingADotOnlyRemovesLight(logger as Logger) as Boolean {
+        Test.assertMessage(DateGlyph.STROKE_PIXELS < LIT_PIXELS_PER_DOT,
+            "a struck dot must light fewer pixels than a whole cross: " +
+            DateGlyph.STROKE_PIXELS + " against " + LIT_PIXELS_PER_DOT);
+        Test.assertEqualMessage(DateGlyph.STROKE_PIXELS, DotGrid.DOT,
+            "a stroke is DOT pixels long");
+        Test.assertMessage(
+            DateGlyph.ARM >= 0 &&
+            DateGlyph.ARM + 1 < DotGrid.ARMS.size(),
+            "the struck stroke must come out of DotGrid.ARMS");
+        Test.assertMessage(DateGlyph.ARM % DotGrid.ARM_VALUES == 0,
+            "and must be the first arm of an orientation, not the middle of one");
+        logger.debug("a struck dot lights " + DateGlyph.STROKE_PIXELS +
+                     " pixels against " + LIT_PIXELS_PER_DOT);
+        return true;
+    }
+
+    //! The two implementations of the watermark agree.
+    //!
+    //! tools/mockup.py mirrors DateGlyph by hand, the way it mirrors the
+    //! lattice and the palette, and it is what the placement and the marking
+    //! were chosen on. The figures below come from that mockup — the same role
+    //! EXPECTED_DOTS plays for the lattice — so a constant moved on one side
+    //! and not the other stops the mockups being an honest preview and says so
+    //! here rather than in a render nobody looked at closely.
+    (:test)
+    function theWatermarkMatchesTheMockup(logger as Logger) as Boolean {
+        Config.reload();
+        DotGrid.ensureBuilt();
+
+        Test.assertEqualMessage(DateGlyph.SCALE, 2, "mockup.py: SCALE = 2");
+        Test.assertEqualMessage(DateGlyph.COLS, 14,
+            "mockup.py: GLYPH_COLS = 14");
+        Test.assertEqualMessage(DateGlyph.ROWS, 10,
+            "mockup.py: GLYPH_ROWS = 10");
+        Test.assertEqualMessage(DateGlyph.ORIGIN_COL, 12,
+            "mockup.py: GLYPH_ORIGIN = (12, 23)");
+        Test.assertEqualMessage(DateGlyph.ORIGIN_ROW, 23,
+            "mockup.py: GLYPH_ORIGIN = (12, 23)");
+
+        // Dots struck, per day, straight out of tools/mockup.py.
+        var days = [5, 15, 28, 31] as Array<Number>;
+        var counts = [92, 76, 96, 76] as Array<Number>;
+        for (var i = 0; i < days.size(); i++) {
+            DateGlyph.ensure(days[i]);
+            Test.assertEqualMessage(DateGlyph.lit, counts[i],
+                "day " + days[i] + " strikes " + DateGlyph.lit +
+                " dots here and " + counts[i] + " in the mockup");
+        }
+        return true;
+    }
+
+    //! Ten digits, fifteen bits each, none of them blank.
+    (:test)
+    function theWatermarkFontCoversTenDigits(logger as Logger) as Boolean {
+        Test.assertEqualMessage(DateGlyph.DIGITS.size(), 10,
+            "the font must have a glyph for every digit");
+        var full = 1 << DateGlyph.FONT_BITS;
+        for (var d = 0; d < DateGlyph.DIGITS.size(); d++) {
+            var bits = DateGlyph.DIGITS[d];
+            Test.assertMessage(bits > 0 && bits < full,
+                "digit " + d + " is not a " + DateGlyph.FONT_BITS + "-bit glyph");
+            for (var e = d + 1; e < DateGlyph.DIGITS.size(); e++) {
+                Test.assertMessage(bits != DateGlyph.DIGITS[e],
+                    "digits " + d + " and " + e + " draw the same shape");
+            }
+        }
+        return true;
+    }
+
+    //! Every day of the month draws both its digits, leading zero included.
+    //!
+    //! The count is derived from the font's own bit counts rather than from
+    //! cellLit, so it is a check on the scaling and the gutter and not a
+    //! restatement of the filter. A day under ten that dropped its leading zero
+    //! would come out short here by however many bits a `0` sets.
+    (:test)
+    function everyDayDrawsBothOfItsDigits(logger as Logger) as Boolean {
+        Config.reload();
+        DotGrid.ensureBuilt();
+        for (var day = 1; day <= 31; day++) {
+            DateGlyph.ensure(day);
+            var expected = (bitsSet(DateGlyph.DIGITS[day / 10]) +
+                            bitsSet(DateGlyph.DIGITS[day % 10])) *
+                           GLYPH_CELLS_PER_BIT;
+            Test.assertEqualMessage(DateGlyph.lit, expected,
+                "day " + day + " struck " + DateGlyph.lit + " dots, not " +
+                expected);
+        }
+        logger.debug("days 1-31 all draw two digits");
+        return true;
+    }
 
     //! The row the staleness test below drives. Named rather than written as a
     //! bare index because the two have to move together: the test changes the
@@ -2102,10 +2520,11 @@ module MatrixTest {
         StatMap.rings[1] = Source.SOURCE_TEMPERATURE;
 
         var turning = StatMap.rotation;
-        var rotations = [StatMap.ROTATION_RADIAL, StatMap.ROTATION_UPRIGHT]
-                        as Array<Number>;
+        var rotations = [StatMap.ROTATION_RADIAL, StatMap.ROTATION_UPRIGHT,
+                         StatMap.ROTATION_UPRIGHT_DATE] as Array<Number>;
         for (var r = 0; r < rotations.size(); r++) {
             StatMap.rotation = rotations[r];
+            DateGlyph.ensure(15);
             MatrixRenderer.draw(dc, spans, marks, overs, emptyBlocks(), Palette.active,
                                 Palette.rampActive, null,
                                 FrameGate.everything(), true);
@@ -2392,7 +2811,10 @@ module MatrixTest {
 
     //! A field print with nothing happening: no drift, no backing.
     function stillField() as Array<Float> {
-        return [0.0, 0.0, -1.0, 0.0] as Array<Float>;
+        // Five values, matching CrossoverView.fieldPrint(): drift x and y, the
+        // backing colour, the minute the hands are at, and the day the
+        // watermark is drawing. Zero here is the watermark switched off.
+        return [0.0, 0.0, -1.0, 0.0, 0.0] as Array<Float>;
     }
 
     //! A ring print with every ring empty and unmarked.
@@ -2984,6 +3406,74 @@ module MatrixTest {
         Test.assertMessage(MatrixRenderer.painted * 4 < whole,
             "a 5% span move repainted " + MatrixRenderer.painted + " of " +
             whole + " dots — that is not a delta, it is a full ring");
+        return true;
+    }
+
+    //! A delta never skips a struck dot, and the watermark survives one.
+    //!
+    //! **This is the invariant the render loop's shape rests on.** The cursor
+    //! that finds the struck dots advances inside the branch that draws one,
+    //! not at the top of the loop — which is what leaves an ordinary dot a
+    //! single comparison rather than a test and a local. The price is that a
+    //! dot the delta skips never reaches the branch, so a skipped struck dot
+    //! would leave the cursor a step behind and shift the rest of the numeral
+    //! along the ring. `i != glyphNext` in the delta's condition is what stops
+    //! that, and it is exactly the term someone tidying the condition would
+    //! take out: it looks redundant, since a struck dot's *lit-ness* reads the
+    //! same as any other dot's.
+    //!
+    //! Every other watermark test clears the screen, which rules the delta out
+    //! — so without this one the whole interaction is untested.
+    (:test)
+    function aDeltaNeverSkipsAStruckDot(logger as Logger) as Boolean {
+        Config.reload();
+        DotGrid.ensureBuilt();
+        var dc = probeDc(logger);
+        if (dc == null) {
+            return true;
+        }
+        var turning = StatMap.rotation;
+        StatMap.rotation = StatMap.ROTATION_UPRIGHT_DATE;
+        DateGlyph.ensure(GLYPH_DAY);
+
+        var overs = noOvers();
+        var spans = everySpan(0.0, 0.50);
+        // Two full draws put this ring in both buffers, which is what makes the
+        // next one delta-eligible.
+        settleBuffers(dc, spans, overs, null);
+
+        var ring = 2;
+        var mine = DateGlyph.firstFor[ring + 1] - DateGlyph.firstFor[ring];
+        Test.assertMessage(mine > 0,
+            "ring " + ring + " carries none of the watermark, so this test " +
+            "would pass vacuously — pick a ring the window crosses");
+
+        var moved = everySpan(0.0, 0.55);
+        MatrixRenderer.draw(dc, moved, noMarks(), overs, emptyBlocks(),
+                            Palette.active, Palette.rampActive, null,
+                            onlyRingDirty(ring), false);
+
+        var whole = ringSize(ring);
+        logger.debug("ring " + ring + ": painted " + MatrixRenderer.painted +
+                     " of " + whole + ", struck " + MatrixRenderer.struck +
+                     " of " + mine);
+        // The delta really engaged. Without this the two below would pass on a
+        // full repaint, which is the failure mode they exist to rule out.
+        Test.assertMessage(MatrixRenderer.painted * 2 < whole,
+            "the delta did not engage: " + MatrixRenderer.painted + " of " +
+            whole + " dots is a full ring, so what follows proves nothing");
+        Test.assertEqualMessage(MatrixRenderer.struck, mine,
+            "a delta redraw must still strike every one of this ring's " +
+            "watermark dots — one skipped leaves the cursor behind and shifts " +
+            "the rest of the numeral round the ring");
+
+        // And the dots it changed tier on are still all drawn: forcing the
+        // struck ones in must not cost the delta its own job.
+        var expected = differing(ring, spans[ring], moved[ring]);
+        Test.assertMessage(MatrixRenderer.painted >= expected,
+            "the delta dropped a dot that changed tier");
+
+        StatMap.rotation = turning;
         return true;
     }
 

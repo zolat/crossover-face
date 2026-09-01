@@ -1,6 +1,6 @@
 # Roadmap
 
-**Current:** done — the block ring is graded sixteen ways; the on-watch check is still below.
+**Current:** done — the day is written into the field; the on-watch check is still below.
 
 Out-of-band feature work, not a phase of the performance roadmap that follows: that one is
 complete and this does not extend it.
@@ -8,9 +8,85 @@ complete and this does not extend it.
 - [x] Rain, next 12h — an hourly forecast in one ring
 - [x] Block levels — width as the second axis, so a block reads sixteen ways rather than four
 - [x] Block centring — a block sits between its two hour marks, not against the first one
+- [x] Date watermark — the day of the month written into the grain of the dot field
 
 Plans: `~/.claude/plans/i-want-to-plan-starry-graham.md`,
-`~/.claude/plans/encapsulated-finding-owl.md`
+`~/.claude/plans/encapsulated-finding-owl.md`,
+`~/.claude/plans/could-we-subtely-wite-curried-forest.md`
+
+## The date watermark, and what the mockups settled
+
+The ask was to write the date into the field by **rotating** dots — turning a chosen few
+45 degrees so a numeral appears in the grain rather than on top of it. Orientation is the
+one channel this face has that costs no light: every cross lights nine pixels whichever way
+it points.
+
+**Rotation is free and does not read.** Measured in `tools/mockup.py`, a face with a rotated
+numeral in it and one without measure the same 4.821% — identical to every digit. But at a
+five-pixel dot a `+` and a `×` are too close to tell apart, and at a 3x5 font the numeral is
+a faint sheen at 1:1 and nothing at all on the wrist. The face has form here: the
+temperature mark had to become a solid block because "a white cross among them is just
+another cross — it was tried and it vanished".
+
+**What reads is density, not orientation.** A *struck* dot draws one of its two strokes and
+not the other — five lit pixels instead of nine, same cell, same colour. Four markings were
+rendered at 1:1 and at wrist scale:
+
+| marking | luminance | reads as a number? |
+|---|---|---|
+| none | 4.82% | — |
+| rotate 45°, 3x5 font | 4.82% | no — a faint texture patch |
+| rotate 45°, double-size font | 4.82% | faintly, at close range |
+| **half-weight stroke, double-size** | **4.64%** | **yes** |
+
+**And it is free in the safe direction.** A struck dot lights a strict subset of the pixels
+it lit before, so the frame total can only fall — no luminance bound needed re-measuring,
+and the argument is arithmetic rather than a measurement.
+`strikingADotOnlyRemovesLight` asserts the premise it rests on.
+
+**Double-size, because a one-dot stroke is not a stroke.** A 3x5 digit at one lattice cell
+to the font pixel is 30x50px, which sounds ample; its strokes are one dot wide and have no
+coherent area to read as strokes. At two cells they are 20px wide and the numeral is there.
+The window is 14x10 cells, horizontally centred, in the lower half — the only placement of
+that size that clears the hand pivot, and all 140 of its cells hold a dot.
+
+**The frame cost is below this machine's noise floor, and saying so took twelve legs.**
+One integer comparison per dot is per-dot work, which CLAUDE.md requires re-measuring both
+rows for. Two builds — a `const` reproducing the loop with no comparison in it at all,
+which is the only honest "before" — interleaved back to back, two rounds:
+
+| rings | leg | round 0 | round 1 |
+|---|---|---|---|
+| defaults | A pre-watermark loop | 29ms / 46 worst | 40ms / 73 |
+| | B watermark off | 37ms / 83 | 35ms / 56 |
+| | C watermark on | 34ms / 66 | 34ms / 64 |
+| seconds + temperature | A pre-watermark loop | 11ms / 56 | 14ms / 84 |
+| | B watermark off | 12ms / 66 | 13ms / 71 |
+| | C watermark on | 13ms / 74 | 14ms / 81 |
+
+**Read the defaults row as the null result it is.** A→C reverses direction between the two
+rounds — C is 3ms *below* B in round 0 and A is 6ms above C in round 1 — which cannot be a
+cost of the comparison and is the machine moving under the measurement. The seconds row,
+where nothing is ever skipped and the sample is therefore steadier, is monotone and tiny:
++1ms for the comparison, +1ms more for the strike. Idle is unmoved at 0-1ms in every leg,
+so `DateGlyph.today()`'s day-key arithmetic does not show up on a skipped frame.
+
+What *is* consistently measurable is memory: **61k to 63k**, in every leg the watermark was
+on, for the two ≤140-entry tables. Against 123k granted.
+
+Three things about the mechanism are load-bearing:
+
+- **The struck dots are named by index, in the order the renderer walks them**, so
+  membership costs one integer comparison per dot rather than a lookup. The lattice scan
+  that finds them runs in index order, which is why the list comes out sorted with no sort
+  and no reverse map.
+- **The cursor advances in the branch that consumed it**, not at the top of the loop — one
+  comparison for an ordinary dot instead of a test and a local. That only works because
+  the delta redraw is told never to skip a struck dot (`i != glyphNext`), or a skipped dot
+  would leave the cursor a step behind and shift the whole numeral along the ring.
+- **The day is in the *field* print**, so midnight clears the screen. A dot struck yesterday
+  and not today has four pixels a repaint cannot remove — the repaint draws the cross's
+  other stroke, which is exactly those four.
 
 ## What it is
 

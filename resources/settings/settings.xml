@@ -27,6 +27,7 @@
         <settingConfig type="list">
             <listEntry value="0">@Strings.RotationRadial</listEntry>
             <listEntry value="1">@Strings.RotationUpright</listEntry>
+            <listEntry value="2">@Strings.RotationUprightDate</listEntry>
         </settingConfig>
     </setting>
     <setting propertyKey="@Properties.ring1" title="@Strings.Ring1Title" prompt="@Strings.RingPrompt">

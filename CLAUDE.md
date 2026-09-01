@@ -468,7 +468,12 @@ implementations together so they cannot drift silently.
 Stored values are **list indices**, so `resources/properties.xml`, `resources/settings/settings.xml`,
 `resources/strings/strings.xml`, the enums in `StatMap`/`Source`, and the label arrays in
 `source/settings/SettingsMenu.mc` all have to agree. Eight properties today: `theme`,
-`handBacking`, `alwaysOnFill`, `dotRotation`, `ring1`–`ring4`.
+`handBacking`, `alwaysOnFill`, `dotRotation`, `ring1`–`ring4`. `dotRotation` carries three
+values, not two — the third is the date watermark below.
+
+A `ChoiceMenu` is given how many values it offers as well as its labels. Adding a label
+without moving that count leaves the new row unreachable with no other symptom, which is
+what `rotationSettingIsClamped` now walks every value to catch.
 
 **A new source is appended after `SOURCE_OFF`, not before it.** That looks wrong and is the
 only safe place: the stored value is an index, so inserting below Off renumbers Off and
@@ -584,6 +589,63 @@ cached either way and toggling the setting needs no rebuild. Do not move this in
 `DotGrid.build()`: it would cost a full ~1100-dot rebuild per toggle, and the next step from
 there is making the ring mapping conditional again. `rotationDoesNotReachTheCache` is the
 guard. Every orientation lights nine pixels, so neither setting moves the luminance.
+
+### The date is written into the grain, not on top of it
+
+`ROTATION_UPRIGHT_DATE` writes the day of the month into the field by drawing a few dozen
+dots **struck**: one of the cross's two strokes and not the other, five lit pixels instead
+of nine, in the same cell and the same colour the ring was already using. `DateGlyph` owns
+the window, the font and the list of dots; nothing else learns what a digit is.
+
+**It cannot cost luminance, and that is arithmetic rather than a measurement.** A struck dot
+lights a strict subset of the pixels it lit before, so a frame's total can only fall — which
+is why this is the one addition to the face that needed no budget re-measured.
+`strikingADotOnlyRemovesLight` asserts the premise, since the claim dies the moment a strike
+becomes anything but one stroke of a cross the field already draws.
+
+Four things are load-bearing and none is obvious:
+
+- **Rotation was the idea and it does not read.** Turning a dot 45 degrees is free too —
+  measured, the luminance does not move in any digit — but at a five-pixel dot a `+` and a
+  `×` are too close to tell apart, and a numeral made of them is a sheen. This is the same
+  law that made the temperature mark a solid block: on a field of thin crosses, only a
+  change of *density* reads. Don't re-litigate it without rendering it; `tools/mockup.py`
+  does both and ROADMAP has the table.
+- **The font is double-size because a one-dot stroke is not a stroke.** `SCALE = 2`, so a
+  3x5 digit is 6x10 lattice cells and its strokes are 20px wide. The window is 14x10 cells
+  at `(ORIGIN_COL, ORIGIN_ROW) = (12, 23)` — horizontally centred, lower half, the only
+  placement of that size clearing the hand pivot. All 140 cells hold a dot, and
+  `everyWatermarkCellHoldsADot` fails if a nudge costs the numeral a hole.
+- **The struck dots are a *sorted list of indices*, walked with a cursor.** That is one
+  integer comparison per dot against a call and a division, and it is the same trade
+  `StatMap.litBetween()` gets. Two things keep it honest: the lattice scan that builds the
+  list runs in index order, so it comes out sorted with no sort and no reverse map; and the
+  cursor is re-seeded per ring from `firstFor`, because a ring the gate left clean is never
+  walked. **The cursor advances inside the draw branch that consumed it**, which is what
+  leaves an ordinary dot with a single `else if` — and that only works because the delta
+  redraw is told never to skip a struck dot (`i != glyphNext` in its condition). Move the
+  advance back to the top of the loop and you pay a test and a local on all ~1100 dots.
+- **The day is in the *field* print, so midnight clears the screen.** A dot struck yesterday
+  and not today has four pixels that a repaint cannot remove: the repaint draws the cross's
+  other stroke, which is exactly those four. The slot holds 0.0 whenever the watermark is
+  off, so a face without it never re-prints on a date change — and reading the clock is
+  confined to the mode that uses it. `DateGlyph.today()` keys on the epoch second divided by
+  a day, so `Gregorian.info` is called once a day rather than on every frame including the
+  skipped ones.
+
+`DotGrid.generation` exists for this and nothing else. `build()` reuses its arrays when the
+lattice has not changed size, which is every rebuild there is, so nothing about the arrays
+says they have been rewritten — and a cache of *indices* into them cannot notice. The
+counter is what `DateGlyph` reads; `aRebuiltLatticeRefreshesTheWatermark` holds it there.
+
+The watermark stays on in always-on and in held-back always-on, deliberately: it is the
+date, and it can only take light off the mode measured against the burn-in budget.
+
+It is a third value of `dotRotation` rather than a property of its own, which keeps the
+settings at eight — but note that the choice was made while the marking was still a
+rotation, and a struck dot does not actually need the upright field. A separate on/off
+property would additionally allow "follow the rings + date"; `tools/mockup.py`'s
+`13b-date-true-size.png` renders that combination.
 
 ### The 10% luminance budget
 

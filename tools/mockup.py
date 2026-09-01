@@ -406,6 +406,84 @@ def hand_covers(dx: float, dy: float, axes) -> bool:
     return False
 
 
+# --- date watermark ----------------------------------------------------------
+# Mirrors source/matrix/DateGlyph.mc. A *struck* dot draws one of its two
+# strokes and not the other -- five lit pixels where the field draws nine, in
+# the same cell and the same colour. A numeral drawn in struck dots is a
+# watermark: the density step reads as a shape when you look for it and
+# disappears into the field when you are reading the rings.
+#
+# It cannot cost luminance, because a struck dot lights a strict subset of the
+# pixels it lit before. Measured here: 4.82% without, 4.64% with.
+#
+# Rotation was the first idea and the mockups killed it: turning a dot 45
+# degrees is free too, and the measured luminance does not move at all -- but
+# at a five-pixel dot a `+` and an `x` are too close to tell apart, and the
+# numeral read as a faint sheen rather than a number. STRIKE_ROTATE renders
+# that version, and build/gate/true-size.png is the comparison it lost.
+
+SCALE = 2                       # lattice cells per font pixel
+FONT_COLS, FONT_ROWS = 3, 5
+FONT_SPAN = 2 * FONT_COLS + 1   # two digits with a one-column gutter
+GUTTER = FONT_COLS
+GLYPH_COLS = FONT_SPAN * SCALE  # 14
+GLYPH_ROWS = FONT_ROWS * SCALE  # 10
+
+# Where the window's top-left cell sits. Horizontally centred, in the lower
+# half -- the only place a block this size clears the hand pivot.
+GLYPH_ORIGIN = (12, 23)
+
+# 3x5 digits, row-major, bit 14 top-left.
+DIGITS = [
+    0b111101101101111,      # 0
+    0b010110010010111,      # 1
+    0b111001111100111,      # 2
+    0b111001111001111,      # 3
+    0b101101111001001,      # 4
+    0b111100111001111,      # 5
+    0b111100111101111,      # 6
+    0b111001001001001,      # 7
+    0b111101111101111,      # 8
+    0b111101111001111,      # 9
+]
+
+# Which ARMS entry the struck stroke comes from: the 45-degree cross's first
+# arm. Taken from the table rather than written out, so the dot size reaches it.
+GLYPH_ARM = 2
+
+
+def digit_lit(digit: int, col: int, row: int) -> bool:
+    """Is this pixel of this digit lit?"""
+    return bool(DIGITS[digit] >> (14 - (row * FONT_COLS + col)) & 1)
+
+
+def glyph_cells(day: int, origin=GLYPH_ORIGIN) -> set:
+    """The lattice cells today's date strikes, as (col, row) pairs."""
+    col0, row0 = origin
+    out = set()
+    for r in range(GLYPH_ROWS):
+        for c in range(GLYPH_COLS):
+            font_col = c // SCALE
+            if font_col == GUTTER:
+                continue
+            digit = (day // 10) if font_col < GUTTER else (day % 10)
+            if digit_lit(digit % 10, font_col % (GUTTER + 1), r // SCALE):
+                out.add((col0 + c, row0 + r))
+    return out
+
+
+def arm_for(dx: int, dy: int, col: int, row: int, rotate: bool, glyph: set):
+    """Which strokes this dot draws.
+
+    A struck dot returns a two-value arm, which draw_dot renders as one line;
+    every other dot returns the usual four.
+    """
+    if glyph and (col, row) in glyph:
+        return ARMS[GLYPH_ARM][:2]
+    # Mirrors StatMap.Rotation: turned to follow the ring, or upright.
+    return ARMS[orientation_at(dx, dy)] if rotate else ARMS[0]
+
+
 # --- rendering ---------------------------------------------------------------
 
 
@@ -414,8 +492,11 @@ def render(spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
            backing: tuple[int, int, int] | None = None,
            at_time: tuple[int, int] = (10, 9),
            drift: tuple[int, int] = (0, 0), marks=None,
-           overs=None, rotate: bool = True) -> Image.Image:
+           overs=None, rotate: bool = True,
+           date: int | None = None) -> Image.Image:
     img = Image.new("RGB", (SIZE, SIZE), (0, 0, 0))
+    # The watermark's cells, resolved once rather than per dot.
+    glyph = glyph_cells(date) if date is not None else set()
     draw = ImageDraw.Draw(img)
     # Which dot each ring marks, worked out once rather than per dot.
     mark_dots = {}
@@ -456,8 +537,7 @@ def render(spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
                         colour = hourly_colour(
                             ring, position, dist_sq,
                             (hourly or {}).get(ring), always_on, held_back)
-                        arm = ARMS[orientation_at(dx, dy)] if rotate \
-                            else ARMS[0]
+                        arm = arm_for(dx, dy, col, row, rotate, glyph)
                         draw_dot(draw, x - half + drift[0],
                                  y - half + drift[1], colour, arm)
                         continue
@@ -498,8 +578,7 @@ def render(spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
                 draw.rectangle([left, top, left + DOT - 1, top + DOT - 1],
                                fill=colour)
                 continue
-            # Mirrors StatMap.Rotation: turned to follow the ring, or upright.
-            arm = ARMS[orientation_at(dx, dy)] if rotate else ARMS[0]
+            arm = arm_for(dx, dy, col, row, rotate, glyph)
             draw_dot(draw, left, top, colour, arm)
     return img
 
@@ -514,10 +593,15 @@ def orientation_at(dx: int, dy: int) -> int:
 
 
 def draw_dot(draw, left: int, top: int, colour, arm=ARMS[0]) -> None:
-    """One dot: two strokes through its centre, at the given orientation."""
+    """One dot: two strokes through its centre, at the given orientation.
+
+    A two-value arm is a *struck* dot -- one stroke, five lit pixels. See the
+    date watermark above.
+    """
     x, y = left + DOT // 2, top + DOT // 2
     draw.line([x - arm[0], y - arm[1], x + arm[0], y + arm[1]], fill=colour)
-    draw.line([x - arm[2], y - arm[3], x + arm[2], y + arm[3]], fill=colour)
+    if len(arm) > 2:
+        draw.line([x - arm[2], y - arm[3], x + arm[2], y + arm[3]], fill=colour)
 
 
 # --- device compositing ------------------------------------------------------
@@ -844,6 +928,33 @@ def main(outdir: str = "build/mockups") -> int:
     path = os.path.join(outdir, "12-duotones.png")
     sheet(panels, "Duotones - two alternating hues, awake, always-on and "
                   "the temperature ramp").save(path)
+    written.append(path)
+
+    # 12. The date watermark: the day of the month struck into the field.
+    #     Every figure on this sheet is *below* the plain face's, because a
+    #     struck dot lights five pixels where the field lights nine.
+    panels = []
+    plain = render(values, rotate=False)
+    panels.append((f"NO WATERMARK   lum {measure(plain) * 100:.2f}%",
+                   composite(plain)))
+    for day in (5, 15, 28):
+        face = render(values, rotate=False, date=day)
+        panels.append((f"DAY {day:02d}   lum {measure(face) * 100:.2f}%",
+                       composite(face)))
+    path = os.path.join(outdir, "13-date-watermark.png")
+    sheet(panels, "Date watermark - the day struck into the dot field, "
+                  "one stroke per dot instead of two").save(path)
+    written.append(path)
+
+    # The same faces uncomposited and at 1:1, which is the honest look at it:
+    # the device art and its bezel shrink the dial by a third.
+    panels = [("UPRIGHT", render(values, rotate=False)),
+              ("UPRIGHT + DATE", render(values, rotate=False, date=15)),
+              ("FOLLOW THE RINGS + DATE", render(values, date=15))]
+    panels = [(f"{n}   lum {measure(f) * 100:.2f}%", f) for n, f in panels]
+    path = os.path.join(outdir, "13b-date-true-size.png")
+    sheet(panels, "Date watermark at 1:1 - and on the radial field, which the "
+                  "setting does not offer").save(path)
     written.append(path)
 
     # 11. Burn-in drift: how long any one pixel stays lit over a full cycle.
