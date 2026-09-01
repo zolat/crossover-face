@@ -7,6 +7,7 @@ complete and this does not extend it.
 
 - [x] Rain, next 12h — an hourly forecast in one ring
 - [x] Block levels — width as the second axis, so a block reads sixteen ways rather than four
+- [x] Block centring — a block sits between its two hour marks, not against the first one
 
 Plans: `~/.claude/plans/i-want-to-plan-starry-graham.md`,
 `~/.claude/plans/encapsulated-finding-owl.md`
@@ -78,11 +79,17 @@ the largest thing this turned out not to need.
   asleep, not a missing permission; `caffeinate -u` wakes it, `-d` only stops it sleeping
   again. It needed a temporary stub for the forecast and a forced ring assignment, so the
   *data path* from `Weather` is still unexercised — see the last bullet.
-- **The gutter's alignment is unexamined.** Blocks occupy the *leading* 22.5 degrees of each
-  wedge, so every boundary lands on an hour mark and the hour hand sits in its own block
-  from :00 to :45 and in the gutter after that. Centring the block instead keeps the hand
-  inside its band the whole hour but moves the boundaries off the marks. One constant either
-  way, and it should be decided looking at a render.
+- ~~**The gutter's alignment is unexamined.**~~ Settled by looking at it on the wrist, which
+  is what this item asked for. Leading alignment put every block 3.75 degrees anticlockwise of
+  its slot's centre — about 12px of arc on the outer ring, and plainly visible against the
+  printed dial. Blocks are now centred: the gutter is split 3.75 degrees either side of each
+  hour mark, and the hand is inside its own block from :07.5 to :52.5 rather than leaving
+  early at :45. Measured before and after off simulator captures of the same stubbed
+  forecast: **aggregate lit centroid 11.57 -> 15.46 degrees** into a 30-degree slot, against a
+  15.00 target, the residual being hand occlusion. Centring the block also made every rung
+  above level 1 more even, and ring 1's full block a flat 21 dots across all twelve; the cost
+  is level 1 drawing 1 dot at four hours and 3 at the rest, where a floor to even it up would
+  collapse it into level 2. Costs about 1ms a drawn block ring, inside run-to-run spread.
 - **On-watch verification.** `getHourlyForecast()` returns null in the simulator, so every
   hour is unknown there and the whole ring draws the dim tier. Nothing has exercised the
   bucketing against a real forecast, and the array's length is undocumented — the dim tier
