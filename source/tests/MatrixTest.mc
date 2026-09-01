@@ -3997,6 +3997,79 @@ module MatrixTest {
     //! dots while the remembered spans describe the EMPTY span an hourly ring
     //! reports, so a delta would skip every dot that is unlit under both and
     //! leave the old forecast standing. The palette is keyed by ring rather
+    //! Turning the hands on or off must repaint a ring in full, twice.
+    //!
+    //! `lastBacking` sits in the delta's eligibility key so that this happens,
+    //! and until now that was an argument rather than a test: **every delta
+    //! test in this file passes `backing = null`**, so the whole hand path was
+    //! unexercised by them. That is the same gap the date watermark's delta
+    //! test turned out to have, found independently on another branch — a
+    //! shared blind spot rather than a coincidence, since `null` is the easy
+    //! argument to pass.
+    //!
+    //! Twice, because both buffers hold the old picture. The direction that
+    //! rots is turning the hands *off*: the buffers keep backed dots while the
+    //! remembered spans say nothing about them, and a delta would skip every
+    //! dot that reads the same under both spans — leaving a hand on screen
+    //! that the settings say is gone.
+    //!
+    //! Asserted on painted counts, which is safe here precisely because it is
+    //! an all-or-nothing claim: a full repaint is `ringSize(0)` at any hour,
+    //! wherever the hands happen to be pointing. A test that counted *backed*
+    //! dots instead would pass or vacuously pass depending on the wall clock,
+    //! and on which of the three lattices it ran.
+    (:test)
+    function turningTheHandsOnOrOffRepaintsTheRingTwice(logger as Logger)
+            as Boolean {
+        var dc = probeDc(logger);
+        if (dc == null) {
+            return true;
+        }
+        var marks = noMarks();
+        var overs = noOvers();
+        var spans = everySpan(0.0, 0.5);
+
+        // Settled with no hands, so a delta is live and this test can show
+        // that turning them on stops it. ringSize() reads the dot cache, so it
+        // cannot be asked before something has built it.
+        settleBuffers(dc, spans, overs, null);
+        var whole = ringSize(0);
+        MatrixRenderer.draw(dc, spans, marks, overs, noHours(), Palette.active,
+                            Palette.rampActive, null, onlyRingDirty(0), false);
+        Test.assertMessage(MatrixRenderer.painted < whole,
+            "the hands-off ring must be deltaing by now, or this test cannot " +
+            "show that turning them on stops it");
+
+        // Hands on.
+        for (var draw = 0; draw < 2; draw++) {
+            MatrixRenderer.draw(dc, spans, marks, overs, noHours(),
+                                Palette.active, Palette.rampActive,
+                                Palette.BACKING_WHITE, onlyRingDirty(0), false);
+            Test.assertEqualMessage(MatrixRenderer.painted, whole,
+                "turning the hands on must repaint the ring whole, draw "
+                    + (draw + 1));
+        }
+
+        // Hands off again. This is the direction that would rot.
+        for (var draw = 0; draw < 2; draw++) {
+            MatrixRenderer.draw(dc, spans, marks, overs, noHours(),
+                                Palette.active, Palette.rampActive, null,
+                                onlyRingDirty(0), false);
+            Test.assertEqualMessage(MatrixRenderer.painted, whole,
+                "turning the hands off must repaint the ring whole, or a hand " +
+                "stays in a buffer, draw " + (draw + 1));
+        }
+
+        // And a third draw with nothing moving is deltaing again, so the
+        // repaints above were the change and not a permanent loss of the delta.
+        MatrixRenderer.draw(dc, spans, marks, overs, noHours(), Palette.active,
+                            Palette.rampActive, null, onlyRingDirty(0), false);
+        Test.assertMessage(MatrixRenderer.painted < whole,
+            "the delta must come back once the backing has settled");
+        logger.debug("hands on/off repainted " + whole + " dots each way");
+        return true;
+    }
+
     //! than by source, so nothing else in the delta's key moves.
     (:test)
     function switchingARingToTheForecastRepaintsItTwice(logger as Logger)

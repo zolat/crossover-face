@@ -79,6 +79,14 @@ Two caveats, both real:
   matching the Crossover's own 10px — trips the watchdog with the hands on. Bisected: 1388
   runs, 1444 does not. 1380 ships, at a 22px rim. The lever is `PITCH`, which drags `DOT`,
   `DotGrid.ARMS`, `Drift`'s offsets and the Python mirror with it — a phase, not an edit.
+- **No delta test drove the hands until now**, and the gap was found from the
+  outside: date-watermark-texture reported that its own delta test ran with
+  `backing = null`, which prompted an audit here that found every one of mine
+  did too. `null` is the easy argument to pass, so it is a shared blind spot
+  rather than a coincidence. Closed by
+  `turningTheHandsOnOrOffRepaintsTheRingTwice`, which is mutation-checked:
+  removing `lastBacking` from the delta's eligibility key fails that test and
+  nothing else in the suite.
 - **The frame A/B's seconds row is unfinished**, and the second attempt at it hit a slept
   display. See above.
 - **Dark hands were chosen on the mockups, not on hardware.** Rendered at six times of day,
