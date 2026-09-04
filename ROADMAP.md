@@ -181,6 +181,10 @@ callbacks claim and clear the complete clipped surface to black rather than doin
 nothing, so animated system controls cannot leave trails, but still avoid every
 source read and dot draw. Each clear resets a trailing-edge deadline, so the full
 face repair cannot run until the transition callbacks have gone quiet.
+The flashlight-specific burst arrives before the normal onHide/onExitSleep order on
+affected hardware, so a detector armed by an ordinary update interval routes subsequent
+sub-500ms callbacks through the same clear path; lifecycle boundaries disarm it so startup
+and steady one-second updates cannot trigger it.
 
 - [x] Phase 0 — baseline the frame cost on a fresh simulator
 - [x] Phase 1a — cost the skipped frame, which nothing measured before

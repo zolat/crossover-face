@@ -3069,6 +3069,19 @@ module MatrixTest {
                 System.DISPLAY_MODE_HIGH_POWER),
             "recovering an unpaired overlay did not re-enable later updates");
 
+        var burstView = new CrossoverView();
+        burstView.onShow();
+        Test.assertMessage(!burstView.isTransitionBurstAt(1000),
+            "the first update was mistaken for a transition burst");
+        Test.assertMessage(!burstView.isTransitionBurstAt(2000),
+            "an ordinary one-second update was mistaken for a burst");
+        Test.assertMessage(burstView.isTransitionBurstAt(2100),
+            "a rapid callback after a stable frame did not identify the burst");
+        burstView.onExitSleep();
+        Test.assertMessage(!burstView.isTransitionBurstAt(2200),
+            "onExitSleep did not disarm the transition-burst detector");
+        burstView.onHide();
+
         view.onShow();
         Test.assertMessage(!view.shouldUpdate(System.DISPLAY_MODE_OFF),
             "a face accepted an update for a display that is off");

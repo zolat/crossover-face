@@ -16,8 +16,11 @@ class CrossoverView extends WatchUi.WatchFace {
     //! repaired. One second covers the observed transition burst while letting
     //! an unpaired overlay recover on its first later callback.
     const TRANSITION_QUIET_MS = 1000;
+    const TRANSITION_BURST_MS = 500;
     private var _leaving as Boolean = false;
     private var _hiddenAt as Number = 0;
+    private var _lastUpdateAt as Number = -1;
+    private var _burstArmed as Boolean = false;
 
     //! A normal low-power update still paints the complete AMOLED frame once a
     //! minute. Only additional calls in that same minute are transition noise
@@ -65,6 +68,7 @@ class CrossoverView extends WatchUi.WatchFace {
     //! top of the face until another value changes.
     function onShow() as Void {
         _leaving = false;
+        resetTransitionBurst();
         DotGrid.ensureBuilt();
         FrameGate.forget();
     }
@@ -84,7 +88,16 @@ class CrossoverView extends WatchUi.WatchFace {
     //! hidden states without depending on the simulator's display controls.
     function updateForMode(dc as Dc, mode as Number) as Void {
         var started = System.getTimer();
-        if (shouldClearTransitionAt(mode, started)) {
+        var burst = mode != System.DISPLAY_MODE_OFF &&
+                    isTransitionBurstAt(started);
+        if (burst) {
+            // On affected flashlight-capable devices the AOD-to-awake burst is
+            // delivered before onExitSleep. Treat it as the same outgoing
+            // transition onHide would have announced.
+            _leaving = true;
+            _hiddenAt = started;
+        }
+        if (burst || shouldClearTransitionAt(mode, started)) {
             // System overlays animate successive positions into the same
             // framebuffer. A true no-op leaves every old position behind; one
             // native clear gives the compositor a clean black surface without
@@ -330,6 +343,7 @@ class CrossoverView extends WatchUi.WatchFace {
 
     function onEnterSleep() as Void {
         _asleep = true;
+        resetTransitionBurst();
         _lowPowerMinuteKey = -1;
         FrameGate.transition();
         WatchUi.requestUpdate();
@@ -337,6 +351,8 @@ class CrossoverView extends WatchUi.WatchFace {
 
     function onExitSleep() as Void {
         _asleep = false;
+        _leaving = false;
+        resetTransitionBurst();
         holdHandsAtSystemTime();
         FrameGate.transition();
         // High-power mode schedules its own immediate onUpdate. Requesting one
@@ -366,6 +382,28 @@ class CrossoverView extends WatchUi.WatchFace {
         return mode != System.DISPLAY_MODE_OFF && _leaving &&
                now >= _hiddenAt &&
                now - _hiddenAt < TRANSITION_QUIET_MS;
+    }
+
+    //! Detect the device-only cluster of callbacks that precedes a wake or
+    //! flashlight transition. A single short gap is not enough: detection is
+    //! armed only after an ordinary stable interval, so startup's own rapid
+    //! callbacks cannot blank the newly drawn face.
+    function isTransitionBurstAt(now as Number) as Boolean {
+        var previous = _lastUpdateAt;
+        _lastUpdateAt = now;
+        if (previous < 0 || now < previous) {
+            return false;
+        }
+        if (now - previous >= TRANSITION_BURST_MS) {
+            _burstArmed = true;
+            return false;
+        }
+        return _burstArmed;
+    }
+
+    private function resetTransitionBurst() as Void {
+        _lastUpdateAt = -1;
+        _burstArmed = false;
     }
 
     //! Time-injected form for the transition tests. Outgoing callbacks stay
