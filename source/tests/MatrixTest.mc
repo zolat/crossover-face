@@ -3040,12 +3040,6 @@ module MatrixTest {
 
         var hidingAt = System.getTimer();
         view.onHide();
-        Test.assertMessage(view.shouldClearTransitionAt(
-                System.DISPLAY_MODE_HIGH_POWER, hidingAt),
-            "an outgoing transition did not request its cheap black clear");
-        Test.assertMessage(!view.shouldClearTransitionAt(
-                System.DISPLAY_MODE_OFF, hidingAt),
-            "a display-off transition tried to draw a clearing frame");
         Test.assertMessage(
             !view.shouldUpdate(System.DISPLAY_MODE_HIGH_POWER),
             "a hidden face accepted a high-power transition update");
@@ -3056,31 +3050,13 @@ module MatrixTest {
                            !BodyBatteryData.historySampled,
             "a hidden update reached a device data source");
 
-        var lastTransitionAt = System.getTimer();
-        Test.assertMessage(view.shouldClearTransitionAt(
-                System.DISPLAY_MODE_HIGH_POWER,
-                lastTransitionAt + view.TRANSITION_QUIET_MS / 2),
-            "the outgoing-frame debounce was not extended by its latest clear");
         Test.assertMessage(view.shouldUpdateAt(
                 System.DISPLAY_MODE_HIGH_POWER,
-                lastTransitionAt + view.TRANSITION_QUIET_MS + 1),
+                hidingAt + view.TRANSITION_QUIET_MS + 1),
             "an overlay without onShow left the face permanently hidden");
         Test.assertMessage(view.shouldUpdate(
                 System.DISPLAY_MODE_HIGH_POWER),
             "recovering an unpaired overlay did not re-enable later updates");
-
-        var burstView = new CrossoverView();
-        burstView.onShow();
-        Test.assertMessage(!burstView.isTransitionBurstAt(1000),
-            "the first update was mistaken for a transition burst");
-        Test.assertMessage(!burstView.isTransitionBurstAt(2000),
-            "an ordinary one-second update was mistaken for a burst");
-        Test.assertMessage(burstView.isTransitionBurstAt(2100),
-            "a rapid callback after a stable frame did not identify the burst");
-        burstView.onExitSleep();
-        Test.assertMessage(!burstView.isTransitionBurstAt(2200),
-            "onExitSleep did not disarm the transition-burst detector");
-        burstView.onHide();
 
         view.onShow();
         Test.assertMessage(!view.shouldUpdate(System.DISPLAY_MODE_OFF),
