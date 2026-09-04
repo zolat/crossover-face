@@ -289,6 +289,8 @@ The face goes onto the watch **directly, with no GUI and no drag**. `make
 install` quits OpenMTP first if it is running — only one process may claim the
 watch's USB interface at a time — and afterwards verifies the file against the
 watch's own directory listing rather than trusting the transfer to have worked.
+The first row under the face's on-watch settings shows the compiled version;
+check it after a sideload to confirm the new PRG is the one currently running.
 
 **These device generations are MTP-only.** Garmin moved away from USB mass storage,
 so the watch never appears in `/Volumes`. The USB Mode prompt on the watch offers

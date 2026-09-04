@@ -89,13 +89,21 @@ module WeatherData {
     //! Today's low and high as fractions of the scale, or null when there is
     //! no forecast — a watch that has never synced has no weather at all.
     function dayRange() as Array<Float>? {
+        var out = [0.0, 0.0] as Array<Float>;
+        return fillDayRange(out) ? out : null;
+    }
+
+    //! Refill a caller-owned range. True when both ends are known.
+    function fillDayRange(out as Array<Float>) as Boolean {
         refresh();
         var low = lowC;
         var high = highC;
         if (low == null || high == null) {
-            return null;
+            return false;
         }
-        return [fraction(low), fraction(high)] as Array<Float>;
+        out[0] = fraction(low);
+        out[1] = fraction(high);
+        return true;
     }
 
     //! Where the temperature right now sits on the same scale, or null when

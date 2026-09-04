@@ -42,6 +42,14 @@ module Drift {
         return [OFFSETS[phase[0]], OFFSETS[phase[1]]] as Array<Number>;
     }
 
+    //! Refill a caller-owned offset. The view already keeps frame scratch, so
+    //! its once-per-second path need not allocate the pair returned above.
+    function fillFor(minute as Number, out as Array<Number>) as Void {
+        var phase = PHASES[phaseFor(minute)];
+        out[0] = OFFSETS[phase[0]];
+        out[1] = OFFSETS[phase[1]];
+    }
+
     //! Offset for right now.
     function current() as Array<Number> {
         return offsetFor(System.getClockTime().min);

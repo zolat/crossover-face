@@ -113,19 +113,38 @@ module Source {
     //! a zero-length span at the origin is genuinely dark rather than a
     //! hairline of lit dots.
     function span(source as Number, awake as Boolean) as Array<Float> {
+        var out = [0.0, 0.0] as Array<Float>;
+        fillSpan(source, awake, out);
+        return out;
+    }
+
+    //! Refill a caller-owned span. The watch-face view uses this path so the
+    //! once-per-second preamble does not allocate one two-float array per ring.
+    function fillSpan(source as Number, awake as Boolean,
+                      out as Array<Float>) as Void {
         switch (source) {
             case SOURCE_STEPS:
-                return goal(WatchData.steps(), awake);
+                fillGoal(WatchData.steps(), awake, out);
+                return;
             case SOURCE_BATTERY:
-                return level(WatchData.battery());
+                fillLevel(WatchData.battery(), out);
+                return;
             case SOURCE_BODY_BATTERY:
-                return level(BodyBatteryData.current());
+                fillLevel(BodyBatteryData.current(), out);
+                return;
             case SOURCE_TEMPERATURE:
-                var range = WeatherData.dayRange();
-                return (range != null) ? range : EMPTY;
+                if (!WeatherData.fillDayRange(out)) {
+                    fillEmpty(out);
+                }
+                return;
             case SOURCE_RAIN:
                 var rain = WeatherData.rainChance();
-                return (rain != null) ? level(rain) : EMPTY;
+                if (rain != null) {
+                    fillLevel(rain, out);
+                } else {
+                    fillEmpty(out);
+                }
+                return;
             case SOURCE_RAIN_HOURS:
             case SOURCE_UV_HOURS:
             case SOURCE_BODY_BATTERY_HOURS:
@@ -140,17 +159,45 @@ module Source {
                 // holds every kind's span inside 0.0-1.0, and NEVER_LIT sits
                 // out at 2.0 deliberately. Both light nothing here, because the
                 // block ring never reads its span at all.
-                return EMPTY;
+                fillEmpty(out);
+                return;
             case SOURCE_INTENSITY_MINUTES:
-                return goal(WatchData.intensityMinutes(), awake);
+                fillGoal(WatchData.intensityMinutes(), awake, out);
+                return;
             case SOURCE_SECONDS:
                 // Awake only, and deliberately so. Always-on is asked for one
                 // frame a minute, so a per-second reading could only ever be
                 // stale there — and it is the mode the burn-in and luminance
                 // rules are written against, which is no place to add motion.
-                return awake ? level(ClockData.minuteSweep()) : EMPTY;
+                if (awake) {
+                    fillLevel(ClockData.minuteSweep(), out);
+                } else {
+                    fillEmpty(out);
+                }
+                return;
             default:
-                return EMPTY;
+                fillEmpty(out);
+                return;
+        }
+    }
+
+    function fillEmpty(out as Array<Float>) as Void {
+        out[0] = EMPTY[0];
+        out[1] = EMPTY[1];
+    }
+
+    function fillLevel(value as Float, out as Array<Float>) as Void {
+        out[0] = 0.0;
+        out[1] = value;
+    }
+
+    function fillGoal(value as Float, awake as Boolean,
+                      out as Array<Float>) as Void {
+        out[0] = 0.0;
+        if (!isOver(value, awake)) {
+            out[1] = value > 1.0 ? 1.0 : value;
+        } else {
+            out[1] = value >= 2.0 ? 1.0 : value - 1.0;
         }
     }
 

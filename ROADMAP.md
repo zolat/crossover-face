@@ -292,7 +292,9 @@ Two caveats, both real:
 
 # Previously: the frame budget (complete)
 
-**Current:** done — Phase 5 landed the lever Phase 4 picked.
+**Current:** superseded by Phase 7. Phase 6 made transitions instant on the
+physical watch, but its inferred two-buffer lifecycle produced flashlight
+animation ghosts and intermittent black frames.
 
 - [x] Phase 0 — baseline the frame cost on a fresh simulator
 - [x] Phase 1a — cost the skipped frame, which nothing measured before
@@ -304,6 +306,11 @@ Two caveats, both real:
       draw, so the next optimisation is chosen on numbers rather than on the
       claim in a comment
 - [x] Phase 5 — draw only the dots that changed, not the whole ring
+- [x] Phase 6 — make view and power-mode transition bursts draw once, then skip
+- [~] Phase 7 — rejected on the physical watch: an unchanged layer was not
+      recomposited during native transitions
+- [~] Phase 8 — explicitly present a cached complete bitmap on every callback;
+      simulator-complete, physical-watch verification pending
 
 Plans: `~/.claude/plans/can-you-review-for-stateless-puffin.md`,
 `~/.claude/plans/are-there-any-more-staged-piglet.md`
@@ -330,11 +337,12 @@ each worth under a millisecond; 1e in particular traded a semantic change — a 
 to 30s stale — for that, and is dropped rather than banked. 1a stays: it is the only figure
 that will notice if the preamble ever grows.
 
-1d landed in part, and had to. The two prints are preallocated and `FrameGate.copy()` keeps
+1d is now complete. The two prints are preallocated and `FrameGate.copy()` keeps
 values rather than the caller's array — not for the microsecond, but because the gate
 storing a reference to a buffer the view refills would compare an array with itself and
-freeze the face to one draw per cap. `spans`, `overs` and `markers` still allocate per
-frame; at ≤1ms that is not worth the churn of changing.
+freeze the face to one draw per cap. The spans, blocks, overflow flags, markers, drift,
+hand axes and renderer mark scratch are now caller-owned buffers too, so an ordinary
+update creates none of those short-lived arrays.
 
 **Phase 2b is not taken.** Splitting the dot loop on `turned` duplicates the loop body, and
 the loop now runs on one ring in five frames out of six rather than on four rings every
@@ -373,13 +381,17 @@ Two caveats, both real:
 
 ## Left on the table
 
-- **The repair cadence is the remaining lever.** `MAX_SKIPS = 5` means one frame in six is
-  a full clear and redraw, and in the seconds configuration that single frame is now most
-  of what the face costs. It is set where it is because it inherits the old cap's promise —
-  damage drawn over the face from outside is gone within a few seconds. Raising it trades
-  that promise for frame time and is a product decision, not a technical one.
+- ~~**The repair cadence is the remaining lever.**~~ Taken in Phase 6: `MAX_SKIPS = 30`.
+  A normal wrist raise now ends before its periodic repair, while power-mode changes force
+  one valid complete frame, onShow repairs both buffers after system overlays, and
+  low-power still paints one complete frame per actual minute.
 - **The hand-backing coverage bitset**, worth ~4ms of a full redraw but only with backing
   on, which this configuration does not use.
+- **Compiled weak-field background spike.** Distinct from Phase 4's runtime mirror: a
+  palette-indexed resource would avoid populating the buffer and could replace the weak
+  dots in a full frame with one blit, leaving the existing delta path for changed dots.
+  Defer until physical-watch testing says the one remaining complete transition frame is
+  itself visible; the simulator's ~20ms blit floor can otherwise make it a regression.
 - **On-watch verification of the partial redraw.** The simulator cannot answer whether the
   Dc handed to `onUpdate` holds what was last presented. `HOLD` and the two-slot mark erase
   are written to be correct either way, but only the watch can confirm it: `make install`,
@@ -725,3 +737,94 @@ Two caveats, both real:
   *worse* than delta redraw on a partial frame and better on a repair, so if it is ever
   taken it is for the repair frame, and it still costs the fill-edge quantisation Phase 4
   described.
+
+---
+
+# Phase 7: make the frame independent of transition surfaces (spike)
+
+**Current:** rejected on the physical Crossover.
+
+Phase 6 proved the performance diagnosis and falsified its framebuffer model. Skipping
+duplicate `onUpdate()` work made the widget list feel like a native Garmin face, but a
+flashlight animation could leave transient copies of itself and the face could flash
+black. More clears, a one-second `onHide()` debounce, and repainting an assumed pair of
+buffers moved those symptoms without eliminating them.
+
+The common cause is that the screen `Dc` is not application storage. Connect IQ may call
+`onUpdate()` repeatedly during transitions, but gives the face no identity or persistence
+contract for the surface behind any one call. Returning without drawing is cheap only if
+the old pixels are still there; the physical failures show that is not always true.
+
+The spike now keeps the complete face in one opaque 16-bit `WatchUi.Layer`. Garmin owns
+compositing that layer during normal updates and animations. `FrameGate` decides only
+whether the layer itself changed, and `MatrixRenderer` applies a change once to that one
+authoritative surface. As a result there is no `onHide()` suppression, debounce, periodic
+damage repair, held duplicate draw, alternate-buffer prime, second remembered span or
+second remembered mark.
+
+The state fingerprint is committed only after rendering succeeds. If a layer Dc is ever
+unavailable, the fallback deliberately draws a complete direct frame on every callback
+and never remembers those screen pixels; correctness degrades to the slower pre-layer
+behaviour rather than to a black or stale frame.
+
+## Evidence so far
+
+- strict Crossover build succeeds;
+- 127 Monkey C tests pass in the private simulator, including layer reuse, configuration
+  invalidation, display-off behaviour and uncommitted-plan recovery;
+- the live face loads in 4.5 seconds and renders correctly in a fresh private simulator;
+- simulator application heap is 64.8 KiB of 123.8 KiB with the layer active;
+- the 390 x 390 x 16-bit pixel store is about 304 KiB in Garmin's separate graphics pool,
+  not in the application heap.
+
+An older private simulator instance stopped accepting both this build and the known-good
+Phase 6 build after a test run. A fresh isolated instance accepted the layer build
+immediately, proving that timeout was harness state rather than a layer startup failure.
+
+## Physical gate
+
+Repeat wake, widget-list, flashlight, notification and settings transitions on the
+Crossover. The spike passes only if all three hold together: native-feeling transition
+latency remains, no flashlight positions survive, and no black frame appears. If native
+layer compositing itself causes unacceptable load, the fallback design is an explicit
+cached bitmap blitted on every callback; returning early against the screen `Dc` is no
+longer an acceptable option.
+
+It failed more strongly than Phase 6: the flashlight remained ghosted, and returning from
+the widget list left the widget animation on screen indefinitely instead of loading the
+face. The generic Layer contract is therefore not sufficient for a watch face beneath
+these Crossover system transitions. An unchanged layer is not reliably recomposited.
+
+---
+
+# Phase 8: explicitly present a cached complete frame (spike)
+
+**Current:** working cleanly in initial physical Crossover testing; Epix
+physical verification pending.
+
+The render target remains one authoritative 16-bit `BufferedBitmap`, but presentation is
+now explicit. A changed fingerprint updates that buffer once; every visible `onUpdate()`
+then calls `dc.drawBitmap(0, 0, frame)`, including unchanged transition callbacks. This is
+the only model consistent with both physical observations: rerunning the 1,112-dot loop
+for every callback causes navigation lag, while presenting nothing can expose a cleared
+or stale transition surface.
+
+The strong `BufferedBitmap` object and its Dc are retained for the app lifetime. Holding
+only the `BufferedBitmapReference` would allow Garmin's graphics pool to purge dynamic
+contents which it cannot reload from the executable. If allocation ever fails, the
+fallback performs a complete direct redraw on every callback and never commits those
+screen pixels as persistent state.
+
+Version `0.1.0` begins explicit sideload versioning. The settings menu shows the compiled
+version as its first row, so physical reports can identify the running PRG directly.
+
+## Evidence so far
+
+- strict builds succeed for Crossover and all four Epix 2 family targets;
+- 137 Monkey C tests pass on each of those five targets, including the requirement that
+  an unchanged callback skips buffer mutation but still increments presentation;
+- 45 Python tests and the simulator-lock suite pass;
+- live Crossover and Epix 2 simulator launches render correctly at their device-specific
+  resolutions and hand styles;
+- initial physical Crossover testing reports the transition fix working well;
+- Epix performance and transition correctness remain the final device gate.

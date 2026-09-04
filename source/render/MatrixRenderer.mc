@@ -54,12 +54,9 @@ import Toybox.Lang;
 //! the fill's leading edge shares a colour, instead of alternating every few
 //! dots as it did when the rings interleaved.
 //!
-//! The lattice is deliberately not cached to a BufferedBitmap, though **not
-//! for the memory reason this comment used to give**. A full-screen 390x390
-//! buffer allocates fine and costs the app heap 616 bytes, because the
-//! graphics pool is separate from it. What rules it out is frame cost:
-//! presenting such a buffer measured ~20ms against the 36ms of the whole
-//! one-ring redraw it would replace. See ROADMAP Phase 4.
+//! The lattice is cached in the view's buffered frame. This renderer mutates
+//! that one authoritative surface; the view then blits it whole onto every
+//! transient screen surface Garmin supplies.
 module MatrixRenderer {
 
     //! Which mark each ring currently has on screen, so a ring being
@@ -72,18 +69,6 @@ module MatrixRenderer {
     //! is being fully repainted anyway, so erase-then-draw is the same picture
     //! either way and needs no reasoning about which frame a move landed on.
     var drawnMark as Array<Number> = [] as Array<Number>;
-
-    //! The cell each ring marked *before* that, still owed an erase.
-    //!
-    //! One slot is not enough once a change is repeated into HOLD draws. Say
-    //! the mark moves P to Q. The first draw rubs out P and lands in one
-    //! buffer; the second draw is for the *other* buffer, and with only
-    //! drawnMark to go on it would rub out Q — leaving P's sixteen stray
-    //! pixels in that buffer with nothing but a nine-pixel cross over them.
-    //! So both cells are rubbed out on every repaint, which costs one extra
-    //! fillRectangle on a marked ring and needs no reasoning about which
-    //! buffer this draw is for.
-    var previousMark as Array<Number> = [] as Array<Number>;
 
     //! Which rings the last draw actually walked, and how many marks it rubbed
     //! out. Four writes and an integer per frame.
@@ -110,7 +95,7 @@ module MatrixRenderer {
     //! no others is otherwise unassertable.
     var struck as Number = 0;
 
-    //! **The span each ring was last drawn with, and the one before that.**
+    //! **The span each ring was last drawn with.**
     //!
     //! A dirty ring used to be repainted in full. Measured, the two drawLine
     //! calls per dot are ~55% of a drawn frame — and between one draw and the
@@ -118,17 +103,11 @@ module MatrixRenderer {
     //! *walked*, which is cheap, and only the dots whose lit-ness actually
     //! changed are drawn.
     //!
-    //! Two spans rather than one, for exactly the reason `previousMark` keeps
-    //! two cells. A partial draw is only correct in the buffer it lands in, and
-    //! on a double-buffered device that buffer was last written two draws ago —
-    //! which is why FrameGate repeats every change into `HOLD` draws. So a dot
-    //! is repainted when it differs from *either* remembered span: that set is
-    //! right for whichever of the two buffers this draw is for, and needs no
-    //! reasoning about which one that is.
+    //! One span is enough because every partial draw targets the same buffer.
+    //! A dot is repainted exactly when it differs from that authoritative
+    //! previous value.
     var lastFrom as Array<Float> = [] as Array<Float>;
     var lastTo as Array<Float> = [] as Array<Float>;
-    var priorFrom as Array<Float> = [] as Array<Float>;
-    var priorTo as Array<Float> = [] as Array<Float>;
 
     //! Everything about a ring that is *not* its span, folded into one key.
     //!
@@ -144,12 +123,9 @@ module MatrixRenderer {
     var lastOver as Array<Boolean> = [] as Array<Boolean>;
     var lastRamp as Array<Boolean> = [] as Array<Boolean>;
 
-    //! Consecutive draws this ring has been drawn with the key above unchanged.
-    //!
-    //! A delta needs **two**: both buffers must already hold this ring in these
-    //! colours, or the one this draw is not landing in keeps a tier that no
-    //! longer exists. Counting is what makes that checkable without storing a
-    //! second copy of every value.
+    //! Whether this ring has been drawn at least once with the key above.
+    //! A changed key forces one full ring; after that the buffer is authoritative
+    //! and span-only changes may use the delta path immediately.
     var stableFor as Array<Number> = [] as Array<Number>;
 
     //! Whether each ring drew blocks rather than a span last time.
@@ -181,12 +157,33 @@ module MatrixRenderer {
     var blockHi as Array<Float> = [] as Array<Float>;
     var blockUnlit as Array<Number> = [] as Array<Number>;
 
+    //! Per-frame mark scratch, retained with the renderer's other tables.
+    var markAt as Array<Number> = new [StatMap.RINGS] as Array<Number>;
+
+    //! Axes and turn positions ignored while hand backing is off. A constant
+    //! avoids allocating a six-float placeholder on every drawn frame.
+    const NO_AXES =
+        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0] as Array<Float>;
+
     function draw(dc as Dc, spans as Array<Array<Float> >,
                   markers as Array<Float>, overs as Array<Boolean>,
                   blocks as Array<Number>,
                   palette as Array<Number>, ramp as Array<Number>,
                   backing as Number?,
                   dirty as Array<Boolean>, clears as Boolean) as Void {
+        drawAt(dc, spans, markers, overs, blocks, palette, ramp, backing,
+               dirty, clears, Drift.current());
+    }
+
+    //! Draw with the drift snapshot already used by the frame fingerprint.
+    //! The live view calls this path so it reads the clock once and cannot
+    //! allocate or cross a drift boundary between planning and rendering.
+    function drawAt(dc as Dc, spans as Array<Array<Float> >,
+                    markers as Array<Float>, overs as Array<Boolean>,
+                    blocks as Array<Number>,
+                    palette as Array<Number>, ramp as Array<Number>,
+                    backing as Number?, dirty as Array<Boolean>,
+                    clears as Boolean, drift as Array<Number>) as Void {
         // Normally a no-op: onLayout has already built the cache. This is the
         // safety net for a settings change, which comes back through onShow.
         DotGrid.ensureBuilt();
@@ -208,11 +205,8 @@ module MatrixRenderer {
         }
         if (drawnMark.size() != StatMap.RINGS) {
             drawnMark = new [StatMap.RINGS] as Array<Number>;
-            previousMark = new [StatMap.RINGS] as Array<Number>;
             lastFrom = new [StatMap.RINGS] as Array<Float>;
             lastTo = new [StatMap.RINGS] as Array<Float>;
-            priorFrom = new [StatMap.RINGS] as Array<Float>;
-            priorTo = new [StatMap.RINGS] as Array<Float>;
             lastWeak = new [StatMap.RINGS] as Array<Number>;
             lastStrong = new [StatMap.RINGS] as Array<Number>;
             lastBacking = new [StatMap.RINGS] as Array<Number>;
@@ -222,11 +216,8 @@ module MatrixRenderer {
             stableFor = new [StatMap.RINGS] as Array<Number>;
             for (var ring = 0; ring < StatMap.RINGS; ring++) {
                 drawnMark[ring] = -1;
-                previousMark[ring] = -1;
                 lastFrom[ring] = 0.0;
                 lastTo[ring] = 0.0;
-                priorFrom[ring] = 0.0;
-                priorTo[ring] = 0.0;
                 lastWeak[ring] = -1;
                 lastStrong[ring] = -1;
                 lastBacking[ring] = -1;
@@ -247,14 +238,12 @@ module MatrixRenderer {
             // The screen is black; nothing is on it to rub out.
             for (var ring = 0; ring < StatMap.RINGS; ring++) {
                 drawnMark[ring] = -1;
-                previousMark[ring] = -1;
             }
         }
 
 
         // Drift shifts where dots are drawn, never which dots exist, so the
         // field translates rigidly instead of popping dots in and out.
-        var drift = Drift.current();
         var centreX = (dc.getWidth() / 2) + drift[0];
         var centreY = (dc.getHeight() / 2) + drift[1];
 
@@ -275,9 +264,7 @@ module MatrixRenderer {
         // call left in the dot loop; reading its four floats out of an array
         // per dot as well would put most of that cost straight back.
         var hasBacking = (backing != null);
-        var axes = hasBacking ? HandBacking.axes()
-                              : ([0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-                                 as Array<Float>);
+        var axes = hasBacking ? HandBacking.axes() : NO_AXES;
         var hourX = axes[0];
         var hourY = axes[1];
         var minuteX = axes[2];
@@ -338,8 +325,6 @@ module MatrixRenderer {
         var gx = arms[DateGlyph.ARM];
         var gy = arms[DateGlyph.ARM + 1];
 
-        var markAt = new [StatMap.RINGS] as Array<Number>;
-
         var half = DotGrid.DOT / 2;
         var lastColour = -1;
         erased = 0;
@@ -354,14 +339,10 @@ module MatrixRenderer {
                 markAt[ring] = -1;
                 continue;
             }
-            // Rub out every cell this ring may still have a mark in, before
-            // its dots go back down over them. Both slots, every time — see
-            // previousMark for why one is not enough.
-            for (var slot = 0; slot < 2; slot++) {
-                var stale = (slot == 0) ? drawnMark[ring] : previousMark[ring];
-                if (stale < 0) {
-                    continue;
-                }
+            // Rub out the cell this ring may still have a mark in, before its
+            // dot goes back down over it on the same authoritative buffer.
+            var stale = drawnMark[ring];
+            if (stale >= 0) {
                 dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_TRANSPARENT);
                 dc.fillRectangle(centreX + xs[stale] - half,
                                  centreY + ys[stale] - half,
@@ -476,11 +457,9 @@ module MatrixRenderer {
             }
 
             // Is this ring's span the only thing that moved since it was last
-            // drawn, and has it been so for both of the draws sitting in the
-            // two buffers? Then the dots that agree with both remembered spans
-            // are already on screen, in the right colour, in whichever buffer
-            // this draw is for — and drawing them again is the cost this whole
-            // change exists to remove.
+            // drawn? Then the dots that agree with the remembered span are
+            // already correct in the buffer, and drawing them again is the cost
+            // this whole change exists to remove.
             //
             // `clears` rules a delta out on its own: the screen has just been
             // blacked, so nothing is on it to keep.
@@ -496,7 +475,7 @@ module MatrixRenderer {
             // Because it never deltas, its packed words need not join the key
             // below: being in the frame print is what makes the ring dirty, and
             // a dirty block ring is always repainted in full.
-            var delta = !clears && !isBlocks && stableFor[ring] >= 2 &&
+            var delta = !clears && !isBlocks && stableFor[ring] >= 1 &&
                         lastWeak[ring] == weak && lastStrong[ring] == strong &&
                         lastOver[ring] == overs[ring] &&
                         lastRamp[ring] == isRamp &&
@@ -505,20 +484,15 @@ module MatrixRenderer {
             var fromA = lastFrom[ring];
             var toA = lastTo[ring];
             var wrapsA = (fromA > toA);
-            var fromB = priorFrom[ring];
-            var toB = priorTo[ring];
-            var wrapsB = (fromB > toB);
             // The cells the mark erase just blacked. Their dots are owed a
             // cross whatever the span did, or a delta leaves a hole where the
             // mark was.
             var forceA = delta ? drawnMark[ring] : -1;
-            var forceB = delta ? previousMark[ring] : -1;
 
             // Remember what this draw is about to put down, before the loop
             // consumes the locals. A ring drawn with the same key as last time
-            // is one draw closer to being delta-eligible; anything else starts
-            // the count again, which is what costs a changed ring its two full
-            // repaints and gives HOLD something to be right about.
+            // stays delta-eligible; anything else starts the count again and
+            // costs one full repaint before a later span-only change may delta.
             stableFor[ring] = (lastWeak[ring] == weak &&
                                lastStrong[ring] == strong &&
                                lastOver[ring] == overs[ring] &&
@@ -532,8 +506,6 @@ module MatrixRenderer {
             lastRamp[ring] = isRamp;
             lastBlocks[ring] = isBlocks;
             lastBacking[ring] = backingKey;
-            priorFrom[ring] = fromA;
-            priorTo[ring] = toA;
             lastFrom[ring] = from;
             lastTo[ring] = to;
 
@@ -676,16 +648,13 @@ module MatrixRenderer {
                     : ((position >= from) && (position <= to));
 
                 // The delta. A dot that reads the same against both remembered
-                // spans is already correct in both buffers, so it is not drawn.
-                // Two comparisons and a branch replace two native drawLine
+                // span is already correct in the buffer, so it is not drawn.
+                // One comparison and a branch replace two native drawLine
                 // calls, on all but the handful of dots the fill edge crossed.
                 if (delta) {
                     var litA = wrapsA
                         ? ((position >= fromA) || (position <= toA))
                         : ((position >= fromA) && (position <= toA));
-                    var litB = wrapsB
-                        ? ((position >= fromB) || (position <= toB))
-                        : ((position >= fromB) && (position <= toB));
                     // `i != glyphNext` is not about correctness of colour —
                     // a struck dot's lit-ness reads the same as any other's.
                     // It keeps the cursor in step: the advance lives in the
@@ -694,8 +663,7 @@ module MatrixRenderer {
                     // reach it. So a struck dot is never skipped. There are a
                     // couple of dozen of them in a ring, against the twenty or
                     // so a moved span repaints anyway.
-                    if (lit == litA && lit == litB && i != forceA &&
-                            i != forceB && i != glyphNext) {
+                    if (lit == litA && i != forceA && i != glyphNext) {
                         continue;
                     }
                 }
@@ -824,11 +792,6 @@ module MatrixRenderer {
                 continue;
             }
             var at = markAt[ring];
-            if (at != drawnMark[ring]) {
-                // The mark moved. The cell it left is owed an erase in the
-                // other buffer too, which the next held draw will do.
-                previousMark[ring] = drawnMark[ring];
-            }
             drawnMark[ring] = at;
             if (at < 0) {
                 continue;

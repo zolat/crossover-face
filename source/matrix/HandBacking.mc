@@ -39,6 +39,9 @@ module HandBacking {
     const HOUR_REACH as Number = Lattice.HOUR_REACH;
     const MINUTE_REACH as Number = Lattice.MINUTE_REACH;
 
+    var _axes as Array<Float> =
+        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0] as Array<Float>;
+
     //! Unit vectors and turn positions for both hands:
     //! [hourX, hourY, minuteX, minuteY, hourTurn, minuteTurn].
     //!
@@ -53,12 +56,13 @@ module HandBacking {
         var hour = Math.toRadians(hourDegrees);
         var minute = Math.toRadians(minuteDegrees);
         // Screen y grows downward and 0 degrees points at twelve o'clock.
-        return [
-            Math.sin(hour).toFloat(), -Math.cos(hour).toFloat(),
-            Math.sin(minute).toFloat(), -Math.cos(minute).toFloat(),
-            (hourDegrees / 360.0).toFloat(),
-            (minuteDegrees / 360.0).toFloat()
-        ] as Array<Float>;
+        _axes[0] = Math.sin(hour).toFloat();
+        _axes[1] = -Math.cos(hour).toFloat();
+        _axes[2] = Math.sin(minute).toFloat();
+        _axes[3] = -Math.cos(minute).toFloat();
+        _axes[4] = (hourDegrees / 360.0).toFloat();
+        _axes[5] = (minuteDegrees / 360.0).toFloat();
+        return _axes;
     }
 
     //! Which hand covers this dot: NONE, HOUR or MINUTE.
