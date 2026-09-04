@@ -51,6 +51,10 @@ class CrossoverView extends WatchUi.WatchFace {
         // there, so a per-second reading could only be stale.
         var hideFills = lowPower &&
                         StatMap.alwaysOnFill == StatMap.ALWAYS_ON_FILL_HIDDEN;
+        // Read blocks first. A Body Battery history refresh seeds the current
+        // value too, so a face showing both forms makes one sensor-history call
+        // on its hourly rebuild rather than asking for current and then history.
+        var blocks = hideFills ? StatMap.noBlocks() : StatMap.blocks();
         var spans = hideFills ? StatMap.noSpans() : StatMap.spans(!lowPower);
         // Which rings are past a goal they can beat, read from the same power
         // mode the spans were: a lap span without its flag would read as a
@@ -63,7 +67,7 @@ class CrossoverView extends WatchUi.WatchFace {
         // the mode nobody is reading closely. It comes back on a wrist raise.
         var markers = lowPower ? StatMap.noMarkers()
                                : StatMap.markers(spans, overs);
-        // The block channel, read once and handed to both the print and the
+        // The block channel is handed to both the print and the
         // renderer. The renderer must never read the clock for itself: an hour
         // rolling over between the two would leave the gate certain a ring had
         // not moved while the renderer drew a different picture, and the ring
@@ -71,7 +75,6 @@ class CrossoverView extends WatchUi.WatchFace {
         //
         // Held back like the spans rather than like the marks, because it is
         // the ring's data rather than an annotation on it.
-        var blocks = hideFills ? StatMap.noBlocks() : StatMap.blocks();
         // Backing is awake-only: in always-on it would cost luminance for a
         // detail nobody is looking at.
         var backing = lowPower ? null : backingColour();

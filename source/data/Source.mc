@@ -49,10 +49,15 @@ module Source {
         //! already carrying a setting. Going after it is what keeps every
         //! existing index meaning what it has always meant. Source.OFFERED
         //! decides picker *order*, and there this sits next to the other rain.
-        SOURCE_RAIN_HOURS = 9
+        SOURCE_RAIN_HOURS = 9,
+        //! The next twelve hours of UV, on Garmin's bounded 0–10 scale.
+        SOURCE_UV_HOURS = 10,
+        //! Current Body Battery and the preceding eleven hours, read backwards
+        //! from the hour hand. Completed hours are averages; current is live.
+        SOURCE_BODY_BATTERY_HOURS = 11
     }
 
-    const COUNT = 10;
+    const COUNT = 12;
 
     //! The sources a ring may actually be assigned to, in picker order.
     //!
@@ -64,9 +69,11 @@ module Source {
         SOURCE_STEPS,
         SOURCE_BATTERY,
         SOURCE_BODY_BATTERY,
+        SOURCE_BODY_BATTERY_HOURS,
         SOURCE_TEMPERATURE,
         SOURCE_RAIN,
         SOURCE_RAIN_HOURS,
+        SOURCE_UV_HOURS,
         SOURCE_INTENSITY_MINUTES,
         SOURCE_SECONDS,
         SOURCE_OFF
@@ -86,7 +93,9 @@ module Source {
         0xCC44FF,   // intensity minutes
         0xCCCCCC,   // seconds
         0x444444,   // off
-        0x0088CC    // rain, next 12h
+        0x0088CC,   // rain, next 12h
+        0xFFCC00,   // UV, next 12h
+        0x3388FF    // Body Battery, last 12h
     ] as Array<Number>;
 
     function hue(source as Number) as Number {
@@ -110,7 +119,7 @@ module Source {
             case SOURCE_BATTERY:
                 return level(WatchData.battery());
             case SOURCE_BODY_BATTERY:
-                return level(WatchData.bodyBattery());
+                return level(BodyBatteryData.current());
             case SOURCE_TEMPERATURE:
                 var range = WeatherData.dayRange();
                 return (range != null) ? range : EMPTY;
@@ -118,6 +127,8 @@ module Source {
                 var rain = WeatherData.rainChance();
                 return (rain != null) ? level(rain) : EMPTY;
             case SOURCE_RAIN_HOURS:
+            case SOURCE_UV_HOURS:
+            case SOURCE_BODY_BATTERY_HOURS:
                 // Twelve disjoint blocks with a radial axis is not something
                 // two floats can say, and widening the span so it could would
                 // make every consumer of one branch on shape. So this source
@@ -248,11 +259,13 @@ module Source {
     //!
     //! **The predicate, not the enum value.** A block source is a shape, and
     //! the renderer, the loader, the picker and the gate all have to ask which
-    //! shape a ring is drawing. Asking `== SOURCE_RAIN_HOURS` in four places is
-    //! how the second block source ends up drawn as an empty span in three of
-    //! them, so nothing outside this function names the kind.
+    //! shape a ring is drawing. Nothing outside this function names individual
+    //! block kinds, so adding one cannot leave it drawn as an empty span in a
+    //! forgotten consumer.
     function usesBlocks(source as Number) as Boolean {
-        return source == SOURCE_RAIN_HOURS;
+        return source == SOURCE_RAIN_HOURS ||
+               source == SOURCE_UV_HOURS ||
+               source == SOURCE_BODY_BATTERY_HOURS;
     }
 
     //! May this source be assigned to this ring? Index 0 is the outermost.
@@ -286,17 +299,19 @@ module Source {
     //! preamble that runs before the gate decides, and a face without one never
     //! reads a clock for it.
     //!
-    //! A second block source is a second case here and nothing else. The
-    //! channel, the packing and the drawing are already shape-shaped rather
-    //! than rain-shaped.
+    //! A new block source is one more case here and nothing else. The channel,
+    //! packing and drawing are shape-shaped rather than source-shaped.
     function fillBlocks(source as Number, out as Array<Number>,
                         at as Number) as Void {
         switch (source) {
             case SOURCE_RAIN_HOURS:
-                RainForecast.refresh();
-                out[at] = RainForecast.levels[0];
-                out[at + 1] = RainForecast.levels[1];
-                out[at + 2] = RainForecast.known;
+                HourlyWeatherData.fillRain(out, at);
+                return;
+            case SOURCE_UV_HOURS:
+                HourlyWeatherData.fillUv(out, at);
+                return;
+            case SOURCE_BODY_BATTERY_HOURS:
+                BodyBatteryData.fillHistory(out, at);
                 return;
             default:
                 out[at] = 0;

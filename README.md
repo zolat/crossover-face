@@ -404,16 +404,27 @@ The face has four rings, and **each one is independently assigned to a source**:
 | Heart rate | level | `Activity.currentHeartRate`, resting → 180bpm |
 | Battery | level | `System.getSystemStats()` |
 | Body Battery | level | `SensorHistory` |
+| Body Battery, last 12h | **blocks**, current + 11 counter-clockwise | `SensorHistory` current value + completed-hour averages |
 | Temperature range | **range** + mark | `Weather` today's low → high, on a 0–60°C scale, with now marked |
 | Chance of rain | level | `Weather.precipitationChance` |
+| Rain, next 12h | **blocks**, clockwise | hourly `Weather.precipitationChance` |
+| UV, next 12h | **blocks**, clockwise | hourly `Weather.uvIndex`, 0–10 |
 | Intensity minutes | **goal** — level, then a second lap | `ActivityMonitor` weekly active minutes ÷ your weekly goal |
 | Seconds | level, **awake only** | `System.getClockTime()`, filling through each minute |
 | Off | — | nothing |
 
-Every source reports a **span** — a start and an end, both 0.0–1.0 — rather than a single
-level. Levels are just spans that start at zero. That one shape is why temperature, which
-is a genuine range, needs no special case anywhere: a level fills from the origin, a range
-floats between its ends and reads as an arc.
+The three twelve-hour sources report **blocks**: twelve separated clock-hour slots whose
+fill grows from the ring's inner edge outward. Rain and UV run clockwise into the future.
+Body Battery puts its newest value in the current hour and completed-hour averages in the
+eleven positions behind it, so reading backwards from the hand runs counter-clockwise. A
+known zero uses the ordinary unfilled tier; an hour with no sample is dimmer and cannot be
+mistaken for an actual zero. Block sources are available on the outer two rings only, where
+the lattice has enough dots to resolve them.
+
+Every other source reports a **span** — a start and an end, both 0.0–1.0 — rather than a
+single level. Levels are just spans that start at zero. That one shape is why temperature,
+which is a genuine range, needs no special case anywhere: a level fills from the origin, a
+range floats between its ends and reads as an arc.
 
 Temperature is the one source drawn on a ramp rather than a flat hue — cold through a middle
 to hot, in the theme's own colours — so the ring reads as a temperature rather than just a
@@ -833,6 +844,8 @@ source/
   CrossoverApp.mc     app lifecycle
   CrossoverView.mc    picks a renderer based on power mode — no drawing
   data/WatchData.mc   device state, formatted. Pure queries, no drawing
+  data/BodyBatteryData.mc  current value and counter-clockwise 12h history
+  data/HourlyWeatherData.mc  one hourly forecast sample for rain and UV
   matrix/DotGrid.mc   lattice geometry: pitch, circle clip, hub
   matrix/StatMap.mc   dot -> ring mapping and span test; the settings
   matrix/Drift.mc     burn-in mitigation cycle

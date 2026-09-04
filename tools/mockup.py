@@ -53,9 +53,15 @@ SOURCES = [
     ("Seconds", (0xCC, 0xCC, 0xCC)),
     ("Off", (0x44, 0x44, 0x44)),
     ("Rain, next 12h", (0x00, 0x88, 0xCC)),
+    ("UV, next 12h", (0xFF, 0xCC, 0x00)),
+    ("Body Battery, last 12h", (0x33, 0x88, 0xFF)),
 ]
 SOURCE_TEMPERATURE = 4
 SOURCE_RAIN_HOURS = 9
+SOURCE_UV_HOURS = 10
+SOURCE_BODY_BATTERY_HOURS = 11
+BLOCK_SOURCES = (SOURCE_RAIN_HOURS, SOURCE_UV_HOURS,
+                 SOURCE_BODY_BATTERY_HOURS)
 
 # Ring colours per theme, outermost first, and which three of each theme's four
 # the temperature ramp runs through as cold, mid and hot. Mirrors Palette.THEMES
@@ -302,7 +308,8 @@ def band_edge(ring: int, tier: int) -> float:
 
 
 def level_for(percent):
-    """A percentage as a block level. Mirrors RainForecast.levelFor: truncating,
+    """A percentage as a block level. Mirrors HourlyWeatherData.rainLevelFor:
+    truncating,
     so a reading has to reach a full rung before it lights anything."""
     if percent is None:
         return None
@@ -530,7 +537,7 @@ def render(spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
                     marked_here = True
                 else:
                     source = assign[ring]
-                    if source == SOURCE_RAIN_HOURS:
+                    if source in BLOCK_SOURCES:
                         # Its own path, mirroring the renderer's own loop: the
                         # forecast reads a radius as well as an angle, so it
                         # cannot be said with a span.
@@ -834,6 +841,44 @@ def main(outdir: str = "build/mockups") -> int:
     path = os.path.join(outdir, "07c-block-levels.png")
     sheet(panels, "Every rung of the 16-step block scale: whole sub-bands "
                   "outward, then width across the block").save(path)
+    written.append(path)
+
+    # 7d. Forward and reverse time share the same block geometry. At 09:30 the
+    #     UV forecast runs clockwise from the hour hand; Body Battery starts at
+    #     its live value and walks backwards through completed-hour averages.
+    def relative_blocks(anchor, readings, direction):
+        blocks = [None] * HOURS
+        for offset, reading in enumerate(readings):
+            blocks[(anchor + direction * offset) % HOURS] = level_for(reading)
+        return blocks
+
+    anchor = 9
+    when = (anchor, 30)
+    # level_for takes percentages. UV's 0-10 index is ten percentage points per
+    # unit on the same 0-1 block scale.
+    uv = relative_blocks(anchor,
+                         [v * 10 for v in (2, 4, 6, 8, 10, 9,
+                                           7, 4, 2, 1, 0, 0)], 1)
+    body = relative_blocks(anchor,
+                           (80, 75, 68, 60, 52, 45,
+                            38, 32, 28, 24, 22, 20), -1)
+    panels = []
+    cases = [
+        ("UV AHEAD", (SOURCE_UV_HOURS, 6, 2, 3), {0: uv}),
+        ("BODY BATTERY HISTORY",
+         (SOURCE_BODY_BATTERY_HOURS, 6, 2, 3), {0: body}),
+        ("BOTH DIRECTIONS",
+         (SOURCE_UV_HOURS, SOURCE_BODY_BATTERY_HOURS, 2, 3),
+         {0: uv, 1: body}),
+    ]
+    for label, assign, block_values in cases:
+        face = render(values, assign=assign, hourly=block_values, at_time=when)
+        panels.append((f"{label}   lum {measure(face) * 100:.2f}%",
+                       composite(face, at_time=when)))
+    path = os.path.join(outdir, "07d-uv-body-history.png")
+    sheet(panels, "At 09:30: UV runs clockwise into the next 12h; "
+                  "Body Battery runs counter-clockwise through the last 12h"
+          ).save(path)
     written.append(path)
 
     # 8. Past the goal — steps on ring 1, read as a second lap. Mirrors

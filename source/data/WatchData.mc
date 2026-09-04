@@ -1,6 +1,5 @@
 import Toybox.ActivityMonitor;
 import Toybox.Lang;
-import Toybox.SensorHistory;
 import Toybox.System;
 
 //! Reads device state and normalises it for drawing, which is all the face
@@ -17,8 +16,9 @@ import Toybox.System;
 //! **One sample a minute, all of it from one pass.** None of these move faster
 //! than that in a way the face can show: a step ring resolves about 36 steps to
 //! a dot, intensity minutes are counted by the minute, battery moves over
-//! hours, and body battery updates every few minutes at best. See Sample for
-//! why a minute and why it is timed the way it is.
+//! hours. Body Battery has its own owner now because its current value and its
+//! hourly history must come from the same sensor sample; see BodyBatteryData.
+//! See Sample for why a minute and why it is timed the way it is.
 //!
 //! It also removes a duplicate read that was there from the start. Source asks
 //! for steps twice a frame — once for the span, once to decide whether the goal
@@ -34,7 +34,6 @@ module WatchData {
     var stepRatio as Float = 0.0;
     var intensityRatio as Float = 0.0;
     var batteryLevel as Float = 0.0;
-    var bodyBatteryLevel as Float = 0.0;
 
     //! Take a fresh sample if the last one has expired.
     function refresh() as Void {
@@ -48,7 +47,6 @@ module WatchData {
         stepRatio = readSteps(info);
         intensityRatio = readIntensity(info);
         batteryLevel = clamp(System.getSystemStats().battery / 100.0);
-        bodyBatteryLevel = readBodyBattery();
     }
 
     //! Drop the sample, so the next read goes to the watch. For the tests, and
@@ -75,11 +73,6 @@ module WatchData {
         return batteryLevel;
     }
 
-    function bodyBattery() as Float {
-        refresh();
-        return bodyBatteryLevel;
-    }
-
     // -- the readings themselves --------------------------------------------
 
     function readSteps(info as ActivityMonitor.Info) as Float {
@@ -98,24 +91,6 @@ module WatchData {
             return 0.0;
         }
         return ratio(minutes.total.toFloat() / goal);
-    }
-
-    function readBodyBattery() as Float {
-        if (!(Toybox has :SensorHistory) ||
-            !(SensorHistory has :getBodyBatteryHistory)) {
-            return 0.0;
-        }
-        var history = SensorHistory.getBodyBatteryHistory(
-            {:period => 1, :order => SensorHistory.ORDER_NEWEST_FIRST});
-        var entry = history.next();
-        if (entry == null) {
-            return 0.0;
-        }
-        var level = entry.data;
-        if (level == null) {
-            return 0.0;
-        }
-        return clamp(level / 100.0);
     }
 
     //! A goal ratio. Floored at zero, and deliberately *not* capped at one:

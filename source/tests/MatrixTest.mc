@@ -450,7 +450,11 @@ module MatrixTest {
         // setting, with nothing to report that it had happened.
         Test.assertEqualMessage(Source.SOURCE_RAIN_HOURS, 9,
             "rain next 12h must stay 9");
-        Test.assertEqualMessage(Source.COUNT, 10,
+        Test.assertEqualMessage(Source.SOURCE_UV_HOURS, 10,
+            "UV next 12h must stay 10");
+        Test.assertEqualMessage(Source.SOURCE_BODY_BATTERY_HOURS, 11,
+            "Body Battery last 12h must stay 11");
+        Test.assertEqualMessage(Source.COUNT, 12,
             "COUNT counts slots, not offers — the tables are indexed by it");
 
         // The retired slot is never offered.
@@ -508,9 +512,8 @@ module MatrixTest {
         WatchData.steps();
         WatchData.intensityMinutes();
         WatchData.battery();
-        WatchData.bodyBattery();
         Test.assertEqualMessage(WatchData.takenAt, taken,
-            "four reads inside the minute must share one sample");
+            "three reads inside the minute must share one sample");
 
         // The span and the over flag must be the same reading, always.
         var steps = WatchData.steps();
@@ -535,6 +538,30 @@ module MatrixTest {
         logger.debug("sample interval " + Sample.INTERVAL_MS + "ms, seconds live");
 
         WatchData.forget();
+        return true;
+    }
+
+    //! Body Battery owns a separate cache because current and history share an
+    //! iterator, but it keeps the same once-a-minute contract as the other data.
+    (:test)
+    function bodyBatteryCurrentIsSampledOnceAMinute(logger as Logger)
+            as Boolean {
+        BodyBatteryData.forget();
+        BodyBatteryData.current();
+        Test.assertMessage(BodyBatteryData.currentSampled,
+            "the first current Body Battery read must take a sample");
+        var taken = BodyBatteryData.currentTakenAt;
+        BodyBatteryData.current();
+        Test.assertEqualMessage(BodyBatteryData.currentTakenAt, taken,
+            "a current Body Battery sample must be reused within its minute");
+
+        var stale = System.getTimer() - Sample.INTERVAL_MS - 1;
+        BodyBatteryData.currentTakenAt = stale;
+        BodyBatteryData.current();
+        Test.assertMessage(BodyBatteryData.currentTakenAt != stale,
+            "an expired current Body Battery sample must be replaced");
+        BodyBatteryData.forget();
+        logger.debug("Body Battery current sample cached for one minute");
         return true;
     }
 
@@ -3625,7 +3652,7 @@ module MatrixTest {
     }
 
     // ------------------------------------------------------------------
-    // Rain, next 12h
+    // Twelve-hour block sources
     // ------------------------------------------------------------------
 
     //! The worst (block, sub-band) a ring may hold and still be offered a
@@ -3776,8 +3803,8 @@ module MatrixTest {
         for (var a = 0; a < anchors.size(); a++) {
             var anchor = anchors[a];
             for (var ahead = 0; ahead < HourBands.HOURS; ahead++) {
-                var block = RainForecast.blockFor(anchor, epoch,
-                                                  epoch + ahead * 3600);
+                var block = HourlyWeatherData.blockFor(
+                    anchor, epoch, epoch + ahead * 3600);
                 Test.assertEqualMessage(block,
                     (anchor + ahead) % HourBands.HOURS,
                     "at hour " + anchor + ", " + ahead + " hours ahead must " +
@@ -3787,7 +3814,7 @@ module MatrixTest {
         // Half past the hour still belongs to that hour's block: the bucket is
         // an hour wide, not a boundary.
         Test.assertEqualMessage(
-            RainForecast.blockFor(9, epoch, epoch + 3600 + 1799), 10,
+            HourlyWeatherData.blockFor(9, epoch, epoch + 3600 + 1799), 10,
             "a reading part-way through an hour belongs to that hour");
         logger.debug("anchoring holds for every hour of the day");
         return true;
@@ -3803,17 +3830,18 @@ module MatrixTest {
             as Boolean {
         var epoch = 1700000000;
         Test.assertEqualMessage(
-            RainForecast.blockFor(6, epoch, epoch - 1), -1,
+            HourlyWeatherData.blockFor(6, epoch, epoch - 1), -1,
             "a reading before this hour must not fold onto it");
         Test.assertEqualMessage(
-            RainForecast.blockFor(6, epoch, epoch - 3600), -1,
+            HourlyWeatherData.blockFor(6, epoch, epoch - 3600), -1,
             "an hour in the past must be dropped, not truncated to now");
         Test.assertEqualMessage(
-            RainForecast.blockFor(6, epoch, epoch + RainForecast.WINDOW_S), -1,
+            HourlyWeatherData.blockFor(
+                6, epoch, epoch + HourlyWeatherData.WINDOW_S), -1,
             "twelve hours out has wrapped onto now and must be dropped");
         Test.assertEqualMessage(
-            RainForecast.blockFor(6, epoch,
-                                  epoch + RainForecast.WINDOW_S - 1),
+            HourlyWeatherData.blockFor(
+                6, epoch, epoch + HourlyWeatherData.WINDOW_S - 1),
             5, "the last second inside the window is still the last block");
         return true;
     }
@@ -3828,17 +3856,19 @@ module MatrixTest {
     (:test)
     function aPercentageChanceLandsOnTheRightLevel(logger as Logger)
             as Boolean {
-        Test.assertEqualMessage(RainForecast.levelFor(0), 0, "0% is dry");
-        Test.assertEqualMessage(RainForecast.levelFor(6), 0,
+        Test.assertEqualMessage(HourlyWeatherData.rainLevelFor(0), 0,
+            "0% is dry");
+        Test.assertEqualMessage(HourlyWeatherData.rainLevelFor(6), 0,
             "below one step of the scale still reads dry, or a day of " +
             "two-percent hours draws a ring of pips");
-        Test.assertEqualMessage(RainForecast.levelFor(10), 1,
+        Test.assertEqualMessage(HourlyWeatherData.rainLevelFor(10), 1,
             "10% is the reading this scale exists for: a level, not nothing");
-        Test.assertEqualMessage(RainForecast.levelFor(50),
+        Test.assertEqualMessage(HourlyWeatherData.rainLevelFor(50),
             HourBands.LEVELS / 2, "half a chance is half the scale");
-        Test.assertEqualMessage(RainForecast.levelFor(100), HourBands.LEVELS,
+        Test.assertEqualMessage(HourlyWeatherData.rainLevelFor(100),
+            HourBands.LEVELS,
             "a certainty must reach the top of the scale, not overflow it");
-        Test.assertEqualMessage(RainForecast.levelFor(-5), 0,
+        Test.assertEqualMessage(HourlyWeatherData.rainLevelFor(-5), 0,
             "a nonsense reading must not index below the scale");
 
         // Monotonic the whole way up, and every level reachable — a scale with
@@ -3849,7 +3879,7 @@ module MatrixTest {
         }
         var previous = 0;
         for (var percent = 0; percent <= 100; percent++) {
-            var level = RainForecast.levelFor(percent);
+            var level = HourlyWeatherData.rainLevelFor(percent);
             Test.assertMessage(level >= previous,
                 percent + "% read lower than " + (percent - 1) + "%");
             Test.assertMessage(level >= 0 && level <= HourBands.LEVELS,
@@ -3876,6 +3906,63 @@ module MatrixTest {
                 "level " + level + " lands on a band edge, so it must have " +
                 "no partial band at all");
         }
+        return true;
+    }
+
+    //! UV uses Garmin's bounded 0–10 index, and missing UV must not borrow
+    //! rain's known bit merely because both fields came from one forecast row.
+    (:test)
+    function uvUsesItsWholeScaleAndItsOwnKnownBits(logger as Logger)
+            as Boolean {
+        Test.assertEqualMessage(HourlyWeatherData.uvLevelFor(0.0), 0,
+            "zero UV must be empty");
+        Test.assertEqualMessage(HourlyWeatherData.uvLevelFor(5.0),
+            HourBands.LEVELS / 2, "UV 5 must sit halfway up the scale");
+        Test.assertEqualMessage(HourlyWeatherData.uvLevelFor(10.0),
+            HourBands.LEVELS, "UV 10 must fill the block");
+        Test.assertEqualMessage(HourlyWeatherData.uvLevelFor(12.0),
+            HourBands.LEVELS, "UV above the documented range must clamp");
+        Test.assertEqualMessage(HourlyWeatherData.uvLevelFor(-1.0), 0,
+            "negative UV must not index below the scale");
+
+        HourlyWeatherData.clear();
+        HourBands.raise(HourlyWeatherData.rainLevels, 4, 9);
+        HourlyWeatherData.rainKnown = 1 << 4;
+        HourBands.raise(HourlyWeatherData.uvLevels, 5, 8);
+        HourlyWeatherData.uvKnown = 1 << 5;
+        Test.assertEqualMessage(
+            HourBands.levelAt(HourlyWeatherData.uvLevels[0],
+                              HourlyWeatherData.uvLevels[1],
+                              HourlyWeatherData.uvKnown, 4),
+            HourBands.UNKNOWN,
+            "known rain must not turn missing UV into zero UV");
+        Test.assertEqualMessage(
+            HourBands.levelAt(HourlyWeatherData.rainLevels[0],
+                              HourlyWeatherData.rainLevels[1],
+                              HourlyWeatherData.rainKnown, 5),
+            HourBands.UNKNOWN,
+            "known UV must not turn missing rain into dry weather");
+        HourlyWeatherData.forget();
+        HourlyWeatherData.clear();
+        logger.debug("UV 0–10 reaches the whole block scale");
+        return true;
+    }
+
+    //! Rain and UV are two views of one cached Weather.getHourlyForecast().
+    (:test)
+    function hourlyWeatherSourcesShareOneMinuteSample(logger as Logger)
+            as Boolean {
+        HourlyWeatherData.forget();
+        var rain = [0, 0, 0] as Array<Number>;
+        var uv = [0, 0, 0] as Array<Number>;
+        HourlyWeatherData.fillRain(rain, 0);
+        Test.assertMessage(HourlyWeatherData.sampled,
+            "the first hourly weather source must take a sample");
+        var taken = HourlyWeatherData.takenAt;
+        HourlyWeatherData.fillUv(uv, 0);
+        Test.assertEqualMessage(HourlyWeatherData.takenAt, taken,
+            "UV must reuse rain's hourly-weather sample inside the minute");
+        HourlyWeatherData.forget();
         return true;
     }
 
@@ -3911,7 +3998,7 @@ module MatrixTest {
                 "a full levels word must round-trip exactly");
         }
         Test.assertEqualMessage(full[HourBands.LEVEL_WORDS],
-            RainForecast.ALL_KNOWN,
+            HourBands.ALL_KNOWN,
             "twelve known hours is what ALL_KNOWN means");
         Test.assertEqualMessage(
             full[HourBands.LEVEL_WORDS].toFloat().toNumber(),
@@ -3965,28 +4052,28 @@ module MatrixTest {
     (:test)
     function theForecastIsResampledWhenTheHourRollsOver(logger as Logger)
             as Boolean {
-        RainForecast.refresh();
+        HourlyWeatherData.refresh();
         var hour = System.getClockTime().hour;
-        Test.assertEqualMessage(RainForecast.anchorHour, hour,
+        Test.assertEqualMessage(HourlyWeatherData.anchorHour, hour,
             "a fresh sample is bucketed against the current hour");
 
         // A sample taken this very moment, but against the wrong hour. The
         // minute timer says it is fresh; the hour says it is not.
-        RainForecast.takenAt = Sample.now();
-        RainForecast.anchorHour = (hour + 1) % 24;
-        Test.assertMessage(!Sample.due(RainForecast.takenAt,
-                                       RainForecast.sampled),
+        HourlyWeatherData.takenAt = Sample.now();
+        HourlyWeatherData.anchorHour = (hour + 1) % 24;
+        Test.assertMessage(!Sample.due(HourlyWeatherData.takenAt,
+                                       HourlyWeatherData.sampled),
             "this sample must look fresh to the minute timer, or the test " +
             "is not testing the hour");
-        RainForecast.refresh();
-        Test.assertEqualMessage(RainForecast.anchorHour, hour,
+        HourlyWeatherData.refresh();
+        Test.assertEqualMessage(HourlyWeatherData.anchorHour, hour,
             "the hour rolling over must expire the sample on its own");
 
         // The ordinary minute expiry still works.
-        RainForecast.takenAt = Sample.now() - Sample.INTERVAL_MS - 1;
-        var stale = RainForecast.takenAt;
-        RainForecast.refresh();
-        Test.assertMessage(RainForecast.takenAt != stale,
+        HourlyWeatherData.takenAt = Sample.now() - Sample.INTERVAL_MS - 1;
+        var stale = HourlyWeatherData.takenAt;
+        HourlyWeatherData.refresh();
+        Test.assertMessage(HourlyWeatherData.takenAt != stale,
             "a sample past its minute must still be retaken");
         return true;
     }
@@ -4029,6 +4116,125 @@ module MatrixTest {
         Test.assertEqualMessage(
             HourBands.levelAt(high[0], high[1], 0xFFF, 11), 9,
             "block 11 did not land in the high word");
+        return true;
+    }
+
+    //! A sampled state is allowed to fall. Forecasts merge upward through
+    //! raise(), while exact state replacement uses setLevel().
+    (:test)
+    function anExactBlockWriteCanLowerWithoutTouchingItsNeighbours(
+            logger as Logger) as Boolean {
+        var words = [0, 0] as Array<Number>;
+        HourBands.setLevel(words, 4, 13);
+        HourBands.setLevel(words, 5, 8);
+        HourBands.setLevel(words, 4, 3);
+        Test.assertEqualMessage(
+            HourBands.levelAt(words[0], words[1], HourBands.ALL_KNOWN, 4), 3,
+            "an exact write must be able to lower Body Battery");
+        Test.assertEqualMessage(
+            HourBands.levelAt(words[0], words[1], HourBands.ALL_KNOWN, 5), 8,
+            "lowering block 4 disturbed block 5");
+
+        HourBands.setLevel(words, 11, HourBands.LEVELS + 5);
+        Test.assertEqualMessage(
+            HourBands.levelAt(words[0], words[1], HourBands.ALL_KNOWN, 11),
+            HourBands.LEVELS, "an exact write must clamp above the scale");
+        HourBands.setLevel(words, 11, -4);
+        Test.assertEqualMessage(
+            HourBands.levelAt(words[0], words[1], HourBands.ALL_KNOWN, 11), 0,
+            "an exact write must clamp below the scale");
+        logger.debug("exact block write lowers one nibble in place");
+        return true;
+    }
+
+    //! Past clock hours walk counter-clockwise from the hand with no renderer
+    //! rotation: their own local hour modulo twelve is already that position.
+    (:test)
+    function bodyBatteryHistoryRunsCounterClockwiseFromTheHand(
+            logger as Logger) as Boolean {
+        var anchors = [0, 1, 11, 12, 23] as Array<Number>;
+        for (var a = 0; a < anchors.size(); a++) {
+            var anchor = anchors[a];
+            for (var ago = 0; ago < HourBands.HOURS; ago++) {
+                var sampleHour = (anchor + 24 - ago) % 24;
+                var expected = (anchor + HourBands.HOURS - ago) %
+                               HourBands.HOURS;
+                Test.assertEqualMessage(
+                    BodyBatteryData.blockForHour(sampleHour), expected,
+                    ago + " hours before " + anchor +
+                    " did not move counter-clockwise");
+            }
+        }
+        return true;
+    }
+
+    //! Completed hours are averaged in raw units, while the current block is
+    //! the newest value and may move down during the hour.
+    (:test)
+    function bodyBatteryAveragesPastHoursButKeepsCurrentLive(
+            logger as Logger) as Boolean {
+        BodyBatteryData.resetHistory();
+        BodyBatteryData.anchorHour = 9;
+
+        // 6% and 8% quantise to levels 0 and 1 separately. Their raw 7% mean
+        // reaches level 1, proving quantisation happens after the average.
+        BodyBatteryData.addPast(8, 6.0);
+        BodyBatteryData.addPast(8, 8.0);
+        BodyBatteryData.addPast(7, 0.0);
+        // Anything accidentally accumulated for current must be ignored.
+        BodyBatteryData.addPast(9, 95.0);
+        BodyBatteryData.finishPast(9);
+
+        Test.assertEqualMessage(
+            HourBands.levelAt(BodyBatteryData.levels[0],
+                              BodyBatteryData.levels[1],
+                              BodyBatteryData.known, 8),
+            HourBands.levelFromFraction(0.07),
+            "past samples were not averaged before quantisation");
+        Test.assertEqualMessage(
+            HourBands.levelAt(BodyBatteryData.levels[0],
+                              BodyBatteryData.levels[1],
+                              BodyBatteryData.known, 7), 0,
+            "a measured zero is known and empty");
+        Test.assertEqualMessage(
+            HourBands.levelAt(BodyBatteryData.levels[0],
+                              BodyBatteryData.levels[1],
+                              BodyBatteryData.known, 6), HourBands.UNKNOWN,
+            "an hour with no samples must remain unknown");
+        Test.assertEqualMessage(
+            HourBands.levelAt(BodyBatteryData.levels[0],
+                              BodyBatteryData.levels[1],
+                              BodyBatteryData.known, 9), HourBands.UNKNOWN,
+            "the current hour must not use its historical average");
+
+        BodyBatteryData.currentKnown = true;
+        BodyBatteryData.currentValue = 0.80;
+        BodyBatteryData.writeCurrent();
+        Test.assertEqualMessage(
+            HourBands.levelAt(BodyBatteryData.levels[0],
+                              BodyBatteryData.levels[1],
+                              BodyBatteryData.known, 9), 12,
+            "the current block must use the newest value");
+        BodyBatteryData.currentValue = 0.20;
+        BodyBatteryData.writeCurrent();
+        Test.assertEqualMessage(
+            HourBands.levelAt(BodyBatteryData.levels[0],
+                              BodyBatteryData.levels[1],
+                              BodyBatteryData.known, 9), 3,
+            "the live current block must be able to drain");
+        Test.assertEqualMessage(
+            HourBands.levelAt(BodyBatteryData.levels[0],
+                              BodyBatteryData.levels[1],
+                              BodyBatteryData.known, 8),
+            HourBands.levelFromFraction(0.07),
+            "updating current disturbed the previous hour's average");
+
+        Test.assertEqualMessage(BodyBatteryData.fraction(-5), 0.0,
+            "Body Battery below zero must clamp");
+        Test.assertEqualMessage(BodyBatteryData.fraction(105), 1.0,
+            "Body Battery above 100 must clamp");
+        BodyBatteryData.forget();
+        logger.debug("past averaged, current live and replaceable");
         return true;
     }
 
@@ -4530,12 +4736,12 @@ module MatrixTest {
                 "held back, no hour may be lit on ring " + ring);
             Test.assertEqualMessage(hi, 0,
                 "held back, no hour may be lit on ring " + ring);
-            Test.assertEqualMessage(known, RainForecast.ALL_KNOWN,
+            Test.assertEqualMessage(known, HourBands.ALL_KNOWN,
                 "held back, every hour must read as known — all zeroes here " +
                 "would draw the unknown tier right round the ring");
             for (var b = 0; b < HourBands.HOURS; b++) {
                 Test.assertEqualMessage(HourBands.levelAt(lo, hi, known, b), 0,
-                    "held back, block " + b + " must read as dry rather than " +
+                    "held back, block " + b + " must read as empty rather than " +
                     "unknown");
             }
         }
@@ -4644,11 +4850,14 @@ module MatrixTest {
         return true;
     }
 
-    //! The picker offers the forecast on the outer two rings only, and its
-    //! labels and values stay in step.
+    //! The picker offers every block source on the outer two rings only, and
+    //! its labels and values stay in step.
     (:test)
-    function theHourlySourceIsOnlyOfferedOnTheOuterTwoRings(logger as Logger)
+    function blockSourcesAreOnlyOfferedOnTheOuterTwoRings(logger as Logger)
             as Boolean {
+        var blockSources = [Source.SOURCE_RAIN_HOURS,
+                            Source.SOURCE_UV_HOURS,
+                            Source.SOURCE_BODY_BATTERY_HOURS] as Array<Number>;
         for (var ring = 0; ring < StatMap.RINGS; ring++) {
             var offered = Source.offeredFor(ring);
             var labels = offeredLabelsFor(ring);
@@ -4656,55 +4865,65 @@ module MatrixTest {
                 "ring " + ring + "'s picker labels and values disagree, so " +
                 "it would store the wrong source with no symptom");
 
-            var carries = false;
+            var carried = 0;
             for (var i = 0; i < offered.size(); i++) {
                 Test.assertMessage(offered[i] >= 0 &&
                                    offered[i] < Source.COUNT,
                     "every offered source must be a real one");
                 Test.assertMessage(offered[i] != Source.SOURCE_RETIRED,
                     "the picker must never offer the retired source");
-                if (offered[i] == Source.SOURCE_RAIN_HOURS) {
-                    carries = true;
+                if (Source.usesBlocks(offered[i])) {
+                    carried++;
                 }
             }
-            Test.assertEqualMessage(carries, ring <= Source.BLOCKS_TOP_RING,
-                "ring " + ring + " is offered the forecast when it should " +
-                "not be, or is not offered it when it should");
+            var expected = (ring <= Source.BLOCKS_TOP_RING)
+                ? blockSources.size() : 0;
+            Test.assertEqualMessage(carried, expected,
+                "ring " + ring + " carries " + carried + " block sources, " +
+                "expected " + expected);
 
-            // Nothing else is filtered, so the two lists differ by exactly one.
+            // Nothing else is filtered, so the two lists differ by exactly the
+            // number of block sources on an inner ring.
             Test.assertEqualMessage(offered.size(),
-                Source.OFFERED.size() - (carries ? 0 : 1),
+                Source.OFFERED.size() -
+                    ((ring <= Source.BLOCKS_TOP_RING) ? 0
+                                                     : blockSources.size()),
                 "ring " + ring + "'s picker lost something other than the " +
-                "forecast");
+                "block sources");
         }
         return true;
     }
 
-    //! A stored setting pointing the forecast at an inner ring reads as Off.
+    //! A stored setting pointing any block source at an inner ring reads as Off.
     //!
     //! The same answer the retired slot gets, and for the same reason: the
     //! ring has nothing it can draw, and saying so is better than a band the
     //! menu cannot name. Falling back to the ring's default instead would
     //! quietly resurrect a source the wearer never chose.
     (:test)
-    function aStoredForecastOnAnInnerRingReadsAsOff(logger as Logger)
+    function aStoredBlockSourceOnAnInnerRingReadsAsOff(logger as Logger)
             as Boolean {
         var saved = new [StatMap.RINGS] as Array<Number>;
         for (var i = 0; i < StatMap.RINGS; i++) {
             saved[i] = StatMap.rings[i];
         }
 
-        for (var ring = 0; ring < StatMap.RINGS; ring++) {
-            Properties.setValue(StatMap.PROPERTY_RINGS[ring],
-                                Source.SOURCE_RAIN_HOURS);
-        }
-        Config.reload();
-        for (var ring = 0; ring < StatMap.RINGS; ring++) {
-            var expected = (ring <= Source.BLOCKS_TOP_RING)
-                ? Source.SOURCE_RAIN_HOURS : Source.SOURCE_OFF;
-            Test.assertEqualMessage(StatMap.rings[ring], expected,
-                "ring " + ring + " stored as the forecast read back as " +
-                StatMap.rings[ring]);
+        var blockSources = [Source.SOURCE_RAIN_HOURS,
+                            Source.SOURCE_UV_HOURS,
+                            Source.SOURCE_BODY_BATTERY_HOURS] as Array<Number>;
+        for (var s = 0; s < blockSources.size(); s++) {
+            var source = blockSources[s];
+            for (var ring = 0; ring < StatMap.RINGS; ring++) {
+                Properties.setValue(StatMap.PROPERTY_RINGS[ring], source);
+            }
+            Config.reload();
+            for (var ring = 0; ring < StatMap.RINGS; ring++) {
+                var expected = (ring <= Source.BLOCKS_TOP_RING)
+                    ? source : Source.SOURCE_OFF;
+                Test.assertEqualMessage(StatMap.rings[ring], expected,
+                    "ring " + ring + " stored as block source " + source +
+                    " read back as " + StatMap.rings[ring]);
+            }
         }
 
         for (var i = 0; i < StatMap.RINGS; i++) {

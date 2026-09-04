@@ -352,15 +352,16 @@ The ordering is real; that reason for it was not. Nothing settable moves the
 lattice any more, so `DotGrid.invalidate()` is now a safety net rather than a requirement —
 but the rebuild it schedules must still land in `onLayout`, never `onStart`.
 
-### One source does not report a span at all
+### Block sources do not report spans
 
-`SOURCE_RAIN_HOURS` ("Rain, next 12h") turns a ring into a twelve-hour forecast, and it is the
-first source to fill a shape the face now has a general name for: **blocks**. The ring's 360°
-is twelve 30° hour slots, a 22.5° block **centred in each** leaving a countable gutter that
-straddles the hour mark, and how much of each block is filled is the reading. Twelve disjoint blocks with a radial axis is not something
-two floats can say, so it reports `Source.EMPTY` as its span and its real payload travels
-beside it: `Source.fillBlocks()` → `StatMap.blocks()` → the view → both the print and the
-renderer. The same move a marker makes, and for the same reason.
+Rain and UV forecasts plus Body Battery history fill the shape the face calls **blocks**.
+The ring's 360° is twelve 30° hour slots, a 22.5° block **centred in each** leaving a
+countable gutter that straddles the hour mark, and how much of each block is filled is the
+reading. Forecasts proceed clockwise; Body Battery's current hour is live and its eleven
+completed-hour averages read counter-clockwise. Twelve disjoint blocks with a radial axis
+is not something two floats can say, so each block source reports `Source.EMPTY` as its span
+and its real payload travels beside it: `Source.fillBlocks()` → `StatMap.blocks()` → the
+view → both the print and the renderer. The same move a marker makes, and for the same reason.
 
 **A block holds a level from 0 to `HourBands.LEVELS` (15), not a sub-band index.** The lattice
 caps the radial axis at three sub-bands and there is no arguing with it, but a block is also
@@ -372,8 +373,9 @@ the nothing the old 25/50/75 scale drew for it.
 
 Consequences worth knowing before touching it:
 
-- **The scale is linear in area and its top is 100%**, not "75% or more". A full ring means a
-  certainty and one whole sub-band means a third. `HourBands.fullBandsFor()` /
+- **The scale is linear in area and its top is the source's 1.0**, not "75% or more". Rain
+  and Body Battery normalise 100% to full; UV normalises index 10 to full. One whole
+  sub-band means a third. `HourBands.fullBandsFor()` /
   `partialHalfFor()` are the only place that curve lives.
 - **The block is centred in its slot, and it was not always.** It used to sit at the wedge's
   *leading* edge — starting exactly on hour mark `H`, with the whole gutter bunched up before
@@ -407,9 +409,10 @@ Five things about the channel are load-bearing:
 
 - **The hour-hand anchoring is free.** The hand at local hour `H` points at clock position
   `H mod 12`, so the forecast `N` hours out belongs at `(H + N) mod 12` — which *is* that
-  forecast hour's own hour-of-day, mod 12. `RainForecast` buckets an entry by its own local
-  hour and it lands where the hand will be. **Nothing rotates anywhere.** Code that turns a
-  table once an hour was written the hard way.
+  forecast hour's own hour-of-day, mod 12. `HourlyWeatherData` buckets straight into that
+  position. Body Battery samples use their own past local hour, so walking back from H lands
+  at H-1, H-2 and proceeds counter-clockwise. **Nothing rotates anywhere.** Code that turns
+  a table once an hour was written the hard way.
 - **All three packed words must be in the ring print.** A block ring's span is `EMPTY` on
   every frame it draws and it carries no mark and no overflow, so without them nothing about
   that ring ever changes and the gate never marks it dirty. `PER_RING` is 7 for this. Three
@@ -425,10 +428,10 @@ Five things about the channel are load-bearing:
   means every hour is unknown, which draws the dim tier right round the ring — data, in the
   held-back mode whose entire purpose is to carry none.
 - **Nothing outside `Source.usesBlocks()` names the kind.** The renderer, the loader and the
-  picker all have to ask which *shape* a ring draws, and four copies of `== SOURCE_RAIN_HOURS`
-  is how the second block source ends up drawn as an empty span in three of them. A second one
-  is a case in `Source.fillBlocks()` and nothing else: `HourBands` owns the packing
-  (`raise`/`levelAt`) and the scale (`levelFromFraction`), and knows nothing about rain.
+  picker all have to ask which *shape* a ring draws; individual block kinds are cases in
+  `Source.fillBlocks()` and nothing else. `HourBands` owns the packing
+  (`raise`/`setLevel`/`levelAt`) and the scale (`levelFromFraction`), and knows nothing about
+  rain, UV or Body Battery.
 
 Three sub-bands rather than four was measured, not chosen: four splits a 42px ring into
 10.5px bands that beat against the 10px lattice pitch, and ring 1 comes out 7.0/5.7/9.0/6.7
@@ -436,9 +439,9 @@ dots per block against three-way's 8.3/9.0/11.0. `DotGrid.bandEdges()` therefore
 **integer** thickness `ringBounds()` uses, never `markerWidths()`'s 42.25 — the float one puts
 ring 1's top edge inside ring 1's own outermost dots.
 
-It is offered on the **outer two rings only** (`Source.BLOCKS_TOP_RING`), enforced in three
-places that must agree: `StatMap.load()` maps it to Off elsewhere, the on-device picker walks
-`Source.offeredFor(ring)`, and `settings.xml` lists it in the `ring1`/`ring2` blocks alone.
+They are offered on the **outer two rings only** (`Source.BLOCKS_TOP_RING`), enforced in three
+places that must agree: `StatMap.load()` maps them to Off elsewhere, the on-device picker
+walks `Source.offeredFor(ring)`, and `settings.xml` lists them in the `ring1`/`ring2` blocks alone.
 The justification is a claim about the lattice and is asserted as one —
 `onlyTheOuterTwoRingsResolveTwelveHoursInThreeBands` measures the worst (block, sub-band) at
 8 and 6 dots on rings 0 and 1, against 4 and 2 on rings 2 and 3. The level scale sharpens that
@@ -477,9 +480,10 @@ what `rotationSettingIsClamped` now walks every value to catch.
 
 **A new source is appended after `SOURCE_OFF`, not before it.** That looks wrong and is the
 only safe place: the stored value is an index, so inserting below Off renumbers Off and
-everything under it on every watch already carrying a setting. `SOURCE_RAIN_HOURS = 9` sits
-above `SOURCE_OFF = 8` for that reason, while `Source.OFFERED` — which decides picker *order*
-— puts it next to the other rain. `sourceTablesCoverEveryKind` used to assert
+everything under it on every watch already carrying a setting. `SOURCE_RAIN_HOURS = 9`,
+`SOURCE_UV_HOURS = 10` and `SOURCE_BODY_BATTERY_HOURS = 11` sit above `SOURCE_OFF = 8` for
+that reason, while `Source.OFFERED` — which decides picker *order* — groups each with its
+related source. `sourceTablesCoverEveryKind` used to assert
 `SOURCE_OFF == COUNT - 1`; that was always a claim about `OFFERED`'s order and only happened
 to be expressible as an enum index while nothing had been added after Off, so it is now made
 against `OFFERED` directly.

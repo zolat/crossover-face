@@ -1,6 +1,6 @@
 # Roadmap
 
-**Current:** done — the day is written into the field; the on-watch check is still below.
+**Current:** UV ahead and Body Battery history now reuse the block-ring grammar.
 
 Out-of-band feature work, not a phase of the performance roadmap that follows: that one is
 complete and this does not extend it.
@@ -9,6 +9,8 @@ complete and this does not extend it.
 - [x] Block levels — width as the second axis, so a block reads sixteen ways rather than four
 - [x] Block centring — a block sits between its two hour marks, not against the first one
 - [x] Date watermark — the day of the month written into the grain of the dot field
+- [x] UV, next 12h — the hourly UV index clockwise ahead of the hand
+- [x] Body Battery, last 12h — current live, completed hours averaged counter-clockwise
 
 Plans: `~/.claude/plans/i-want-to-plan-starry-graham.md`,
 `~/.claude/plans/encapsulated-finding-owl.md`,

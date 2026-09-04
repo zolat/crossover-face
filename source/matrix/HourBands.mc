@@ -19,7 +19,7 @@ import Toybox.Lang;
 //! points at clock position `H mod 12`, so the forecast for `N` hours ahead
 //! must sit at `(H + N) mod 12` — which is exactly that forecast hour's own
 //! hour-of-day, mod 12. So block `b` permanently means "the coming hour whose
-//! local hour-of-day is congruent to b". RainForecast buckets straight into
+//! local hour-of-day is congruent to b". HourlyWeatherData buckets straight into
 //! that index and nothing downstream rotates anything, ever. If a table here
 //! ever needs turning once an hour, this was built the hard way.
 //!
@@ -65,6 +65,11 @@ module HourBands {
     //! A block the source said nothing about. Not a level — levels run 0 to
     //! LEVELS and 0 is a real answer meaning "known, and empty".
     const UNKNOWN = -1;
+
+    //! Every block known. Kept with the packed shape rather than with any one
+    //! producer: held-back always-on needs to say "known and empty everywhere",
+    //! and rain, UV and history all use the same known-bit word.
+    const ALL_KNOWN = (1 << HOURS) - 1;
 
     // --- packing -------------------------------------------------------------
     //
@@ -115,6 +120,23 @@ module HourBands {
         if (level <= existing) {
             return;
         }
+        setLevel(words, block, level);
+    }
+
+    //! Set one block exactly, including lowering it.
+    //!
+    //! Forecast duplicates use raise(), because the strongest reading wins.
+    //! A sampled level is different: Body Battery can fall as well as rise, so
+    //! its live hour must be able to replace yesterday's larger nibble. This is
+    //! the one exact-write primitive for the packed shape.
+    function setLevel(words as Array<Number>, block as Number,
+                      level as Number) as Void {
+        if (level < 0) { level = 0; }
+        if (level > LEVELS) { level = LEVELS; }
+        var word = wordOf(block);
+        var shift = shiftOf(block);
+        var packed = words[word];
+        var existing = (packed >> shift) & LEVEL_MASK;
         words[word] = packed - (existing << shift) + (level << shift);
     }
 

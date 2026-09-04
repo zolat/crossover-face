@@ -43,6 +43,8 @@
     <string id="SourceTemperature">Temperature range</string>
     <string id="SourceRain">Chance of rain</string>
     <string id="SourceRainHours">Rain, next 12h</string>
+    <string id="SourceUvHours">UV, next 12h</string>
+    <string id="SourceBodyBatteryHours">Body Battery, last 12h</string>
     <string id="SourceIntensityMinutes">Intensity minutes</string>
     <string id="SourceSeconds">Seconds</string>
     <string id="SourceOff">Off</string>

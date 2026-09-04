@@ -210,7 +210,7 @@ module StatMap {
         for (var i = 0; i < RINGS; i++) {
             out[i * BLOCK_VALUES] = 0;
             out[i * BLOCK_VALUES + 1] = 0;
-            out[i * BLOCK_VALUES + 2] = RainForecast.ALL_KNOWN;
+            out[i * BLOCK_VALUES + 2] = HourBands.ALL_KNOWN;
         }
         return out;
     }
