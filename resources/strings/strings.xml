@@ -3,6 +3,7 @@
 
     <string id="SettingsTitle">Crossover Face</string>
     <string id="InUse">In use</string>
+    <string id="VersionTitle">Version</string>
 
     <string id="ThemeTitle">Colour theme</string>
     <string id="ThemePrompt">Which set of colours the rings carry</string>

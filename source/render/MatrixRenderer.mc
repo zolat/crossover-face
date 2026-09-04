@@ -54,9 +54,9 @@ import Toybox.Lang;
 //! the fill's leading edge shares a colour, instead of alternating every few
 //! dots as it did when the rings interleaved.
 //!
-//! The lattice is cached in the view's system-managed render layer. This
-//! renderer mutates that one authoritative surface; Garmin, rather than this
-//! loop, composites it onto transient screen surfaces and animation frames.
+//! The lattice is cached in the view's buffered frame. This renderer mutates
+//! that one authoritative surface; the view then blits it whole onto every
+//! transient screen surface Garmin supplies.
 module MatrixRenderer {
 
     //! Which mark each ring currently has on screen, so a ring being
@@ -103,7 +103,7 @@ module MatrixRenderer {
     //! *walked*, which is cheap, and only the dots whose lit-ness actually
     //! changed are drawn.
     //!
-    //! One span is enough because every partial draw targets the same layer.
+    //! One span is enough because every partial draw targets the same buffer.
     //! A dot is repainted exactly when it differs from that authoritative
     //! previous value.
     var lastFrom as Array<Float> = [] as Array<Float>;
@@ -124,7 +124,7 @@ module MatrixRenderer {
     var lastRamp as Array<Boolean> = [] as Array<Boolean>;
 
     //! Whether this ring has been drawn at least once with the key above.
-    //! A changed key forces one full ring; after that the layer is authoritative
+    //! A changed key forces one full ring; after that the buffer is authoritative
     //! and span-only changes may use the delta path immediately.
     var stableFor as Array<Number> = [] as Array<Number>;
 
@@ -314,7 +314,7 @@ module MatrixRenderer {
                 continue;
             }
             // Rub out the cell this ring may still have a mark in, before its
-            // dot goes back down over it on the same authoritative surface.
+            // dot goes back down over it on the same authoritative buffer.
             var stale = drawnMark[ring];
             if (stale >= 0) {
                 dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_TRANSPARENT);
@@ -390,7 +390,7 @@ module MatrixRenderer {
 
             // Is this ring's span the only thing that moved since it was last
             // drawn? Then the dots that agree with the remembered span are
-            // already correct in the layer, and drawing them again is the cost
+            // already correct in the buffer, and drawing them again is the cost
             // this whole change exists to remove.
             //
             // `clears` rules a delta out on its own: the screen has just been
@@ -533,7 +533,7 @@ module MatrixRenderer {
                     : ((position >= from) && (position <= to));
 
                 // The delta. A dot that reads the same against both remembered
-                // span is already correct in the layer, so it is not drawn.
+                // span is already correct in the buffer, so it is not drawn.
                 // One comparison and a branch replace two native drawLine
                 // calls, on all but the handful of dots the fill edge crossed.
                 if (delta) {

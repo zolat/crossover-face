@@ -9,6 +9,7 @@ rather than value equality — that is what proves nothing in the format is bein
 
 import importlib
 import os
+import re
 import struct
 import subprocess
 import sys
@@ -17,6 +18,7 @@ import unittest
 from collections import OrderedDict
 from pathlib import Path
 from unittest import mock
+from xml.etree import ElementTree
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -27,6 +29,7 @@ from simctl.runner import Runner, parse_tests, read_crash
 from simctl.settings import Schema, SettingsError, describe, read, reset, write
 
 FIXTURE = Path(__file__).resolve().parent / "testdata" / "CROSSOVERFACE.SET"
+REPO = Path(__file__).resolve().parent.parent
 
 # A stand-in for bin/CrossoverFace-settings.json, so these tests do not need a build.
 SCHEMA_ENTRIES = [
@@ -50,6 +53,18 @@ SCHEMA_STRINGS = {"BackingOff": "Off", "BackingWhite": "White", "BackingTitle": 
 
 def schema() -> Schema:
     return Schema(SCHEMA_ENTRIES, SCHEMA_STRINGS)
+
+
+class BuildVersion(unittest.TestCase):
+    def test_runtime_and_manifest_versions_match(self):
+        manifest = ElementTree.parse(REPO / "manifest.xml").getroot()
+        application = next(iter(manifest))
+        manifest_version = application.attrib["version"]
+
+        source = (REPO / "source" / "BuildInfo.mc").read_text()
+        match = re.search(r'const VERSION = "([0-9]+\.[0-9]+\.[0-9]+)";', source)
+        self.assertIsNotNone(match, "BuildInfo.VERSION must be a semantic version")
+        self.assertEqual(match.group(1), manifest_version)
 
 
 class SetFileCodec(unittest.TestCase):

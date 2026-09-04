@@ -19,7 +19,7 @@ class CrossoverApp extends Application.AppBase {
 
     //! Called when the user changes settings in Garmin Connect or Express.
     function onSettingsChanged() as Void {
-        // Config.reload() also invalidates the authoritative render layer.
+        // Config.reload() also invalidates the authoritative buffered frame.
         Config.reload();
         WatchUi.requestUpdate();
     }

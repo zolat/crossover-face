@@ -42,7 +42,10 @@ class SettingsMenu extends WatchUi.Menu2 {
 
     function initialize() {
         Menu2.initialize({:title => Rez.Strings.SettingsTitle});
-        // The theme leads: it is the largest visual choice on the face.
+        addItem(new WatchUi.MenuItem(
+            Rez.Strings.VersionTitle, BuildInfo.VERSION, :version, null));
+        // Version leads so a sideload can be identified without opening or
+        // changing any setting; the theme remains the first visual choice.
         addItem(new WatchUi.MenuItem(
             Rez.Strings.ThemeTitle, themeLabel(), :theme, null));
         addItem(new WatchUi.MenuItem(
@@ -63,11 +66,11 @@ class SettingsMenu extends WatchUi.Menu2 {
     //! the values can be refreshed — the menu itself is not rebuilt.
     function onShow() as Void {
         Menu2.onShow();
-        setSubLabelOf(0, themeLabel());
-        setSubLabelOf(1, backingLabel());
-        setSubLabelOf(2, alwaysOnFillLabel());
-        setSubLabelOf(3, rotationLabel());
-        setSubLabelOf(5, Diagnostics.summary());
+        setSubLabelOf(1, themeLabel());
+        setSubLabelOf(2, backingLabel());
+        setSubLabelOf(3, alwaysOnFillLabel());
+        setSubLabelOf(4, rotationLabel());
+        setSubLabelOf(6, Diagnostics.summary());
     }
 
     private function setSubLabelOf(index as Number,

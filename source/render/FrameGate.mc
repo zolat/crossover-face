@@ -1,33 +1,34 @@
 import Toybox.Lang;
 
-//! Plans changes to the face's authoritative render layer.
+//! Plans changes to the face's authoritative buffered frame.
 //!
 //! The screen Dc supplied to onUpdate is deliberately absent from this
 //! contract. Physical AMOLED firmware can supply a cleared surface during a
 //! transition, so "unchanged" cannot safely mean "draw nothing to the screen".
-//! CrossoverView instead keeps the complete face in one opaque WatchUi.Layer;
-//! Garmin composites that layer on every screen update and animation frame.
+//! CrossoverView instead keeps the complete face in one BufferedBitmap and
+//! explicitly presents it on every screen update and animation callback.
 //!
-//! This module only decides whether that layer's pixels need changing:
+//! This module only decides whether that buffer's pixels need changing:
 //!
 //!   - the **field** print covers changes that move or recolour every dot;
 //!   - one **ring** print per ring covers data that can be repainted locally.
 //!
-//! There is one surface, so a change is written once. There are no inferred
-//! front/back buffers, held duplicate draws, periodic damage repairs or
-//! lifecycle timing windows. System overlays never modify the layer itself.
+//! There is one authoritative surface, so a change is written once. There are
+//! no inferred front/back buffers, held duplicate draws, periodic damage
+//! repairs or lifecycle timing windows. System overlays never modify the
+//! off-screen buffer itself.
 module FrameGate {
 
     var skipped as Number = 0;          //! consecutive unchanged callbacks
-    var drawn as Number = 0;            //! successfully committed layer draws
+    var drawn as Number = 0;            //! successfully committed buffer draws
     var suppressed as Number = 0;       //! total unchanged callbacks
 
-    //! Which rings the pending layer update must draw, and whether it must
-    //! clear the layer first. Read immediately after plan() returns true.
+    //! Which rings the pending buffer update must draw, and whether it must
+    //! clear the buffer first. Read immediately after plan() returns true.
     var dirty as Array<Boolean> = new [StatMap.RINGS] as Array<Boolean>;
     var clears as Boolean = true;
 
-    //! Last state successfully rendered into the layer. A pending plan never
+    //! Last state successfully rendered into the buffer. A pending plan never
     //! changes these; commit() does that only after rendering completes.
     var _field as Array<Float>? = null;
     var _rings as Array<Float>? = null;
@@ -37,10 +38,10 @@ module FrameGate {
     //! and the block channel's three packed words.
     const PER_RING = 7;
 
-    //! Plan an update against the last frame known to be in the layer.
+    //! Plan an update against the last frame known to be in the buffer.
     //!
     //! True means the caller must render `dirty` and then call commit(). False
-    //! means the layer is already complete and Garmin can composite it as-is.
+    //! means the buffer is already complete and only needs presenting.
     function plan(field as Array<Float>, rings as Array<Float>) as Boolean {
         var previousField = _field;
         var full = _forceFull || previousField == null ||
@@ -64,7 +65,7 @@ module FrameGate {
         return anything;
     }
 
-    //! Record a plan only after its pixels are safely in the layer.
+    //! Record a plan only after its pixels are safely in the buffer.
     function commit(field as Array<Float>, rings as Array<Float>) as Void {
         _field = copy(field, _field);
         _rings = copy(rings, _rings);
@@ -83,7 +84,7 @@ module FrameGate {
         return dirty;
     }
 
-    //! Invalidate layer contents after a visual configuration or geometry
+    //! Invalidate buffer contents after a visual configuration or geometry
     //! change. The next successful update will define the complete surface.
     function forget() as Void {
         _forceFull = true;
@@ -127,7 +128,7 @@ module FrameGate {
         return out;
     }
 
-    //! Share of callbacks that needed no layer mutation.
+    //! Share of callbacks that needed no buffer mutation.
     function skipPercent() as Number {
         var total = drawn + suppressed;
         return (total == 0) ? 0 : (suppressed * 100) / total;

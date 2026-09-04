@@ -13,8 +13,8 @@ module Config {
         StatMap.load();
         Palette.build();
         // Theme, source, rotation and backing changes can alter pixels without
-        // changing the sampled data values. The render layer must therefore be
-        // treated as stale whenever configuration is reloaded.
+        // changing the sampled data values. The buffered frame must therefore
+        // be treated as stale whenever configuration is reloaded.
         FrameGate.forget();
         // No setting changes the lattice geometry. Rebuilding all 1,112 dots
         // every time the face returns from a menu adds exactly the synchronous

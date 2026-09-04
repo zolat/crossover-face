@@ -190,7 +190,9 @@ animation ghosts and intermittent black frames.
       claim in a comment
 - [x] Phase 5 — draw only the dots that changed, not the whole ring
 - [x] Phase 6 — make view and power-mode transition bursts draw once, then skip
-- [~] Phase 7 — move the authoritative frame into a system-composited layer;
+- [~] Phase 7 — rejected on the physical watch: an unchanged layer was not
+      recomposited during native transitions
+- [~] Phase 8 — explicitly present a cached complete bitmap on every callback;
       simulator-complete, physical-watch verification pending
 
 Plans: `~/.claude/plans/can-you-review-for-stateless-puffin.md`,
@@ -530,7 +532,7 @@ other frame a step behind.
 
 # Phase 7: make the frame independent of transition surfaces (spike)
 
-**Current:** simulator-complete; the Crossover physical-watch loop is the gate.
+**Current:** rejected on the physical Crossover.
 
 Phase 6 proved the performance diagnosis and falsified its framebuffer model. Skipping
 duplicate `onUpdate()` work made the widget list feel like a native Garmin face, but a
@@ -577,3 +579,38 @@ latency remains, no flashlight positions survive, and no black frame appears. If
 layer compositing itself causes unacceptable load, the fallback design is an explicit
 cached bitmap blitted on every callback; returning early against the screen `Dc` is no
 longer an acceptable option.
+
+It failed more strongly than Phase 6: the flashlight remained ghosted, and returning from
+the widget list left the widget animation on screen indefinitely instead of loading the
+face. The generic Layer contract is therefore not sufficient for a watch face beneath
+these Crossover system transitions. An unchanged layer is not reliably recomposited.
+
+---
+
+# Phase 8: explicitly present a cached complete frame (spike)
+
+**Current:** simulator-complete; physical Crossover verification pending.
+
+The render target remains one authoritative 16-bit `BufferedBitmap`, but presentation is
+now explicit. A changed fingerprint updates that buffer once; every visible `onUpdate()`
+then calls `dc.drawBitmap(0, 0, frame)`, including unchanged transition callbacks. This is
+the only model consistent with both physical observations: rerunning the 1,112-dot loop
+for every callback causes navigation lag, while presenting nothing can expose a cleared
+or stale transition surface.
+
+The strong `BufferedBitmap` object and its Dc are retained for the app lifetime. Holding
+only the `BufferedBitmapReference` would allow Garmin's graphics pool to purge dynamic
+contents which it cannot reload from the executable. If allocation ever fails, the
+fallback performs a complete direct redraw on every callback and never commits those
+screen pixels as persistent state.
+
+Version `0.1.0` begins explicit sideload versioning. The settings menu shows the compiled
+version as its first row, so physical reports can identify the running PRG directly.
+
+## Evidence so far
+
+- strict Crossover build succeeds;
+- 128 Monkey C tests pass, including the requirement that an unchanged callback skips
+  buffer mutation but still increments the presentation count;
+- the existing Python and simulator-lock suites remain the non-graphics gates;
+- physical performance and transition correctness remain the deciding test.

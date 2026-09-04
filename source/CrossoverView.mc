@@ -11,11 +11,16 @@ class CrossoverView extends WatchUi.WatchFace {
     private var _asleep as Boolean = false;
 
     //! The complete face lives here rather than in whichever screen Dc Garmin
-    //! supplies to a particular callback. Layers are composited by the system
-    //! during regular updates and transition animations, so an unchanged frame
-    //! can leave these pixels alone without exposing a cleared screen surface.
-    const LAYER_COLOR_DEPTH = 16;
-    private var _faceDc as Dc? = null;
+    //! supplies to a particular callback. Every visible onUpdate explicitly
+    //! blits this buffer to that Dc, so a firmware-cleared transition surface
+    //! receives complete pixels without rerunning the dot renderer.
+    const BUFFER_COLOR_DEPTH = 16;
+    private var _frameBuffer as Graphics.BufferedBitmap? = null;
+    private var _frameDc as Dc? = null;
+
+    //! Observable presentation count for lifecycle tests. A duplicate callback
+    //! must present the cached frame even though it does not mutate it.
+    var presented as Number = 0;
 
     //! The two prints, allocated once and refilled every frame. FrameGate copies
     //! the values it needs, so handing it the same buffer every frame is safe.
@@ -41,20 +46,27 @@ class CrossoverView extends WatchUi.WatchFace {
         WatchFace.initialize();
     }
 
-    //! Build the fixed lattice and the one authoritative render surface. The
-    //! screen itself is cleared only as the opaque backing behind that layer;
-    //! every later pixel mutation happens off-screen in the layer's own Dc.
+    //! Build the fixed lattice and one authoritative off-screen frame. Holding
+    //! the BufferedBitmap object (not only its reference) pins its contents in
+    //! Garmin's graphics pool; a purged dynamic buffer cannot be restored from
+    //! the executable.
     function onLayout(dc as Dc) as Void {
-        clearLayers();
-        var layer = new WatchUi.Layer({
-            :locX => 0,
-            :locY => 0,
-            :width => dc.getWidth(),
-            :height => dc.getHeight(),
-            :colorDepth => LAYER_COLOR_DEPTH
-        });
-        _faceDc = layer.getDc();
-        addLayer(layer);
+        _frameBuffer = null;
+        _frameDc = null;
+        try {
+            var resource = Graphics.createBufferedBitmap({
+                :width => dc.getWidth(),
+                :height => dc.getHeight(),
+                :colorDepth => BUFFER_COLOR_DEPTH
+            }).get();
+            if (resource instanceof Graphics.BufferedBitmap) {
+                _frameBuffer = resource;
+                _frameDc = resource.getDc();
+            }
+        } catch (ex instanceof Graphics.OutOfGraphicsMemoryException) {
+            // updateForMode falls back to a complete direct redraw on every
+            // callback. Slower, but never blank or dependent on stale pixels.
+        }
 
         dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_BLACK);
         dc.clear();
@@ -63,9 +75,9 @@ class CrossoverView extends WatchUi.WatchFace {
         holdHandsAtSystemTime();
     }
 
-    //! The layer survives system overlays and view transitions. Settings reload
-    //! at the point they change and invalidate FrameGate there; merely becoming
-    //! visible again does not make an unchanged layer stale.
+    //! The buffer survives system overlays and view transitions. Settings
+    //! reload at the point they change and invalidate FrameGate there; merely
+    //! becoming visible again does not make its pixels stale.
     function onShow() as Void {
         DotGrid.ensureBuilt();
     }
@@ -152,27 +164,28 @@ class CrossoverView extends WatchUi.WatchFace {
             DateGlyph.ensure(day);
         }
 
-        // What of the authoritative layer needs changing. Most callbacks see
-        // the same visual state and leave it untouched; Garmin still composites
-        // the complete layer for the callback and for every animation frame.
+        // What of the authoritative frame needs changing. Most callbacks see
+        // the same visual state and skip the renderer, but still present the
+        // complete cached bitmap below.
         var clock = System.getClockTime();
         Drift.fillFor(clock.min, _drift);
         var field = fieldPrint(backing, day, _drift, clock.min, mode);
         var rings = ringPrint(spans, markers, overs, blocks);
         if (!FrameGate.plan(field, rings)) {
+            present(dc);
             Diagnostics.recordSkip(System.getTimer() - started);
             return;
         }
 
         // onLayout establishes this on the real watch. The explicit fallback
-        // keeps the face functional if a device cannot provide a layer Dc: it
+        // keeps the face functional if a device cannot provide a frame buffer: it
         // draws a complete direct frame on every callback rather than applying
         // unsafe deltas to an unowned screen surface.
         var targetDc = dc;
         var persistent = false;
-        var layerDc = _faceDc;
-        if (layerDc != null) {
-            targetDc = layerDc;
+        var frameDc = _frameDc;
+        if (frameDc != null && _frameBuffer != null) {
+            targetDc = frameDc;
             persistent = true;
         } else {
             FrameGate.everything();
@@ -190,12 +203,25 @@ class CrossoverView extends WatchUi.WatchFace {
                               backing, FrameGate.dirty, FrameGate.clears, _drift);
         if (persistent) {
             FrameGate.commit(field, rings);
+            present(dc);
         } else {
             // Do not remember direct-screen pixels: Garmin may clear them
-            // before the next callback, which is the failure this layer fixes.
+            // before the next callback, which is the failure this buffer fixes.
             FrameGate.forget();
         }
         Diagnostics.record(System.getTimer() - started);
+    }
+
+    //! Copy the complete authoritative frame to the callback's actual screen
+    //! surface. This runs even when the fingerprint is unchanged; it is the
+    //! cheap, explicit contract transition callbacks were missing.
+    private function present(dc as Dc) as Void {
+        var frame = _frameBuffer;
+        if (frame == null) {
+            return;
+        }
+        dc.drawBitmap(0, 0, frame);
+        presented++;
     }
 
     //! What moves every dot at once: the burn-in drift, and the hands.
@@ -331,7 +357,7 @@ class CrossoverView extends WatchUi.WatchFace {
     }
 
     //! Display-off callbacks have no visible consumer. All other callbacks are
-    //! accepted even during transitions: the layer makes them cheap and safe,
+    //! accepted even during transitions: the cached blit makes them cheap and safe,
     //! so no lifecycle timing or debounce is needed.
     function shouldUpdate(mode as Number) as Boolean {
         return mode != System.DISPLAY_MODE_OFF;
