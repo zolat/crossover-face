@@ -296,18 +296,21 @@ two things, and neither is mass storage:
 
 | Answer | What you get | Mountable? |
 |---|---|---|
-| **Yes, use MTP** | MTP (`idProduct 0x5246`) — what you want | No, but MTP clients can reach it |
+| **Yes, use MTP** | MTP — what you want; the USB product ID varies by model | No, but MTP clients can reach it |
 | No | Garmin's proprietary protocol (`idProduct 0x0003`) | No, and it may not even charge |
 
-So answer **yes** to *Use MTP?*. If the watch is plugged in but sitting in
-proprietary mode, `make install` says so and stops rather than failing obscurely.
+The Crossover reports `0x5246` in MTP mode; an Epix Pro 51 mm reports `0x50DA`.
+`make install` probes the MTP protocol instead of assuming one model's product ID. So
+answer **yes** to *Use MTP?*. If the watch is plugged in but not exposing MTP, the
+installer says so and stops rather than failing obscurely.
 Then on the watch hold **MENU → Watch Face → Crossover Face**. The
 `.prg.debug.xml` beside the `.prg` stays on your Mac; it symbolicates crash logs
 pulled from `GARMIN/Apps/LOGS/`.
 
 ### How the push works
 
-macOS ships no usable MTP client, and **libmtp cannot talk to this watch**:
+macOS ships no usable MTP client, and **libmtp cannot talk to the Crossover used for
+this trace**:
 `libusb_claim_interface()` returns `-3`, access denied, because macOS's own Image
 Capture daemon (`icdd`) holds the interface. `mtp-detect` therefore finds the
 device and still cannot open it:

@@ -348,10 +348,10 @@ good enough to see the face by and not good enough to measure.
   `TESTS FAILED`, the simulator died mid-run. The target now diagnoses this itself — no
   `Ran N tests` line means contention, not a bug — but re-run before believing it either way.
 - **The watch must be in MTP mode and OpenMTP must not be running.** Only one process may
-  claim the USB interface; `make push` quits OpenMTP for you. `idProduct 0x5246` (21062) is MTP,
-  `0x0003` is Garmin's proprietary mode, which cannot be written to — answer **yes** to
-  *Use MTP?* on the watch. Note that `ioreg` prints `idProduct` *before* `idVendor`, so a
-  `grep -A` window anchored on the vendor will silently miss it.
+  claim the USB interface; `make push` quits OpenMTP for you. USB product IDs are
+  model-specific — measured `0x5246` on the Crossover and `0x50DA` on an Epix Pro 51 mm —
+  so `make install` asks the MTP engine whether the device is usable instead of matching
+  one ID. Answer **yes** to *Use MTP?* on the watch.
 - **`luminance.py` wants a raw 390×390 face render**, not the contact sheets in `build/mockups/`
   — a sheet measures meaninglessly high. `mockup.py` prints per-face figures itself.
 

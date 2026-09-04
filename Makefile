@@ -138,14 +138,14 @@ install: build
 		echo "No Garmin device on USB. Connect the watch with a data cable."; \
 		exit 1; \
 	fi; \
-	if ! ioreg -p IOUSB -w0 -l 2>/dev/null | grep -q '"idProduct" = 21062'; then \
-		echo "The watch is on USB but not in MTP mode (needs idProduct 0x5246)."; \
-		echo "Unplug it, plug it back in, and answer YES to \"Use MTP?\"."; \
-		exit 1; \
-	fi; \
 	if [ ! -f "$(KALAM)" ]; then \
 		echo "OpenMTP is not installed, so there is no MTP engine to drive:"; \
 		echo "  brew install --cask openmtp"; \
+		exit 1; \
+	fi; \
+	if ! python3 $(PUSH) --info >/dev/null 2>&1; then \
+		echo "The Garmin is on USB but is not available over MTP."; \
+		echo "Unplug it, plug it back in, and answer YES to \"Use MTP?\"."; \
 		exit 1; \
 	fi; \
 	$(MAKE) -s push-built || { \
