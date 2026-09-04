@@ -57,8 +57,10 @@ def simulator_binary() -> Path:
 
 
 def default_name() -> str:
-    """One instance per checkout, so sibling worktrees never share a simulator."""
-    return paths.repo_root().name
+    """One instance per MCP client and checkout, so parallel agents never share one."""
+    checkout = paths.repo_root().name
+    namespace = os.environ.get("CROSSOVER_SIM_NAMESPACE", "").strip()
+    return f"{namespace}-{checkout}" if namespace else checkout
 
 
 def _port_for(name: str) -> int:
