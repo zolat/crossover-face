@@ -229,9 +229,9 @@ frame. The cost it addresses shrank by more than the change would save.
 ## Left on the table
 
 - ~~**The repair cadence is the remaining lever.**~~ Taken in Phase 6: `MAX_SKIPS = 30`.
-  A normal wrist raise now ends before its periodic repair, while shows and power-mode
-  changes still force a valid complete frame and low-power still paints one complete frame
-  per actual minute.
+  A normal wrist raise now ends before its periodic repair, while power-mode changes force
+  one valid complete frame, onShow repairs both buffers after system overlays, and
+  low-power still paints one complete frame per actual minute.
 - **The hand-backing coverage bitset**, worth ~4ms of a full redraw but only with backing
   on, which this configuration does not use.
 - **Compiled weak-field background spike.** Distinct from Phase 4's runtime mirror: a

@@ -2971,6 +2971,54 @@ module MatrixTest {
         return true;
     }
 
+    //! A system surface can occupy the alternate display buffer while the face
+    //! is hidden. Returning must repaint both buffers immediately; one frame
+    //! leaves the flashlight surface visible until some later value changes.
+    //! The third identical callback must still skip, or this fix would restore
+    //! the unbounded transition work it is meant to avoid.
+    (:test)
+    function returningFromASystemSurfaceRepaintsExactlyTwoFrames(
+        logger as Logger) as Boolean {
+        var dc = probeDc(logger);
+        if (dc == null) {
+            logger.debug("no buffered bitmap available; return not exercised");
+            return true;
+        }
+
+        var savedRings = StatMap.rings;
+        StatMap.rings = [Source.SOURCE_OFF, Source.SOURCE_OFF,
+                         Source.SOURCE_OFF, Source.SOURCE_OFF]
+                        as Array<Number>;
+        var view = new CrossoverView();
+        view.onShow();
+        var drawn = FrameGate.drawn;
+        var suppressed = FrameGate.suppressed;
+
+        view.updateForMode(dc, System.DISPLAY_MODE_HIGH_POWER);
+        Test.assertEqualMessage(FrameGate.drawn, drawn + 1,
+            "onShow did not repaint the first display buffer");
+        Test.assertMessage(FrameGate.clears,
+            "the first return frame did not clear the system surface");
+
+        view.updateForMode(dc, System.DISPLAY_MODE_HIGH_POWER);
+        Test.assertEqualMessage(FrameGate.drawn, drawn + 2,
+            "onShow did not repaint the alternate display buffer");
+        Test.assertMessage(FrameGate.clears,
+            "the alternate return frame did not clear the system surface");
+
+        view.updateForMode(dc, System.DISPLAY_MODE_HIGH_POWER);
+        Test.assertEqualMessage(FrameGate.drawn, drawn + 2,
+            "returning to the face kept drawing after both buffers were valid");
+        Test.assertEqualMessage(FrameGate.suppressed, suppressed + 1,
+            "the third identical return callback did not skip");
+
+        view.onHide();
+        StatMap.rings = savedRings;
+        FrameGate.forget();
+        logger.debug("onShow repaired two buffers, then skipped");
+        return true;
+    }
+
     //! Garmin may call onUpdate while a view transition is removing the face.
     //! Hidden and display-off callbacks must stop before touching any source;
     //! otherwise the transition can wait on a history or forecast refresh for

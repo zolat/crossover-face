@@ -55,12 +55,14 @@ class CrossoverView extends WatchUi.WatchFace {
 
     //! Coming back from a menu, which pops rather than re-laying out. Settings
     //! reload at the point they change; the fixed lattice remains valid for the
-    //! whole application lifetime. Only the gate must forget a frame it can no
-    //! longer vouch for.
+    //! whole application lifetime. Both display buffers must be repainted
+    //! immediately here: a system surface such as the flashlight can occupy the
+    //! alternate buffer, and deferring its repair leaves that surface ghosted on
+    //! top of the face until another value changes.
     function onShow() as Void {
         _shown = true;
         DotGrid.ensureBuilt();
-        FrameGate.transition();
+        FrameGate.forget();
     }
 
     //! Stop all later transition-time callbacks at the first instruction.

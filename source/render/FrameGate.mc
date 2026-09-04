@@ -34,8 +34,9 @@ import Toybox.Lang;
 //!   - **a cap on consecutive skips.** Anything that damages the frame buffer
 //!     from outside — a notification banner, a system alert — is repaired only
 //!     by a draw. Past the cap the next frame is a full clear and redraw;
-//!   - **an explicit transition().** Shows, power-mode changes and settings
-//!     changes draw one complete frame before duplicates may be skipped;
+//!   - **an explicit lifecycle reset.** Power-mode and settings changes draw one
+//!     complete frame before duplicates may be skipped; onShow uses forget() to
+//!     repaint both buffers after system surfaces such as the flashlight;
 //!   - **every change is drawn HOLD times, not once.** See HOLD.
 //!
 //! Prints are compared value by value rather than hashed. A collision here
@@ -230,7 +231,7 @@ module FrameGate {
         _transitionNeedsSecondBuffer = false;
     }
 
-    //! Force one complete frame after a show, wake, sleep or settings boundary,
+    //! Force one complete frame after a wake, sleep or settings boundary,
     //! then defer the second buffer's complete repaint until some visible value
     //! actually changes. Transition bursts therefore get one render followed by
     //! cheap identical-frame returns in either power mode.
