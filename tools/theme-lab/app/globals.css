@@ -84,7 +84,7 @@ h2 { font-size: 24px; font-weight: 560; letter-spacing: -.035em; }
 .comparison-section { border-top: 1px solid var(--line); padding: 38px clamp(24px,4vw,68px) 60px; }
 .comparison-heading { align-items: end; margin-bottom: 24px; }
 .comparison-heading > p { color: #777c79; font-size: 11px; max-width: 340px; text-align: right; }
-.candidate-grid { display: grid; gap: 12px; grid-template-columns: repeat(3,1fr); }
+.candidate-grid { display: grid; gap: 12px; grid-template-columns: minmax(280px,420px); }
 .candidate-card { background: #111413; border: 1px solid #262a28; border-radius: 5px; cursor: pointer; overflow: hidden; padding: 0; text-align: left; transition: 180ms ease; }
 .candidate-card:hover, .candidate-card.is-selected { border-color: #596059; transform: translateY(-2px); }
 .candidate-card.is-selected { box-shadow: inset 0 -2px var(--acid); }

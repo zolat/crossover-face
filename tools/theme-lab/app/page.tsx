@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Mode, PALETTE_KEYS, PALETTES, PaletteKey, RING_NAMES } from "./palette-data";
+import { CANDIDATE_KEYS, Mode, PALETTE_KEYS, PALETTES, PaletteKey, RING_NAMES } from "./palette-data";
 import { WatchDial } from "./watch-dial";
 
 type PaletteState = Record<PaletteKey, { colors: string[]; ramp: number[] }>;
@@ -304,10 +304,10 @@ export default function Home() {
             <p className="eyebrow">Candidate board</p>
             <h2>Compare the field, not the hex</h2>
           </div>
-          <p>Click any candidate to move it into the editor. All three remain mockup-only.</p>
+          <p>Arcade remains the one mockup-only palette. Click it to move it into the editor.</p>
         </div>
         <div className="candidate-grid">
-          {(["arcade", "pulse", "beacon"] as PaletteKey[]).map((key) => (
+          {CANDIDATE_KEYS.map((key) => (
             <button
               className={`candidate-card ${selected === key ? "is-selected" : ""}`}
               key={key}

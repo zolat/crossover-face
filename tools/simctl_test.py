@@ -68,7 +68,7 @@ class BuildVersion(unittest.TestCase):
 
 
 class ThemeResources(unittest.TestCase):
-    def test_phone_settings_offer_only_the_two_shipping_themes(self):
+    def test_phone_settings_offer_the_shipping_themes(self):
         settings = ElementTree.parse(
             REPO / "resources" / "settings" / "settings.xml"
         ).getroot()
@@ -79,6 +79,8 @@ class ThemeResources(unittest.TestCase):
             [
                 ("0", "@Strings.ThemeTerrain"),
                 ("1", "@Strings.ThemeActivity"),
+                ("7", "@Strings.ThemeBeacon"),
+                ("8", "@Strings.ThemePulse"),
             ],
         )
 
@@ -92,7 +94,10 @@ class ThemeResources(unittest.TestCase):
             if entry.attrib["id"].startswith("Theme")
             and entry.attrib["id"] not in {"ThemeTitle", "ThemePrompt"}
         }
-        self.assertEqual(theme_labels, {"ThemeTerrain", "ThemeActivity"})
+        self.assertEqual(
+            theme_labels,
+            {"ThemeTerrain", "ThemeActivity", "ThemeBeacon", "ThemePulse"},
+        )
 
 
 class SetFileCodec(unittest.TestCase):

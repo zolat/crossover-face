@@ -114,6 +114,10 @@ SHIPPING_THEMES = {
                 (0x7F, 0xD4, 0xFF), (0xFF, 0x6B, 0x5B)],
     "activity": [(0xFE, 0x46, 0x46), (0x6D, 0xC5, 0x4F),
                  (0x1F, 0x8F, 0xFE), (0xE5, 0x9A, 0x0A)],
+    "beacon": [(0x5C, 0xD9, 0xF0), (0xFE, 0x46, 0x46),
+               (0x8E, 0x7B, 0xFF), (0xE5, 0x9A, 0x0A)],
+    "pulse": [(0xFE, 0x46, 0x46), (0x2F, 0xD9, 0xC5),
+              (0xE8, 0x79, 0xF9), (0xB8, 0xD6, 0x4B)],
 }
 
 # Mockup-only candidates. They deliberately have no production IDs, resource
@@ -122,21 +126,17 @@ SHIPPING_THEMES = {
 CANDIDATE_THEMES = {
     "arcade": [(0xF4, 0x5B, 0xD8), (0xB8, 0xD6, 0x4B),
                (0x1F, 0x8F, 0xFE), (0xFF, 0x99, 0x00)],
-    "pulse": [(0xFE, 0x46, 0x46), (0x2F, 0xD9, 0xC5),
-              (0xE8, 0x79, 0xF9), (0xB8, 0xD6, 0x4B)],
-    "beacon": [(0x5C, 0xD9, 0xF0), (0xFE, 0x46, 0x46),
-               (0x8E, 0x7B, 0xFF), (0xE5, 0x9A, 0x0A)],
 }
 
 SHIPPING_RAMP_STOPS = {
     "terrain": (2, 0, 3),           # ice -> orchid -> rust
     "activity": (2, 3, 0),          # blue -> gold -> red
+    "beacon": (0, 3, 1),            # cyan -> gold -> red
+    "pulse": (1, 3, 0),             # teal -> lime -> red
 }
 
 CANDIDATE_RAMP_STOPS = {
     "arcade": (2, 3, 0),            # blue -> gold -> magenta
-    "pulse": (1, 3, 0),             # teal -> lime -> red
-    "beacon": (0, 3, 1),            # cyan -> gold -> red
 }
 
 THEME_NAME = "terrain"
@@ -963,16 +963,17 @@ def main(outdir: str = "build/mockups", device: str = DEFAULT_DEVICE) -> int:
 
     # 9. Themes — the same face in each set of ring colours, in both modes.
     panels = []
-    for name, label in (("terrain", "TERRAIN"), ("activity", "ACTIVITY")):
+    for name in ("terrain", "activity", "beacon", "pulse"):
         use_theme(name)
         for mode, always_on in (("awake", False), ("always-on", True)):
             face = render(values, always_on=always_on)
-            panels.append((f"{label} {mode}   lum {measure(face) * 100:.2f}%",
+            panels.append((f"{name.upper()} {mode}   "
+                           f"lum {measure(face) * 100:.2f}%",
                            composite(face)))
     use_theme("terrain")
     path = os.path.join(outdir, "09-themes.png")
-    sheet(panels, "Colour themes — Terrain and Activity, awake and "
-                  "always-on").save(path)
+    sheet(panels, "Shipping colour themes — Terrain, Activity, Beacon and "
+                  "Pulse; awake and always-on").save(path)
     written.append(path)
 
     # 10. Non-shipping candidates, kept together and visibly separate from the
@@ -980,7 +981,7 @@ def main(outdir: str = "build/mockups", device: str = DEFAULT_DEVICE) -> int:
     #     views: awake, always-on, and the temperature range that exercises all
     #     three of its explicit ramp stops.
     panels = []
-    for name in ("arcade", "pulse", "beacon"):
+    for name in ("arcade",):
         use_theme(name)
         label = name.upper()
         awake = render(values)
@@ -997,8 +998,8 @@ def main(outdir: str = "build/mockups", device: str = DEFAULT_DEVICE) -> int:
                        composite(weather)))
     use_theme("terrain")
     path = os.path.join(outdir, "10-candidates.png")
-    sheet(panels, "Mockup-only candidates — Arcade, Pulse and Beacon; "
-                  "awake, always-on and temperature range").save(path)
+    sheet(panels, "Mockup-only candidate — Arcade; awake, always-on and "
+                  "temperature range").save(path)
     written.append(path)
 
     # 12. The date watermark: the day of the month struck into the field.

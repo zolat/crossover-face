@@ -1,8 +1,8 @@
 # Colour Field Lab
 
 Interactive browser prototype for comparing and tuning Crossover Face colour
-palettes. Activity mirrors the shipping watch theme; Arcade, Pulse, and Beacon
-remain mockup-only candidates.
+palettes. Activity, Beacon, and Pulse mirror shipping watch themes; Arcade
+remains the mockup-only candidate.
 
 ## Run locally
 

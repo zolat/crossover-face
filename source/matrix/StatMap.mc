@@ -47,19 +47,21 @@ module StatMap {
     //!
     //! IDs 2 through 6 belonged to retired themes. They stay reserved so an
     //! old stored value can never silently become a different colour scheme.
-    //! New themes start at 7 and are appended to THEME_IDS explicitly; the
+    //! New themes started at 7 and are appended to THEME_IDS explicitly; the
     //! array position is the dense index used by Palette's compact tables.
     enum Theme {
         THEME_TERRAIN = 0,          //! Orchid, moss, ice, rust.
-        THEME_ACTIVITY = 1          //! The watch's own activity accents.
+        THEME_ACTIVITY = 1,         //! The watch's own activity accents.
+        THEME_BEACON = 7,           //! Cyan, red, indigo, gold.
+        THEME_PULSE = 8             //! Red, teal, orchid, lime.
     }
 
     const THEME_RETIRED_FIRST = 2;
     const THEME_RETIRED_LAST = 6;
-    const THEME_NEXT_ID = 7;
+    const THEME_NEXT_ID = 9;
     // Literal values because Monkey C const arrays have failed on-device when
     // their initialisers refer to other consts. The tests pin these to the enum.
-    const THEME_IDS = [0, 1] as Array<Number>;
+    const THEME_IDS = [0, 1, 7, 8] as Array<Number>;
 
     const PROPERTY_THEME = "theme";
     const PROPERTY_BACKING = "handBacking";

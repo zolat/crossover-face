@@ -384,6 +384,8 @@ goal, and the temperature ramp.
 |---|---|---|---|---|
 | **Terrain** | orchid `#E879F9` | moss `#B8D64B` | ice `#7FD4FF` | rust `#FF6B5B` |
 | **Activity** | red `#FE4646` | green `#6DC54F` | blue `#1F8FFE` | gold `#E59A0A` |
+| **Beacon** | cyan `#5CD9F0` | red `#FE4646` | indigo `#8E7BFF` | gold `#E59A0A` |
+| **Pulse** | red `#FE4646` | teal `#2FD9C5` | orchid `#E879F9` | lime `#B8D64B` |
 
 **Activity** is not a palette invented for the face — it is the accent colours *this watch*
 uses, the ones an activity profile picks from. They were read off the device's own artwork
@@ -397,8 +399,12 @@ two rings can be told apart. Activity keeps gold, its one awkward colour, on rin
 blue beside it and the innermost ring carries by far the fewest dots.
 
 Gold got the same test that once rejected an amber for turning brown when dimmed: at the
-unfilled tier it is `#7D5405`, a CIELAB chroma of 47.3, level with orchid's 47.0. Both shipping
+unfilled tier it is `#7D5405`, a CIELAB chroma of 47.3, level with orchid's 47.0. All shipping
 themes remain inside the 10% always-on luminance budget.
+
+Beacon and Pulse graduated from the Colour Field Lab after visual review. Their persisted IDs
+begin after the permanently retired `2–6` range, so an older stored setting can never silently
+change meaning.
 
 ### Ring data
 
@@ -433,7 +439,8 @@ range floats between its ends and reads as an arc.
 
 Temperature is the one source drawn on a ramp rather than a flat hue — cold through a middle
 to hot, in the theme's own colours — so the ring reads as a temperature rather than just a
-length. Terrain runs ice through orchid to rust, Activity blue through gold to red.
+length. Terrain runs ice through orchid to rust; Activity blue through gold to red; Beacon cyan
+through gold to red; and Pulse teal through lime to red.
 
 #### Past the goal — the second lap
 

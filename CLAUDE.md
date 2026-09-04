@@ -761,21 +761,24 @@ from `StatMap.themeIndex()`, for the reason `DotGrid.ARMS` is flat: a const arra
 further than Monkey C's `const` is meant to go, and nesting it resolves in the simulator and
 comes back empty on the watch. `RAMP_STOPS` is flat for the same reason.
 
-There are two shipping themes, outermost to innermost:
+There are four shipping themes, outermost to innermost:
 
 - Terrain: orchid `#E879F9`, moss `#B8D64B`, ice `#7FD4FF`, rust `#FF6B5B`.
 - Activity: red `#FE4646`, green `#6DC54F`, blue `#1F8FFE`, gold `#E59A0A`.
+- Beacon: cyan `#5CD9F0`, red `#FE4646`, indigo `#8E7BFF`, gold `#E59A0A`.
+- Pulse: red `#FE4646`, teal `#2FD9C5`, orchid `#E879F9`, lime `#B8D64B`.
 
 The temperature ramp names three **indices into the theme, not colours**: a ramp stop *is* a
 ring colour, and writing the value a second time is how the two drift apart. Terrain runs ice
-→ orchid → rust; Activity runs blue → gold → red. Both themes have three explicit stops, so
-`Palette.build()` does no per-theme branching while it constructs the ramp.
+→ orchid → rust; Activity runs blue → gold → red; Beacon runs cyan → gold → red; and Pulse runs
+teal → lime → red. Every theme has three explicit stops, so `Palette.build()` does no per-theme
+branching while it constructs the ramp.
 
 Persisted theme IDs are deliberately sparse. Terrain remains `0`, Activity remains `1`, and
 IDs `2` through `6` are retired forever. Any watch still storing one of them falls back to
-Terrain. The next production theme must use ID `7`; add it to `StatMap.THEME_IDS`, whose array
-position is the dense Palette table slot. Never reuse a retired ID or index a palette table
-directly by the persisted ID.
+Terrain. Beacon uses `7`, Pulse uses `8`, and the next production theme must use `9`.
+`StatMap.THEME_IDS` maps those sparse persisted IDs to dense Palette table slots. Never reuse a
+retired ID or index a palette table directly by the persisted ID.
 
 Adding a production theme means changing the colours and ramp stops, the persisted ID list,
 the on-device label table, the resource string and phone-side settings entry, and the exact
@@ -788,9 +791,9 @@ swatches, whose hues agree to a tenth of a degree across both sets. Gold is on r
 the innermost ring has by far the fewest dots, and it sits beside blue rather than either of
 the closer hues.
 
-`tools/mockup.py` also keeps Arcade, Pulse and Beacon in separate candidate-only tables. They
-appear together in `10-candidates.png` in awake, always-on and temperature-range views, but
-have no persisted IDs, strings or settings entries and therefore cannot reach a watch build.
+`tools/mockup.py` keeps Arcade in a separate candidate-only table. It appears in
+`10-candidates.png` in awake, always-on and temperature-range views, but has no persisted ID,
+string or settings entry and therefore cannot reach a watch build.
 
 ### Dot rotation is a render choice, not a cached one
 

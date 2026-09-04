@@ -884,12 +884,16 @@ module MatrixTest {
             "Terrain's persisted ID must never move");
         Test.assertEqualMessage(StatMap.THEME_ACTIVITY, 1,
             "Activity's persisted ID must never move");
+        Test.assertEqualMessage(StatMap.THEME_BEACON, 7,
+            "Beacon must use the first ID after the retired range");
+        Test.assertEqualMessage(StatMap.THEME_PULSE, 8,
+            "Pulse must follow Beacon without reusing a retired ID");
         Test.assertEqualMessage(StatMap.THEME_RETIRED_FIRST, 2,
             "the retired theme reservation must begin at ID 2");
         Test.assertEqualMessage(StatMap.THEME_RETIRED_LAST, 6,
             "the retired theme reservation must end at ID 6");
-        Test.assertEqualMessage(StatMap.THEME_NEXT_ID, 7,
-            "new production themes must begin at ID 7");
+        Test.assertEqualMessage(StatMap.THEME_NEXT_ID, 9,
+            "the next production theme must use ID 9");
 
         Properties.setValue(StatMap.PROPERTY_THEME, 99);
         Config.reload();
@@ -924,8 +928,8 @@ module MatrixTest {
     //! unreachable, miscoloured, or unnamed.
     (:test)
     function themeTablesCoverEveryTheme(logger as Logger) as Boolean {
-        Test.assertEqualMessage(Palette.THEME_COUNT, 2,
-            "exactly two production themes must ship");
+        Test.assertEqualMessage(Palette.THEME_COUNT, 4,
+            "exactly four production themes must ship");
         Test.assertEqualMessage(Palette.THEMES.size(),
             Palette.THEME_COUNT * Palette.THEME_COLOURS,
             "THEMES must hold exactly THEME_COLOURS entries per theme");
@@ -940,6 +944,10 @@ module MatrixTest {
             "Terrain must be first in the settings list");
         Test.assertEqualMessage(StatMap.THEME_IDS[1], StatMap.THEME_ACTIVITY,
             "Activity must be second in the settings list");
+        Test.assertEqualMessage(StatMap.THEME_IDS[2], StatMap.THEME_BEACON,
+            "Beacon must be third in the settings list");
+        Test.assertEqualMessage(StatMap.THEME_IDS[3], StatMap.THEME_PULSE,
+            "Pulse must be fourth in the settings list");
 
         // Every shipping theme has three explicit temperature colours.
         for (var i = 0; i < Palette.RAMP_STOPS.size(); i++) {
@@ -1065,6 +1073,47 @@ module MatrixTest {
         Test.assertEqualMessage(
             Palette.rampActive[Palette.RAMP_STEPS - 1], 0xFE4646,
             "the built Activity ramp no longer ends at red");
+
+        Properties.setValue(StatMap.PROPERTY_THEME, StatMap.THEME_TERRAIN);
+        Config.reload();
+        return true;
+    }
+
+    function assertExactTheme(theme as Number, colours as Array<Number>,
+                              ramp as Array<Number>, name as String) as Void {
+        Properties.setValue(StatMap.PROPERTY_THEME, theme);
+        Config.reload();
+        for (var ring = 0; ring < StatMap.RINGS; ring++) {
+            Test.assertEqualMessage(Palette.active[ring * 2 + 1], colours[ring],
+                name + " ring " + ring + " has the wrong colour");
+        }
+
+        var stops = StatMap.themeIndex(theme) * Palette.RAMP_POINTS;
+        for (var point = 0; point < Palette.RAMP_POINTS; point++) {
+            Test.assertEqualMessage(Palette.RAMP_STOPS[stops + point],
+                ramp[point], name + " ramp stop " + point + " moved");
+            Test.assertEqualMessage(
+                Palette.themeColour(Palette.RAMP_STOPS[stops + point]),
+                colours[ramp[point]], name + " ramp stop " + point +
+                " resolves to the wrong colour");
+        }
+        Test.assertEqualMessage(Palette.rampActive[0], colours[ramp[0]],
+            name + " built ramp starts at the wrong colour");
+        Test.assertEqualMessage(
+            Palette.rampActive[Palette.RAMP_STEPS - 1], colours[ramp[2]],
+            name + " built ramp ends at the wrong colour");
+    }
+
+    //! The reviewed Beacon and Pulse candidates are now production themes.
+    //! Pin both the ring order and the temperature-stop indices that shipped.
+    (:test)
+    function beaconAndPulseKeepTheirExactPalettes(logger as Logger) as Boolean {
+        assertExactTheme(StatMap.THEME_BEACON,
+            [0x5CD9F0, 0xFE4646, 0x8E7BFF, 0xE59A0A] as Array<Number>,
+            [0, 3, 1] as Array<Number>, "Beacon");
+        assertExactTheme(StatMap.THEME_PULSE,
+            [0xFE4646, 0x2FD9C5, 0xE879F9, 0xB8D64B] as Array<Number>,
+            [1, 3, 0] as Array<Number>, "Pulse");
 
         Properties.setValue(StatMap.PROPERTY_THEME, StatMap.THEME_TERRAIN);
         Config.reload();

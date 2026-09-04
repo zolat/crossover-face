@@ -39,11 +39,12 @@ test("server-renders the colour field lab", async () => {
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton/i);
 });
 
-test("keeps candidates marked as mockup-only", async () => {
+test("keeps only Arcade marked as mockup-only", async () => {
   const source = await readFile(new URL("../app/palette-data.ts", import.meta.url), "utf8");
-  assert.match(source, /activity:\s*\{[\s\S]*?status: "Shipping"/);
-  for (const candidate of ["arcade", "pulse", "beacon"]) {
-    assert.match(source, new RegExp(`${candidate}:\\s*\\{[\\s\\S]*?status: "Mockup only"`));
+  for (const shipping of ["activity", "beacon", "pulse"]) {
+    assert.match(source, new RegExp(`${shipping}:\\s*\\{[\\s\\S]*?status: "Shipping"`));
   }
+  assert.match(source, /arcade:\s*\{[\s\S]*?status: "Mockup only"/);
+  assert.match(source, /CANDIDATE_KEYS: PaletteKey\[\] = \["arcade"\]/);
   assert.match(source, /#FE4646[\s\S]*#6DC54F[\s\S]*#1F8FFE[\s\S]*#E59A0A/);
 });

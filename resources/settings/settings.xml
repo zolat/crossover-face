@@ -3,6 +3,8 @@
         <settingConfig type="list">
             <listEntry value="0">@Strings.ThemeTerrain</listEntry>
             <listEntry value="1">@Strings.ThemeActivity</listEntry>
+            <listEntry value="7">@Strings.ThemeBeacon</listEntry>
+            <listEntry value="8">@Strings.ThemePulse</listEntry>
         </settingConfig>
     </setting>
     <setting propertyKey="@Properties.handBacking" title="@Strings.BackingTitle" prompt="@Strings.BackingPrompt">

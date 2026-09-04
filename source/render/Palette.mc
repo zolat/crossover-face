@@ -45,14 +45,18 @@ module Palette {
     //! level with orchid's 47.0, and every Activity colour dims to a chroma
     //! inside the band Terrain already occupies.
     //!
-    //! The order is decorative in neither theme. Neighbours blurring together,
+    //! **Beacon** — cyan, red, indigo, gold. **Pulse** — red, teal, orchid,
+    //! lime. Both began as mockup candidates and keep the exact ring order and
+    //! temperature stops reviewed there.
+    //!
+    //! The order is decorative in no theme. Neighbours blurring together,
     //! not the set average, decides whether two rings can be told apart.
     //! Activity puts gold on the innermost ring, which has by far the fewest
     //! dots, and leaves it beside blue rather than either of the closer hues.
     //!
     //! Ring 1 is the outermost.
     const THEME_COLOURS = 4;
-    const THEME_COUNT = 2;
+    const THEME_COUNT = 4;
     const THEMES = [
         0xE879F9,   //! Terrain:  orchid
         0xB8D64B,   //!           moss
@@ -61,7 +65,15 @@ module Palette {
         0xFE4646,   //! Activity: red
         0x6DC54F,   //!           green
         0x1F8FFE,   //!           blue
-        0xE59A0A    //!           gold
+        0xE59A0A,   //!           gold
+        0x5CD9F0,   //! Beacon:   cyan
+        0xFE4646,   //!           red
+        0x8E7BFF,   //!           indigo
+        0xE59A0A,   //!           gold
+        0xFE4646,   //! Pulse:    red
+        0x2FD9C5,   //!           teal
+        0xE879F9,   //!           orchid
+        0xB8D64B    //!           lime
     ] as Array<Number>;
 
     const WEAK_ACTIVE = 0.55;
@@ -202,11 +214,14 @@ module Palette {
     //! which slot holds the cold hue falls out of the ring ordering — and that
     //! ordering answers to neighbour contrast, not to keeping the ramp's
     //! indices where they were. Terrain runs ice -> orchid -> rust, Activity
-    //! blue -> gold -> red. Both shipping themes have three explicit stops.
+    //! blue -> gold -> red, Beacon cyan -> gold -> red, and Pulse teal -> lime
+    //! -> red. Every shipping theme has three explicit stops.
     const RAMP_POINTS = 3;
     const RAMP_STOPS = [
         2, 0, 3,                    //! Terrain:  ice -> orchid -> rust
-        2, 3, 0                     //! Activity: blue -> gold -> red
+        2, 3, 0,                    //! Activity: blue -> gold -> red
+        0, 3, 1,                    //! Beacon:   cyan -> gold -> red
+        1, 3, 0                     //! Pulse:    teal -> lime -> red
     ] as Array<Number>;
 
     var active as Array<Number> = [] as Array<Number>;
