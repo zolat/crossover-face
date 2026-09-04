@@ -3056,9 +3056,14 @@ module MatrixTest {
                            !BodyBatteryData.historySampled,
             "a hidden update reached a device data source");
 
+        var lastTransitionAt = System.getTimer();
+        Test.assertMessage(view.shouldClearTransitionAt(
+                System.DISPLAY_MODE_HIGH_POWER,
+                lastTransitionAt + view.TRANSITION_QUIET_MS / 2),
+            "the outgoing-frame debounce was not extended by its latest clear");
         Test.assertMessage(view.shouldUpdateAt(
                 System.DISPLAY_MODE_HIGH_POWER,
-                hidingAt + view.TRANSITION_QUIET_MS + 1),
+                lastTransitionAt + view.TRANSITION_QUIET_MS + 1),
             "an overlay without onShow left the face permanently hidden");
         Test.assertMessage(view.shouldUpdate(
                 System.DISPLAY_MODE_HIGH_POWER),

@@ -90,8 +90,18 @@ class CrossoverView extends WatchUi.WatchFace {
             // native clear gives the compositor a clean black surface without
             // bringing source reads or the 1,112-dot renderer back into the
             // outgoing transition.
+            // The transition Dc may arrive clipped to only the newly exposed
+            // slice. Garmin documents clear() as affecting the clip region, so
+            // explicitly claim the whole surface or old overlay positions
+            // outside that slice survive as ghosts.
+            dc.setClip(0, 0, dc.getWidth(), dc.getHeight());
             dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_BLACK);
             dc.clear();
+            dc.clearClip();
+            // Trailing-edge debounce: however many frames the system animation
+            // produces, the expensive face repair is not eligible until a full
+            // quiet interval after the most recent one.
+            _hiddenAt = started;
             return;
         }
         if (!shouldUpdateAt(mode, started)) {
