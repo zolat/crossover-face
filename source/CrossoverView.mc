@@ -10,10 +10,14 @@ class CrossoverView extends WatchUi.WatchFace {
     //! Tracks sleep state for devices that predate System.getDisplayMode().
     private var _asleep as Boolean = false;
 
-    //! onUpdate may be called while a view transition is removing the face.
-    //! Once onHide has run the system already has the pixels it is sliding out;
-    //! doing source work or repainting behind that transition can only delay it.
-    private var _shown as Boolean = false;
+    //! Suppress only the short outgoing animation, never the whole hidden
+    //! lifetime. The flashlight overlay can call onHide without a matching
+    //! onShow; a permanent hidden flag therefore prevents its pixels ever being
+    //! repaired. One second covers the observed transition burst while letting
+    //! an unpaired overlay recover on its first later callback.
+    const TRANSITION_QUIET_MS = 1000;
+    private var _leaving as Boolean = false;
+    private var _hiddenAt as Number = 0;
 
     //! A normal low-power update still paints the complete AMOLED frame once a
     //! minute. Only additional calls in that same minute are transition noise
@@ -60,14 +64,16 @@ class CrossoverView extends WatchUi.WatchFace {
     //! alternate buffer, and deferring its repair leaves that surface ghosted on
     //! top of the face until another value changes.
     function onShow() as Void {
-        _shown = true;
+        _leaving = false;
         DotGrid.ensureBuilt();
         FrameGate.forget();
     }
 
-    //! Stop all later transition-time callbacks at the first instruction.
+    //! Suppress the outgoing animation burst, but only for a bounded interval.
+    //! See shouldUpdateAt() for the unpaired-overlay recovery.
     function onHide() as Void {
-        _shown = false;
+        _leaving = true;
+        _hiddenAt = System.getTimer();
     }
 
     function onUpdate(dc as Dc) as Void {
@@ -77,10 +83,10 @@ class CrossoverView extends WatchUi.WatchFace {
     //! The body of an update, separated so lifecycle tests can drive OFF and
     //! hidden states without depending on the simulator's display controls.
     function updateForMode(dc as Dc, mode as Number) as Void {
-        if (!shouldUpdate(mode)) {
+        var started = System.getTimer();
+        if (!shouldUpdateAt(mode, started)) {
             return;
         }
-        var started = System.getTimer();
         var lowPower = (mode == System.DISPLAY_MODE_LOW_POWER);
         // Held back in always-on when asked: the field keeps its colour but
         // loses its waterlines, and the data comes back on a wrist raise.
@@ -306,9 +312,7 @@ class CrossoverView extends WatchUi.WatchFace {
         _asleep = true;
         _lowPowerMinuteKey = -1;
         FrameGate.transition();
-        if (_shown) {
-            WatchUi.requestUpdate();
-        }
+        WatchUi.requestUpdate();
     }
 
     function onExitSleep() as Void {
@@ -331,9 +335,30 @@ class CrossoverView extends WatchUi.WatchFace {
                        : System.DISPLAY_MODE_HIGH_POWER;
     }
 
-    //! Whether an update has any visible consumer. Public only so the lifecycle
-    //! contract can be pinned without asking the simulator to change modes.
+    //! Whether an update has any visible consumer right now.
     function shouldUpdate(mode as Number) as Boolean {
-        return _shown && mode != System.DISPLAY_MODE_OFF;
+        return shouldUpdateAt(mode, System.getTimer());
+    }
+
+    //! Time-injected form for the transition tests. Outgoing callbacks stay
+    //! cheaper than the frame preamble. Once the animation window has elapsed,
+    //! an update without a matching onShow is treated as an overlay returning
+    //! and both buffers are repaired.
+    function shouldUpdateAt(mode as Number, now as Number) as Boolean {
+        if (mode == System.DISPLAY_MODE_OFF) {
+            return false;
+        }
+        if (!_leaving) {
+            return true;
+        }
+        if (now >= _hiddenAt &&
+                now - _hiddenAt < TRANSITION_QUIET_MS) {
+            return false;
+        }
+        // Timer wrap also lands here: a wrapped timestamp must never leave the
+        // face permanently hidden.
+        _leaving = false;
+        FrameGate.forget();
+        return true;
     }
 }

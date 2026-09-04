@@ -3038,6 +3038,7 @@ module MatrixTest {
         HourlyWeatherData.forget();
         BodyBatteryData.forget();
 
+        var hidingAt = System.getTimer();
         view.onHide();
         Test.assertMessage(
             !view.shouldUpdate(System.DISPLAY_MODE_HIGH_POWER),
@@ -3048,6 +3049,14 @@ module MatrixTest {
                            !BodyBatteryData.currentSampled &&
                            !BodyBatteryData.historySampled,
             "a hidden update reached a device data source");
+
+        Test.assertMessage(view.shouldUpdateAt(
+                System.DISPLAY_MODE_HIGH_POWER,
+                hidingAt + view.TRANSITION_QUIET_MS + 1),
+            "an overlay without onShow left the face permanently hidden");
+        Test.assertMessage(view.shouldUpdate(
+                System.DISPLAY_MODE_HIGH_POWER),
+            "recovering an unpaired overlay did not re-enable later updates");
 
         view.onShow();
         Test.assertMessage(!view.shouldUpdate(System.DISPLAY_MODE_OFF),
