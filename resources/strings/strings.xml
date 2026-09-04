@@ -9,11 +9,6 @@
     <string id="ThemePrompt">Which set of colours the rings carry</string>
     <string id="ThemeTerrain">Terrain</string>
     <string id="ThemeActivity">Activity</string>
-    <string id="ThemeFrost">Frost</string>
-    <string id="ThemeLagoon">Lagoon</string>
-    <string id="ThemeNocturne">Nocturne</string>
-    <string id="ThemeAlpinist">Alpinist</string>
-    <string id="ThemeAlpinist4">Alpinist 4</string>
     <string id="BackingTitle">Behind hands</string>
     <string id="BackingPrompt">Clears the dots under the hands while the watch is awake</string>
     <string id="AlwaysOnFillTitle">Always-on data</string>

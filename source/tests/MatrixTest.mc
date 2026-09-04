@@ -880,10 +880,29 @@ module MatrixTest {
     //! Same contract for the theme setting.
     (:test)
     function themeSettingIsClamped(logger as Logger) as Boolean {
+        Test.assertEqualMessage(StatMap.THEME_TERRAIN, 0,
+            "Terrain's persisted ID must never move");
+        Test.assertEqualMessage(StatMap.THEME_ACTIVITY, 1,
+            "Activity's persisted ID must never move");
+        Test.assertEqualMessage(StatMap.THEME_RETIRED_FIRST, 2,
+            "the retired theme reservation must begin at ID 2");
+        Test.assertEqualMessage(StatMap.THEME_RETIRED_LAST, 6,
+            "the retired theme reservation must end at ID 6");
+        Test.assertEqualMessage(StatMap.THEME_NEXT_ID, 7,
+            "new production themes must begin at ID 7");
+
         Properties.setValue(StatMap.PROPERTY_THEME, 99);
         Config.reload();
         Test.assertEqualMessage(StatMap.theme, StatMap.THEME_TERRAIN,
             "an out-of-range value must fall back to Terrain");
+
+        for (var retired = StatMap.THEME_RETIRED_FIRST;
+             retired <= StatMap.THEME_RETIRED_LAST; retired++) {
+            Properties.setValue(StatMap.PROPERTY_THEME, retired);
+            Config.reload();
+            Test.assertEqualMessage(StatMap.theme, StatMap.THEME_TERRAIN,
+                "retired theme ID " + retired + " must fall back to Terrain");
+        }
 
         Properties.setValue(StatMap.PROPERTY_THEME, StatMap.THEME_ACTIVITY);
         Config.reload();
@@ -900,12 +919,13 @@ module MatrixTest {
         return true;
     }
 
-    //! Adding a theme means touching four places at once: the colours, the
-    //! ramp stops that pick three of them, the range StatMap clamps to, and
-    //! the menu's labels. Miss the clamp and the new theme is unreachable;
-    //! miss the labels and choosing it indexes past the end of the table.
+    //! A shipping theme has a dense colour slot, three ramp stops, a persisted
+    //! ID, and a menu label. These lists must move together or the theme is
+    //! unreachable, miscoloured, or unnamed.
     (:test)
     function themeTablesCoverEveryTheme(logger as Logger) as Boolean {
+        Test.assertEqualMessage(Palette.THEME_COUNT, 2,
+            "exactly two production themes must ship");
         Test.assertEqualMessage(Palette.THEMES.size(),
             Palette.THEME_COUNT * Palette.THEME_COLOURS,
             "THEMES must hold exactly THEME_COLOURS entries per theme");
@@ -914,49 +934,29 @@ module MatrixTest {
             "every theme needs a cold, a mid and a hot ramp stop");
         Test.assertEqualMessage(THEME_LABELS.size(), Palette.THEME_COUNT,
             "every theme needs a name in the settings menu");
+        Test.assertEqualMessage(StatMap.THEME_IDS.size(), Palette.THEME_COUNT,
+            "the settings list must name every shipping theme ID");
+        Test.assertEqualMessage(StatMap.THEME_IDS[0], StatMap.THEME_TERRAIN,
+            "Terrain must be first in the settings list");
+        Test.assertEqualMessage(StatMap.THEME_IDS[1], StatMap.THEME_ACTIVITY,
+            "Activity must be second in the settings list");
 
-        // Cold and hot must name a real colour. The mid slot may also be
-        // RAMP_LINEAR, which a two-hue theme uses to say it has no third
-        // colour to turn through — but only the mid slot: a sentinel at
-        // either end would leave the ramp with no colour at all.
+        // Every shipping theme has three explicit temperature colours.
         for (var i = 0; i < Palette.RAMP_STOPS.size(); i++) {
             var stop = Palette.RAMP_STOPS[i];
-            var isMid = (i % Palette.RAMP_POINTS) == 1;
-            if (isMid && stop == Palette.RAMP_LINEAR) {
-                continue;
-            }
             Test.assertMessage(stop >= 0 && stop < Palette.THEME_COLOURS,
                 "ramp stop " + i + " points outside its theme");
         }
 
-        // A linear ramp still has to be a ramp: its two ends must differ, or
-        // every temperature draws one colour.
-        for (var theme = 0; theme < Palette.THEME_COUNT; theme++) {
-            var stops = theme * Palette.RAMP_POINTS;
-            if (Palette.RAMP_STOPS[stops + 1] != Palette.RAMP_LINEAR) {
-                continue;
-            }
-            var base = theme * Palette.THEME_COLOURS;
-            Test.assertMessage(
-                Palette.THEMES[base + Palette.RAMP_STOPS[stops]] !=
-                Palette.THEMES[base + Palette.RAMP_STOPS[stops + 2]],
-                "theme " + theme + " ramps linearly between two colours " +
-                "that are the same, so temperature reads as one flat band");
+        for (var theme = 0; theme < StatMap.THEME_IDS.size(); theme++) {
+            var id = StatMap.THEME_IDS[theme];
+            Properties.setValue(StatMap.PROPERTY_THEME, id);
+            Config.reload();
+            Test.assertEqualMessage(StatMap.theme, id,
+                "shipping theme ID " + id + " is unreachable");
+            Test.assertEqualMessage(StatMap.themeIndex(id), theme,
+                "shipping theme ID " + id + " maps to the wrong table slot");
         }
-
-        // The clamp is the piece with no other symptom: a theme present in
-        // THEMES but outside StatMap's range simply never draws.
-        var last = Palette.THEME_COUNT - 1;
-        Properties.setValue(StatMap.PROPERTY_THEME, last);
-        Config.reload();
-        Test.assertEqualMessage(StatMap.theme, last,
-            "the last theme is unreachable — StatMap's clamp has not been " +
-            "widened to match Palette.THEME_COUNT");
-
-        Properties.setValue(StatMap.PROPERTY_THEME, Palette.THEME_COUNT);
-        Config.reload();
-        Test.assertEqualMessage(StatMap.theme, StatMap.THEME_TERRAIN,
-            "one past the last theme must still fall back");
 
         Properties.setValue(StatMap.PROPERTY_THEME, StatMap.THEME_TERRAIN);
         Config.reload();
@@ -1033,13 +1033,53 @@ module MatrixTest {
         return true;
     }
 
+    //! Activity uses the watch's four accents, with gold on the smallest ring,
+    //! while temperature still reads cold blue through gold to hot red.
+    (:test)
+    function activityKeepsItsExactOrderAndRamp(logger as Logger) as Boolean {
+        Properties.setValue(StatMap.PROPERTY_THEME, StatMap.THEME_ACTIVITY);
+        Config.reload();
+
+        var activity = [0xFE4646, 0x6DC54F, 0x1F8FFE, 0xE59A0A]
+                       as Array<Number>;
+        for (var ring = 0; ring < StatMap.RINGS; ring++) {
+            Test.assertEqualMessage(Palette.active[ring * 2 + 1], activity[ring],
+                "ring " + ring + " no longer draws its Activity colour");
+        }
+        Test.assertEqualMessage(Palette.active[7], 0xE59A0A,
+            "Activity gold must stay on ring 4, the smallest ring");
+
+        var stops = StatMap.themeIndex(StatMap.THEME_ACTIVITY) *
+                    Palette.RAMP_POINTS;
+        Test.assertEqualMessage(
+            Palette.themeColour(Palette.RAMP_STOPS[stops]), 0x1F8FFE,
+            "Activity's ramp must start at blue");
+        Test.assertEqualMessage(
+            Palette.themeColour(Palette.RAMP_STOPS[stops + 1]), 0xE59A0A,
+            "Activity's ramp must pass through gold");
+        Test.assertEqualMessage(
+            Palette.themeColour(Palette.RAMP_STOPS[stops + 2]), 0xFE4646,
+            "Activity's ramp must end at red");
+        Test.assertEqualMessage(Palette.rampActive[0], 0x1F8FFE,
+            "the built Activity ramp no longer starts at blue");
+        Test.assertEqualMessage(
+            Palette.rampActive[Palette.RAMP_STEPS - 1], 0xFE4646,
+            "the built Activity ramp no longer ends at red");
+
+        Properties.setValue(StatMap.PROPERTY_THEME, StatMap.THEME_TERRAIN);
+        Config.reload();
+        return true;
+    }
+
     //! Every luminance test here measures whichever theme happens to be
     //! persisted, so a second theme would ship unmeasured. This walks them all
     //! through the worst frame the face can draw.
     (:test)
     function everyThemeFitsTheAlwaysOnBudget(logger as Logger) as Boolean {
         var full = everySpan(0.0, 1.0);
-        for (var theme = 0; theme < Palette.THEME_COUNT; theme++) {
+        for (var themeIndex = 0;
+             themeIndex < StatMap.THEME_IDS.size(); themeIndex++) {
+            var theme = StatMap.THEME_IDS[themeIndex];
             Properties.setValue(StatMap.PROPERTY_THEME, theme);
             Config.reload();
             var worst = frameLuminance(full, Palette.alwaysOn);
@@ -1062,7 +1102,9 @@ module MatrixTest {
     //! every-pair is not.
     (:test)
     function everyThemeKeepsTheTierOrder(logger as Logger) as Boolean {
-        for (var theme = 0; theme < Palette.THEME_COUNT; theme++) {
+        for (var themeIndex = 0;
+             themeIndex < StatMap.THEME_IDS.size(); themeIndex++) {
+            var theme = StatMap.THEME_IDS[themeIndex];
             Properties.setValue(StatMap.PROPERTY_THEME, theme);
             Config.reload();
 
@@ -1085,11 +1127,8 @@ module MatrixTest {
                     where + ": the mark must outshine the lap it lands on");
             }
 
-            // Neighbours only, not every pair. A duotone repeats its two
-            // hues on purpose, and rings 1 and 3 never touch — a shared
-            // colour is only a defect between rings that sit against each
-            // other, which is the same reason the ring order is chosen on
-            // neighbour distance rather than on the set average.
+            // Neighbours are the pairs that can visually blur together, so
+            // keep every adjacent ring distinguishable in every theme.
             for (var a = 0; a + 1 < StatMap.RINGS; a++) {
                 var b = a + 1;
                 var pair = "theme " + theme + ": rings " + a + " and " + b;
@@ -3672,7 +3711,9 @@ module MatrixTest {
     function handsCostLittleAlwaysOnLuminance(logger as Logger) as Boolean {
         var full = everySpan(0.0, 1.0);
         var worstCost = 0.0;
-        for (var theme = 0; theme < Palette.THEME_COUNT; theme++) {
+        for (var themeIndex = 0;
+             themeIndex < StatMap.THEME_IDS.size(); themeIndex++) {
+            var theme = StatMap.THEME_IDS[themeIndex];
             Properties.setValue(StatMap.PROPERTY_THEME, theme);
             Config.reload();
             var bare = frameLuminance(full, Palette.alwaysOn);

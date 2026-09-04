@@ -383,7 +383,7 @@ goal, and the temperature ramp.
 | Theme | Ring 1 — outer | Ring 2 | Ring 3 | Ring 4 — inner |
 |---|---|---|---|---|
 | **Terrain** | orchid `#E879F9` | moss `#B8D64B` | ice `#7FD4FF` | rust `#FF6B5B` |
-| **Activity** | gold `#E59A0A` | blue `#1F8FFE` | green `#6DC54F` | red `#FE4646` |
+| **Activity** | red `#FE4646` | green `#6DC54F` | blue `#1F8FFE` | gold `#E59A0A` |
 
 **Activity** is not a palette invented for the face — it is the accent colours *this watch*
 uses, the ones an activity profile picks from. They were read off the device's own artwork
@@ -392,15 +392,13 @@ rather than guessed: each `nwidget_*.png` and `D_list_select_*.png` in
 the peak-chroma pixel *is* the accent, and the hue agrees to a tenth of a degree across both
 sets of artwork.
 
-Neither order is decorative. Each maximises the CIELAB distance between rings that sit *next
-to* each other — 93 for Terrain, 118 for Activity — because neighbours blurring together, not
-the set average, is what decides whether two rings can be told apart. Activity keeps gold, its
-one awkward colour, at the end of the run with only blue beside it.
+Neither order is decorative. Neighbours blurring together, not the set average, decide whether
+two rings can be told apart. Activity keeps gold, its one awkward colour, on ring 4: it has only
+blue beside it and the innermost ring carries by far the fewest dots.
 
 Gold got the same test that once rejected an amber for turning brown when dimmed: at the
-unfilled tier it is `#7D5405`, a CIELAB chroma of 47.3, level with orchid's 47.0. Activity is
-also the darker theme — worst-case always-on 4.82% against Terrain's 5.73%, both well inside
-the 10% budget.
+unfilled tier it is `#7D5405`, a CIELAB chroma of 47.3, level with orchid's 47.0. Both shipping
+themes remain inside the 10% always-on luminance budget.
 
 ### Ring data
 

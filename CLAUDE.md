@@ -679,74 +679,41 @@ rebuild until **Reset All App Data**.
 
 ### A theme is four ring slots and three ramp stops
 
-`Palette.THEMES` holds every theme's ring colours **flat** — `theme * THEME_COLOURS + n` —
-for the reason `DotGrid.ARMS` is flat: a const array of arrays is further than Monkey C's
-`const` is meant to go, and nesting it resolves in the simulator and comes back empty on the
-watch. `RAMP_STOPS` is flat for the same reason.
+`Palette.THEMES` holds only shipping ring colours **flat**, indexed by the dense slot returned
+from `StatMap.themeIndex()`, for the reason `DotGrid.ARMS` is flat: a const array of arrays is
+further than Monkey C's `const` is meant to go, and nesting it resolves in the simulator and
+comes back empty on the watch. `RAMP_STOPS` is flat for the same reason.
 
-The temperature ramp used to hard-code `THEME[2] → THEME[0] → THEME[3]`. Those indices carried
-meaning — cold, mid, hot — not position, so each theme now names its own three as
-`RAMP_STOPS[theme * RAMP_POINTS + n]`. They are **indices into the theme, not colours**: a ramp
-stop *is* a ring colour, and writing the value a second time is how the two drift apart. That
-frees the ring order to answer only to its real constraint, which is the CIELAB distance
-between rings that sit next to each other (93 for Terrain, 118 for Activity).
+There are two shipping themes, outermost to innermost:
 
-Adding a theme means four things at once: the colours, its ramp stops, the range
-`StatMap.load()` clamps `theme` to, and a label in `SettingsMenu.THEME_LABELS`. Miss the clamp
-and the theme is simply unreachable, with no other symptom — `themeTablesCoverEveryTheme` is
-the guard. `everyThemeFitsTheAlwaysOnBudget` and `everyThemeKeepsTheTierOrder` walk *every*
-theme, because every other luminance test measures only whichever one is persisted.
+- Terrain: orchid `#E879F9`, moss `#B8D64B`, ice `#7FD4FF`, rust `#FF6B5B`.
+- Activity: red `#FE4646`, green `#6DC54F`, blue `#1F8FFE`, gold `#E59A0A`.
 
-**Four slots, but not necessarily four colours.** Frost, Lagoon, Nocturne and Alpinist are
-duotones: two hues alternating, so slots 0 and 2 hold the same value and so do 1 and 3. Rings
-1 and 3 never touch, so a repeat costs no legibility — and alternating makes *every* neighbour
-a hue flip rather than a hue step, which is why the duotones measure 94–103 against Terrain's 93.
-`everyThemeKeepsTheTierOrder` therefore compares **neighbours only**; it used to compare every
-pair, which a duotone fails by design.
+The temperature ramp names three **indices into the theme, not colours**: a ramp stop *is* a
+ring colour, and writing the value a second time is how the two drift apart. Terrain runs ice
+→ orchid → rust; Activity runs blue → gold → red. Both themes have three explicit stops, so
+`Palette.build()` does no per-theme branching while it constructs the ramp.
 
-Two things about that are counterintuitive and were both settled by measurement:
+Persisted theme IDs are deliberately sparse. Terrain remains `0`, Activity remains `1`, and
+IDs `2` through `6` are retired forever. Any watch still storing one of them falls back to
+Terrain. The next production theme must use ID `7`; add it to `StatMap.THEME_IDS`, whose array
+position is the dense Palette table slot. Never reuse a retired ID or index a palette table
+directly by the persisted ID.
 
-- **The repeat has to be exact.** The obvious alternative — the same hue at two lightnesses,
-  which keeps four distinct values and needs no test change — is the one arrangement that
-  actually breaks the face. A dimmed `A` lands on top of `A`'s own unfilled tier, so ring 3
-  *lit* becomes indistinguishable from ring 1 *unlit*: a CIELAB distance of 5–16, against
-  61–67 for the four-hue themes. An exact repeat has no such collision, because the only pair
-  it creates is `A` against `0.55·A` — the band-to-unfilled contrast every ring already lives on.
-- **The temperature ramp is what actually constrains a duotone**, not ring contrast. With two
-  hues there is no third colour to turn through, so the ramp runs straight from one to the
-  other and *that blend is the middle of the scale*, where most readings sit. A complementary
-  pair blends through grey and reads as no data: violet+lime drops to a chroma of 4,
-  teal+coral to 14. `RAMP_LINEAR` (−1) in the mid slot is how a theme says it has only two
-  stops, and `Palette.build()` substitutes the midpoint. Pairs whose blend goes grey are
-  therefore unusable however well their rings separate — which is what kept several
-  better-contrasting pairs out.
-
-Alpinist is the one worth reading `Palette.mc` about before touching. Green and gold sit close
-on the wheel, so it is the hardest duotone to separate and the only one that had to leave its
-source material to do it: the Seiko dial's own green puts the unfilled tier at a relative
-luminance of 0.012, invisible on a face that emits rather than reflects. Adding the dial's
-cream lume as a third colour makes it worse, not better — cream is bright and nearly
-achromatic, so it separates from nothing and drops the worst neighbour pair to 52.
-
-**There can be no brown ring beside a gold one, and the reason generalises.** Brown is not a
-hue — it is dark orange, which is exactly what this face produces when it dims a gold. Unlit
-gold is `0x8C5400`; a cocoa brown is `0x8B5A2B`, 15 apart in CIELAB against the ~37 that
-separates lit from unlit *within* a ring. So a lit brown dot and an unlit gold dot are the
-same colour. Every brown tried lands 15–24 from unlit gold, and sweeping one toward red only
-clears the bar at a hue of about 4 degrees, by which point it is a brick and not a brown.
-That is why Alpinist 4's strap colour is `0xC75A5A`. The general rule: **any colour that is
-another ring's colour darkened cannot be used**, whatever its name. This is the same law that
-rules out the hue-at-two-lightnesses duotone above, arriving from a different direction.
-
-Alpinist 4 is also where ring order stops being free. White on the outermost ring — 436 dots
-against the innermost's 92 — puts a white-bearing theme over the luminance budget; on the
-innermost it lands at 4.95%, below Terrain. When a theme carries one much brighter colour,
-which ring it sits on matters more than which colour it is.
+Adding a production theme means changing the colours and ramp stops, the persisted ID list,
+the on-device label table, the resource string and phone-side settings entry, and the exact
+theme tests together. `themeTablesCoverEveryTheme` holds all table/list lengths in step;
+`everyThemeFitsTheAlwaysOnBudget` and `everyThemeKeepsTheTierOrder` walk every shipping ID.
 
 Activity's colours are not invented: they are the accent colours the watch itself uses, read
 off the peak-chroma pixel of the device's own `nwidget_*.png` and `D_list_select_*.png`
-swatches, whose hues agree to a tenth of a degree across both sets. Activity is the darker
-theme throughout: worst-case always-on 4.82% against Terrain's 5.73%.
+swatches, whose hues agree to a tenth of a degree across both sets. Gold is on ring 4 because
+the innermost ring has by far the fewest dots, and it sits beside blue rather than either of
+the closer hues.
+
+`tools/mockup.py` also keeps Arcade, Pulse and Beacon in separate candidate-only tables. They
+appear together in `10-candidates.png` in awake, always-on and temperature-range views, but
+have no persisted IDs, strings or settings entries and therefore cannot reach a watch build.
 
 ### Dot rotation is a render choice, not a cached one
 

@@ -98,71 +98,49 @@ SOURCE_BODY_BATTERY_HOURS = 11
 BLOCK_SOURCES = (SOURCE_RAIN_HOURS, SOURCE_UV_HOURS,
                  SOURCE_BODY_BATTERY_HOURS)
 
-# Ring colours per theme, outermost first, and which three of each theme's four
-# the temperature ramp runs through as cold, mid and hot. Mirrors Palette.THEMES
-# and Palette.RAMP_STOPS in Monkey C — flat over there because a const array of
-# arrays comes back empty on the watch, named here because nothing forces it.
+# Shipping ring colours, outermost first. These mirror Palette.THEMES exactly;
+# keeping them separate from CANDIDATE_THEMES is what prevents a palette being
+# mistaken for a selectable watch setting before it has been reviewed.
 #
 # Terrain is orchid, moss, ice, rust. Activity is the accent colours the watch
 # itself uses, read off the peak-chroma pixel of the device's own swatches in
 # ~/.Garmin/ConnectIQ/Devices/instinctcrossoveramoled/{nwidget,D_list_select}_*.png
-# rather than guessed: gold, blue, green, red.
+# rather than guessed: red, green, blue, gold.
 #
-# Each theme's order maximises the CIELAB distance between rings that sit next
-# to each other — 93 for Terrain, 118 for Activity — because neighbours blurring
-# together, not the set average, decides whether two rings can be told apart.
-THEMES = {
+# Neighbours blurring together, not the set average, decides whether two rings
+# can be told apart. Activity keeps gold on the smallest, innermost ring.
+SHIPPING_THEMES = {
     "terrain": [(0xE8, 0x79, 0xF9), (0xB8, 0xD6, 0x4B),
                 (0x7F, 0xD4, 0xFF), (0xFF, 0x6B, 0x5B)],
-    "activity": [(0xE5, 0x9A, 0x0A), (0x1F, 0x8F, 0xFE),
-                 (0x6D, 0xC5, 0x4F), (0xFE, 0x46, 0x46)],
-    # Not a shipping theme: Activity with the watch's *other* blue, #1852E6, so
-    # the choice between the two is made on a rendered face and not on a hex.
-    "activity-navy": [(0xE5, 0x9A, 0x0A), (0x18, 0x52, 0xE6),
-                      (0x6D, 0xC5, 0x4F), (0xFE, 0x46, 0x46)],
-    # Duotones: two hues alternating, so every ring's neighbour is a hue flip
-    # and rings 1 and 3 -- which never touch -- may share a colour. Slots still
-    # run outermost first; they just repeat. The repeat is exact rather than
-    # the same hue at two lightnesses, because a dimmed A collides with A's own
-    # unfilled tier -- see the duotone note in Palette.mc.
-    "frost": [(0x5C, 0xD9, 0xF0), (0xF4, 0x5B, 0xD8)] * 2,
-    "lagoon": [(0x2F, 0xD9, 0xC5), (0xE5, 0x9A, 0x0A)] * 2,
-    "nocturne": [(0x8E, 0x7B, 0xFF), (0xFF, 0x6B, 0x5B)] * 2,
-    # After the Seiko Alpinist: a dark sunburst green dial under gold indices.
-    # Not transcribed -- that dial is a surface lit from outside and this face
-    # emits its own light on black, so the dial's ~#1E3A2F falls below the
-    # unfilled tier and is not there at all. The relationship carries over,
-    # the values do not. See the Alpinist note in Palette.mc for what the
-    # green and gold had to give up to separate at all.
-    "alpinist": [(0x44, 0xC2, 0x65), (0xFF, 0x99, 0x00)] * 2,
-    # The whole watch rather than the dial: strap, dial, indices, lume. The
-    # strap is a brick and not a leather brown because brown is what gold
-    # looks like unlit -- see the Alpinist 4 note in Palette.mc. White goes on
-    # the innermost ring, which holds 92 dots against the outermost's 436;
-    # that placement is what keeps a white-bearing theme inside the budget.
-    "alpinist4": [(0xC7, 0x5A, 0x5A), (0x44, 0xC2, 0x65),
-                  (0xFF, 0x99, 0x00), (0xF5, 0xF5, 0xF5)],
+    "activity": [(0xFE, 0x46, 0x46), (0x6D, 0xC5, 0x4F),
+                 (0x1F, 0x8F, 0xFE), (0xE5, 0x9A, 0x0A)],
 }
 
-# Which three of a theme's four slots the temperature ramp runs through, as
-# cold, mid and hot. A mid of RAMP_LINEAR means the theme has only two hues to
-# ramp through, so the middle is the midpoint of cold and hot rather than a
-# colour of its own -- see temperature_colour and Palette.RAMP_LINEAR.
-RAMP_LINEAR = -1
+# Mockup-only candidates. They deliberately have no production IDs, resource
+# labels or settings entries; this sheet is the review boundary before any one
+# of them can become a shipping theme.
+CANDIDATE_THEMES = {
+    "arcade": [(0xF4, 0x5B, 0xD8), (0xB8, 0xD6, 0x4B),
+               (0x1F, 0x8F, 0xFE), (0xFF, 0x99, 0x00)],
+    "pulse": [(0xFE, 0x46, 0x46), (0x2F, 0xD9, 0xC5),
+              (0xE8, 0x79, 0xF9), (0xB8, 0xD6, 0x4B)],
+    "beacon": [(0x5C, 0xD9, 0xF0), (0xFE, 0x46, 0x46),
+               (0x8E, 0x7B, 0xFF), (0xE5, 0x9A, 0x0A)],
+}
 
-RAMP_STOPS = {
+SHIPPING_RAMP_STOPS = {
     "terrain": (2, 0, 3),           # ice -> orchid -> rust
-    "activity": (1, 0, 3),          # blue -> gold -> red
-    "activity-navy": (1, 0, 3),
-    "frost": (0, RAMP_LINEAR, 1),      # cyan -> magenta
-    "lagoon": (0, RAMP_LINEAR, 1),     # teal -> gold
-    "nocturne": (0, RAMP_LINEAR, 1),   # indigo -> rust
-    "alpinist": (0, RAMP_LINEAR, 1),   # green -> gold
-    "alpinist4": (1, 2, 0),            # green -> gold -> brick
+    "activity": (2, 3, 0),          # blue -> gold -> red
+}
+
+CANDIDATE_RAMP_STOPS = {
+    "arcade": (2, 3, 0),            # blue -> gold -> magenta
+    "pulse": (1, 3, 0),             # teal -> lime -> red
+    "beacon": (0, 3, 1),            # cyan -> gold -> red
 }
 
 THEME_NAME = "terrain"
-THEME = THEMES[THEME_NAME]
+THEME = SHIPPING_THEMES[THEME_NAME]
 
 
 def use_theme(name: str) -> None:
@@ -171,8 +149,9 @@ def use_theme(name: str) -> None:
     Same move as the WEAK_ACTIVE sweep in main(): this file mirrors Monkey C
     module constants, so varying one means assigning to the global.
     """
+    themes = SHIPPING_THEMES if name in SHIPPING_THEMES else CANDIDATE_THEMES
     globals()["THEME_NAME"] = name
-    globals()["THEME"] = THEMES[name]
+    globals()["THEME"] = themes[name]
 
 # Mirrors Palette.MARKER: the current temperature called out on the range it
 # sits in. Carrying rather more than half its own band's colour — what makes a
@@ -270,11 +249,10 @@ def temperature_colour(fraction: float):
     theme rather than colours of their own: a ramp stop *is* a ring colour, and
     writing the value a second time is how the two drift apart.
     """
-    cold_i, mid_i, hot_i = RAMP_STOPS[THEME_NAME]
-    cold, hot = THEME[cold_i], THEME[hot_i]
-    # A two-hue theme has no third colour to turn through, so its middle is
-    # simply the midpoint -- which makes the two segments one straight run.
-    mid = mix(cold, hot, 0.5) if mid_i == RAMP_LINEAR else THEME[mid_i]
+    stops = (SHIPPING_RAMP_STOPS if THEME_NAME in SHIPPING_RAMP_STOPS
+             else CANDIDATE_RAMP_STOPS)
+    cold_i, mid_i, hot_i = stops[THEME_NAME]
+    cold, mid, hot = THEME[cold_i], THEME[mid_i], THEME[hot_i]
     if fraction <= 0.5:
         return mix(cold, mid, fraction * 2.0)
     return mix(mid, hot, (fraction - 0.5) * 2.0)
@@ -997,55 +975,30 @@ def main(outdir: str = "build/mockups", device: str = DEFAULT_DEVICE) -> int:
                   "always-on").save(path)
     written.append(path)
 
-    # 10. Which blue Activity should carry. The watch ships two, and the blue
-    #     is also the ramp's cold stop, so the weather face is shown beside the
-    #     plain one — the two hues separate most at the cold end of the ramp.
+    # 10. Non-shipping candidates, kept together and visibly separate from the
+    #     production theme sheet above. Each candidate gets the same three
+    #     views: awake, always-on, and the temperature range that exercises all
+    #     three of its explicit ramp stops.
     panels = []
-    for name, label in (("activity", "LIGHT BLUE #1F8FFE"),
-                        ("activity-navy", "NAVY #1852E6")):
+    for name in ("arcade", "pulse", "beacon"):
         use_theme(name)
-        plain = render(values)
-        panels.append((f"{label}   lum {measure(plain) * 100:.2f}%",
-                       composite(plain)))
+        label = name.upper()
+        awake = render(values)
+        panels.append((f"{label} awake   lum {measure(awake) * 100:.2f}%",
+                       composite(awake)))
+        always_on = render(values, always_on=True)
+        panels.append((f"{label} always-on   "
+                       f"lum {measure(always_on) * 100:.2f}%",
+                       composite(always_on)))
         weather = render(weather_spans, assign=weather_assign,
                          marks=weather_marks)
-        panels.append((f"{label} / temp ramp   "
+        panels.append((f"{label} temp range   "
                        f"lum {measure(weather) * 100:.2f}%",
                        composite(weather)))
     use_theme("terrain")
-    path = os.path.join(outdir, "10-activity-blue.png")
-    sheet(panels, "Activity's blue — the watch ships two, and it is the "
-                  "temperature ramp's cold stop").save(path)
-    written.append(path)
-
-    # 12. The duotones. Two hues alternating rather than four distinct ones --
-    #     rings 1 and 3 never touch, so a repeat costs no legibility, and every
-    #     neighbour pair becomes a hue flip.
-    #
-    #     The temperature face is shown beside each, because the ramp is the
-    #     one place a duotone can fail: with only two hues it runs straight
-    #     from one to the other, and a complementary pair blends through grey
-    #     exactly where most readings sit. These three were picked by
-    #     measurement -- neighbour dE at or above the 93 Terrain ships with, a
-    #     blend that holds its chroma, and no more luminance than Terrain.
-    #     Ember (amber + rose) was rendered and dropped: its ramp was the best
-    #     of the set but its rings only reached 70.
-    panels = []
-    for name in ("frost", "lagoon", "nocturne", "alpinist", "alpinist4"):
-        use_theme(name)
-        for mode, always_on in (("awake", False), ("always-on", True)):
-            face = render(values, always_on=always_on)
-            panels.append((f"{name.upper()} {mode}   "
-                           f"lum {measure(face) * 100:.2f}%", composite(face)))
-        weather = render(weather_spans, assign=weather_assign,
-                         marks=weather_marks)
-        panels.append((f"{name.upper()} temp ramp   "
-                       f"lum {measure(weather) * 100:.2f}%",
-                       composite(weather)))
-    use_theme("terrain")
-    path = os.path.join(outdir, "12-duotones.png")
-    sheet(panels, "Duotones - two alternating hues, awake, always-on and "
-                  "the temperature ramp").save(path)
+    path = os.path.join(outdir, "10-candidates.png")
+    sheet(panels, "Mockup-only candidates — Arcade, Pulse and Beacon; "
+                  "awake, always-on and temperature range").save(path)
     written.append(path)
 
     # 12. The date watermark: the day of the month struck into the field.

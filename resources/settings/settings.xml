@@ -3,11 +3,6 @@
         <settingConfig type="list">
             <listEntry value="0">@Strings.ThemeTerrain</listEntry>
             <listEntry value="1">@Strings.ThemeActivity</listEntry>
-            <listEntry value="2">@Strings.ThemeFrost</listEntry>
-            <listEntry value="3">@Strings.ThemeLagoon</listEntry>
-            <listEntry value="4">@Strings.ThemeNocturne</listEntry>
-            <listEntry value="5">@Strings.ThemeAlpinist</listEntry>
-            <listEntry value="6">@Strings.ThemeAlpinist4</listEntry>
         </settingConfig>
     </setting>
     <setting propertyKey="@Properties.handBacking" title="@Strings.BackingTitle" prompt="@Strings.BackingPrompt">

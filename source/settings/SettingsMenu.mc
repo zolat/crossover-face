@@ -7,12 +7,7 @@ import Toybox.WatchUi;
 //! how the two stop agreeing.
 const THEME_LABELS = [
     Rez.Strings.ThemeTerrain,
-    Rez.Strings.ThemeActivity,
-    Rez.Strings.ThemeFrost,
-    Rez.Strings.ThemeLagoon,
-    Rez.Strings.ThemeNocturne,
-    Rez.Strings.ThemeAlpinist,
-    Rez.Strings.ThemeAlpinist4
+    Rez.Strings.ThemeActivity
 ] as Array<ResourceId>;
 
 //! Source names, in Source.Kind order — every value, including the retired
@@ -84,7 +79,7 @@ class SettingsMenu extends WatchUi.Menu2 {
     }
 
     private function themeLabel() as ResourceId {
-        return THEME_LABELS[StatMap.theme];
+        return THEME_LABELS[StatMap.themeIndex(StatMap.theme)];
     }
 
     private function alwaysOnFillLabel() as ResourceId {
@@ -122,7 +117,7 @@ class SettingsMenuDelegate extends WatchUi.Menu2InputDelegate {
                              WatchUi.SLIDE_LEFT);
         } else if (id == :theme) {
             push(new ChoiceMenu(Rez.Strings.ThemeTitle, StatMap.PROPERTY_THEME,
-                THEME_LABELS, sequential(THEME_LABELS.size()), StatMap.theme));
+                THEME_LABELS, StatMap.THEME_IDS, StatMap.theme));
         } else if (id == :backing) {
             push(new ChoiceMenu(Rez.Strings.BackingTitle, StatMap.PROPERTY_BACKING,
                 [Rez.Strings.BackingOff,
@@ -212,8 +207,9 @@ class RingMenuDelegate extends WatchUi.Menu2InputDelegate {
     }
 }
 
-//! Values 0..count-1, for the settings whose every value is still offered.
-//! Only the ring picker has a gap in it.
+//! Values 0..count-1, for contiguous settings whose every value is offered.
+//! Themes and ring sources use explicit arrays because their stored IDs have
+//! retired gaps.
 function sequential(count as Number) as Array<Number> {
     var out = new [count] as Array<Number>;
     for (var i = 0; i < count; i++) {

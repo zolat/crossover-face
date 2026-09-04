@@ -67,6 +67,34 @@ class BuildVersion(unittest.TestCase):
         self.assertEqual(match.group(1), manifest_version)
 
 
+class ThemeResources(unittest.TestCase):
+    def test_phone_settings_offer_only_the_two_shipping_themes(self):
+        settings = ElementTree.parse(
+            REPO / "resources" / "settings" / "settings.xml"
+        ).getroot()
+        theme = settings.find("setting[@propertyKey='@Properties.theme']/settingConfig")
+        self.assertIsNotNone(theme)
+        self.assertEqual(
+            [(entry.attrib["value"], entry.text) for entry in theme],
+            [
+                ("0", "@Strings.ThemeTerrain"),
+                ("1", "@Strings.ThemeActivity"),
+            ],
+        )
+
+    def test_only_shipping_themes_have_selectable_resource_labels(self):
+        strings = ElementTree.parse(
+            REPO / "resources" / "strings" / "strings.xml"
+        ).getroot()
+        theme_labels = {
+            entry.attrib["id"]
+            for entry in strings.findall("string")
+            if entry.attrib["id"].startswith("Theme")
+            and entry.attrib["id"] not in {"ThemeTitle", "ThemePrompt"}
+        }
+        self.assertEqual(theme_labels, {"ThemeTerrain", "ThemeActivity"})
+
+
 class SetFileCodec(unittest.TestCase):
     def test_round_trips_a_real_file_byte_for_byte(self):
         original = FIXTURE.read_bytes()

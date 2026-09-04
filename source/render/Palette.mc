@@ -14,7 +14,7 @@ import Toybox.Lang;
 //! Every table is indexed by ring * 2, plus 1 when lit.
 module Palette {
 
-    //! Ring colours for every theme, flat: THEMES[theme * THEME_COLOURS + n].
+    //! Ring colours for every theme, flat: THEMES[themeIndex * THEME_COLOURS + n].
     //!
     //! Flat rather than an array of arrays, for the same reason DotGrid.ARMS
     //! is flat: a const array of arrays is a step further than Monkey C's
@@ -32,7 +32,7 @@ module Palette {
     //! chromatic. Orchid holds a CIELAB chroma of 47 when dimmed, against
     //! amber's 39 of brown.
     //!
-    //! **Activity** — gold, blue, green, red: the accent colours this watch
+    //! **Activity** — red, green, blue, gold: the accent colours this watch
     //! itself uses, read off the device's own artwork rather than guessed.
     //! Each nwidget_*.png and D_list_select_*.png in the installed device
     //! directory is a ramp from black to one accent, so the peak-chroma pixel
@@ -43,129 +43,25 @@ module Palette {
     //! Gold is the rejected amber's cousin, so it was held to the same test:
     //! dimmed to the unfilled tier it is #7D5405, a CIELAB chroma of 47.3 —
     //! level with orchid's 47.0, and every Activity colour dims to a chroma
-    //! inside the band Terrain already occupies. Activity is also the darker
-    //! theme, at 84% of Terrain's luminance weighted by dots per ring, so it
-    //! costs the burn-in budget nothing.
+    //! inside the band Terrain already occupies.
     //!
-    //! The order is decorative in neither theme: it is the arrangement that
-    //! maximises the distance between rings which sit *next to* each other —
-    //! 93 for Terrain against 78 for its worst arrangement, and 118 for
-    //! Activity. Neighbours blurring together, not the set average, is what
-    //! decides whether two rings can be told apart. Activity keeps gold, its
-    //! one awkward colour at 59 from red and 71 from green, at the end of the
-    //! run with only blue beside it.
-    //!
-    //! **Frost**, **Lagoon** and **Nocturne** are duotones: two hues
-    //! alternating rather than four distinct ones, so slots 0 and 2 hold the
-    //! same colour and so do 1 and 3. That costs nothing, because rings 1 and
-    //! 3 never touch — a repeat is only a defect between neighbours, and
-    //! alternating makes *every* neighbour a hue flip rather than a hue step.
-    //! Measured, the worst neighbour pair is 102, 99 and 103 against the 93
-    //! Terrain ships with.
-    //!
-    //! The repeat has to be exact. The obvious alternative — the same hue at
-    //! two lightnesses, which would keep four distinct values and leave the
-    //! tests alone — is the one arrangement that actually breaks the face: a
-    //! dimmed A sits on top of A's own unfilled tier, so ring 3 *lit* becomes
-    //! indistinguishable from ring 1 *unlit*. Measured at a CIELAB distance of
-    //! 5 to 16, against 61 to 67 for the four-hue themes. An exact repeat has
-    //! no such collision, because the only pair it creates is A against
-    //! 0.55*A, which is the band-to-unfilled contrast every ring already
-    //! relies on.
-    //!
-    //! What does constrain a duotone is the temperature ramp. With two hues
-    //! there is no third colour to turn through, so the ramp runs straight
-    //! from one to the other and *that blend* is the scale's middle — where
-    //! most readings sit. A complementary pair blends through grey and reads
-    //! as no data at all: violet-lime drops to a chroma of 4, teal-coral to
-    //! 14. These three hold 30, 40 and 27 respectively, which is what put
-    //! them in and kept better-contrasting pairs out.
-    //!
-    //! Lagoon's gold and Nocturne's rust are deliberately the values Activity
-    //! and Terrain already carry, rather than new ones a shade off them.
-    //!
-    //! **Alpinist** is after the Seiko Alpinist: a dark sunburst green dial
-    //! under gold indices. It is the one theme here that could not be
-    //! transcribed, and the reason is the medium — that dial is a surface
-    //! lit from outside, while this face emits its own light on black, so
-    //! the dial's own ~#1E3A2F falls below the unfilled tier and simply is
-    //! not there. What carries over is the *relationship*: a cool forest
-    //! green against a warm brass, taken up in luminance until the dim tier
-    //! still reads.
-    //!
-    //! Green and gold sit close on the wheel, so this pair is the hardest of
-    //! the duotones to separate — the obvious brass-on-forest choices land at
-    //! 64 to 75, well under the 93 Terrain ships. The green had to move to a
-    //! true leaf green and the gold toward orange to reach 94. Two things
-    //! were tried and rejected on measurement: the dial's actual green (the
-    //! dim tier collapses to a relative luminance of 0.012, invisible), and
-    //! adding the cream lume as a third colour, which *lowers* the worst
-    //! neighbour pair to 52 and pushes the field past Terrain's luminance —
-    //! cream is bright and nearly achromatic, so it separates from nothing.
-    //!
-    //! Pushing further gets a better number and a worse theme: the top of the
-    //! sweep drifts the green to teal and the gold to orange, which scores 100
-    //! and lands 16 from Lagoon's teal. This green sits 41 away, which is what
-    //! keeps it a different theme rather than a better-contrasting Lagoon.
-    //!
-    //! **Alpinist 4** is the whole watch rather than the dial: the strap and
-    //! the lume join the green and the gold. It is the only four-colour theme
-    //! added since Activity, and it exists because of one fact that is not
-    //! obvious until it is measured.
-    //!
-    //! **Brown is what gold looks like unlit.** Gold at the unfilled tier is
-    //! 0x8C5400; a cocoa brown is 0x8B5A2B. Those are 15 apart in CIELAB
-    //! against the ~37 that separates a lit dot from an unlit one *within* a
-    //! ring — so a lit brown dot and an unlit gold dot are the same colour,
-    //! and a brown ring beside a gold one is unreadable. Brown is not a hue;
-    //! it is dark orange, which is precisely the thing this face makes when
-    //! it dims a gold. Every brown tried lands 15-24 from unlit gold.
-    //!
-    //! So the strap is a brick rather than a leather brown. Sweeping the brown
-    //! toward red, it has to reach a hue of about 4 degrees before it clears
-    //! that bar — at which point it is no longer brown. The alternative was to
-    //! drop the gold and keep a true brown, which works and was rendered: it
-    //! reaches only 65 between neighbours against this one's 86, and the brown
-    //! ring goes muddy against the green.
-    //!
-    //! The white sits on the **innermost** ring on purpose. Ring order is free
-    //! here, and the rings hold 436/340/244/92 dots outermost-in, so the
-    //! brightest colour on the smallest ring is what keeps a white-bearing
-    //! theme inside the luminance budget at all: 4.95% worst-case always-on,
-    //! which is lower than Terrain.
+    //! The order is decorative in neither theme. Neighbours blurring together,
+    //! not the set average, decides whether two rings can be told apart.
+    //! Activity puts gold on the innermost ring, which has by far the fewest
+    //! dots, and leaves it beside blue rather than either of the closer hues.
     //!
     //! Ring 1 is the outermost.
     const THEME_COLOURS = 4;
-    const THEME_COUNT = 7;
+    const THEME_COUNT = 2;
     const THEMES = [
         0xE879F9,   //! Terrain:  orchid
         0xB8D64B,   //!           moss
         0x7FD4FF,   //!           ice
         0xFF6B5B,   //!           rust
-        0xE59A0A,   //! Activity: gold
-        0x1F8FFE,   //!           blue
+        0xFE4646,   //! Activity: red
         0x6DC54F,   //!           green
-        0xFE4646,   //!           red
-        0x5CD9F0,   //! Frost:    cyan
-        0xF45BD8,   //!           magenta
-        0x5CD9F0,   //!           cyan again — see the duotone note above
-        0xF45BD8,   //!           magenta
-        0x2FD9C5,   //! Lagoon:   teal
-        0xE59A0A,   //!           gold, the same one Activity carries
-        0x2FD9C5,   //!           teal
-        0xE59A0A,   //!           gold
-        0x8E7BFF,   //! Nocturne: indigo
-        0xFF6B5B,   //!           rust, the same one Terrain carries
-        0x8E7BFF,   //!           indigo
-        0xFF6B5B,   //!           rust
-        0x44C265,   //! Alpinist: forest green
-        0xFF9900,   //!           gold
-        0x44C265,   //!           forest green
-        0xFF9900,   //!           gold
-        0xC75A5A,   //! Alpinist 4: brick, the strap. See the note above for
-        0x44C265,   //!             why it is not brown.
-        0xFF9900,   //!             gold
-        0xF5F5F5    //!             white, the lume, on the innermost ring
+        0x1F8FFE,   //!           blue
+        0xE59A0A    //!           gold
     ] as Array<Number>;
 
     const WEAK_ACTIVE = 0.55;
@@ -298,7 +194,7 @@ module Palette {
     const RAMP_STEPS = 32;
 
     //! Which of a theme's colours the ramp runs through, flat and in cold,
-    //! mid, hot order: RAMP_STOPS[theme * RAMP_POINTS + n].
+    //! mid, hot order: RAMP_STOPS[themeIndex * RAMP_POINTS + n].
     //!
     //! Indices into the theme rather than colours of their own, because a ramp
     //! stop *is* a ring colour and writing the value a second time is how the
@@ -306,31 +202,11 @@ module Palette {
     //! which slot holds the cold hue falls out of the ring ordering — and that
     //! ordering answers to neighbour contrast, not to keeping the ramp's
     //! indices where they were. Terrain runs ice -> orchid -> rust, Activity
-    //! blue -> gold -> red.
-    //! A mid stop of RAMP_LINEAR means the theme has only two hues to ramp
-    //! through, so the middle is the midpoint of cold and hot rather than a
-    //! colour of its own — the two segments become one straight run. It is a
-    //! sentinel rather than a fourth colour because a duotone genuinely has
-    //! no third stop to name, and inventing one here would be writing a
-    //! colour value in the one table that exists to avoid exactly that.
-    const RAMP_LINEAR = -1;
-
-    //! The -1s below are RAMP_LINEAR, written as a literal on purpose. Naming
-    //! the const inside a const array's initialiser is the same shape as the
-    //! nested const array that resolves in the simulator and comes back empty
-    //! on the watch, and an empty RAMP_STOPS would not draw wrong — it would
-    //! index out of bounds and the face would not load. Not worth finding out
-    //! on the device. RAMP_LINEAR is still the name everything compares
-    //! against, which is a runtime read and safe.
+    //! blue -> gold -> red. Both shipping themes have three explicit stops.
     const RAMP_POINTS = 3;
     const RAMP_STOPS = [
         2, 0, 3,                    //! Terrain:  ice -> orchid -> rust
-        1, 0, 3,                    //! Activity: blue -> gold -> red
-        0, -1, 1,                   //! Frost:    cyan -> magenta
-        0, -1, 1,                   //! Lagoon:   teal -> gold
-        0, -1, 1,                   //! Nocturne: indigo -> rust
-        0, -1, 1,                   //! Alpinist: green -> gold
-        1, 2, 0                     //! Alpinist 4: green -> gold -> brick
+        2, 3, 0                     //! Activity: blue -> gold -> red
     ] as Array<Number>;
 
     var active as Array<Number> = [] as Array<Number>;
@@ -363,7 +239,7 @@ module Palette {
 
     //! One colour of the theme in force, by its index within that theme.
     function themeColour(index as Number) as Number {
-        return THEMES[(StatMap.theme * THEME_COLOURS) +
+        return THEMES[(StatMap.themeIndex(StatMap.theme) * THEME_COLOURS) +
                       (index % THEME_COLOURS)];
     }
 
@@ -403,15 +279,10 @@ module Palette {
         var rampLifted = [] as Array<Number>;
         // Hoisted: the stops are fixed for the whole ramp, so looking them up
         // per step would pay for the indirection 32 times over for nothing.
-        var stops = StatMap.theme * RAMP_POINTS;
+        var stops = StatMap.themeIndex(StatMap.theme) * RAMP_POINTS;
         var cold = themeColour(RAMP_STOPS[stops]);
+        var mid = themeColour(RAMP_STOPS[stops + 1]);
         var hot = themeColour(RAMP_STOPS[stops + 2]);
-        // Branch before themeColour rather than inside it: the sentinel is not
-        // an index, and themeColour would wrap it into a real slot.
-        var midStop = RAMP_STOPS[stops + 1];
-        var mid = (midStop == RAMP_LINEAR)
-            ? mix(cold, hot, 0.5)
-            : themeColour(midStop);
         for (var step = 0; step < RAMP_STEPS; step++) {
             var along = step.toFloat() / (RAMP_STEPS - 1);
             var colour = (along <= 0.5)

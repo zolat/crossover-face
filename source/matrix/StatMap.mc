@@ -44,17 +44,22 @@ module StatMap {
 
     //! Which set of colours the rings carry. The theme decides every colour
     //! the face draws; see Palette.THEMES for what each one is and why.
-    //! Appended to, never reordered: the stored value is an index, so moving
-    //! one renames every theme above it on watches already carrying a setting.
+    //!
+    //! IDs 2 through 6 belonged to retired themes. They stay reserved so an
+    //! old stored value can never silently become a different colour scheme.
+    //! New themes start at 7 and are appended to THEME_IDS explicitly; the
+    //! array position is the dense index used by Palette's compact tables.
     enum Theme {
         THEME_TERRAIN = 0,          //! Orchid, moss, ice, rust.
-        THEME_ACTIVITY = 1,         //! The watch's own activity accents.
-        THEME_FROST = 2,            //! Duotone: cyan and magenta.
-        THEME_LAGOON = 3,           //! Duotone: teal and gold.
-        THEME_NOCTURNE = 4,         //! Duotone: indigo and rust.
-        THEME_ALPINIST = 5,         //! Duotone: forest green and gold.
-        THEME_ALPINIST4 = 6         //! Brick, green, gold and white.
+        THEME_ACTIVITY = 1          //! The watch's own activity accents.
     }
+
+    const THEME_RETIRED_FIRST = 2;
+    const THEME_RETIRED_LAST = 6;
+    const THEME_NEXT_ID = 7;
+    // Literal values because Monkey C const arrays have failed on-device when
+    // their initialisers refer to other consts. The tests pin these to the enum.
+    const THEME_IDS = [0, 1] as Array<Number>;
 
     const PROPERTY_THEME = "theme";
     const PROPERTY_BACKING = "handBacking";
@@ -83,8 +88,9 @@ module StatMap {
     //! Re-read every setting. Safe at any time; anything missing or out of
     //! range falls back to its default rather than throwing.
     function load() as Void {
-        theme = readNumber(PROPERTY_THEME, THEME_TERRAIN,
-                           THEME_TERRAIN, THEME_ALPINIST4);
+        var storedTheme = readNumber(PROPERTY_THEME, THEME_TERRAIN,
+                                     THEME_TERRAIN, THEME_NEXT_ID);
+        theme = THEME_IDS[themeIndex(storedTheme)];
         backing = readNumber(PROPERTY_BACKING, BACKING_OFF,
                              BACKING_OFF, BACKING_DARK);
         alwaysOnFill = readNumber(PROPERTY_ALWAYS_ON_FILL, ALWAYS_ON_FILL_SHOWN,
@@ -134,6 +140,18 @@ module StatMap {
             value = fallback;
         }
         return value;
+    }
+
+    //! Dense table index for a persisted theme ID. Unknown and retired IDs
+    //! resolve to Terrain, keeping Palette's shipping tables gap-free without
+    //! ever making the reserved values selectable again.
+    function themeIndex(id as Number) as Number {
+        for (var i = 0; i < THEME_IDS.size(); i++) {
+            if (THEME_IDS[i] == id) {
+                return i;
+            }
+        }
+        return 0;
     }
 
     //! A span nothing is inside.
