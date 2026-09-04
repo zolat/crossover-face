@@ -341,6 +341,14 @@ good enough to see the face by and not good enough to measure.
 
 - **There is no lint or typecheck step.** `monkey.jungle` sets `project.typecheck = strict` and
   the Makefile passes `-w`, so a clean `make build` *is* the type check. Don't go looking for one.
+- **But `make build` does not type-check `MatrixTest.mc`.** That file is `(:test)` and only
+  compiles under `-t`, so a green `make build` says nothing about it. Worse, the failure
+  *looks like contention*: `make test` compiles before it runs, a compile error means no
+  `Ran N tests` line, and the target's own diagnosis reports "the simulator died" — the one
+  thing you have been told to re-run rather than believe. Two ways to tell them apart: read the
+  raw output for `ERROR: instinctcrossoveramoled:`, or build the test `.prg` on its own first —
+  `"${SDK}bin/monkeyc" -f monkey.jungle -o bin/CrossoverFace-test.prg -y "$KEY" -d
+  instinctcrossoveramoled -w -t`. Do that after editing tests, before blaming the simulator.
 - **`monkeydo` exits non-zero even when every test passes**, which is why `make test` greps for
   `^PASSED` and ignores the exit code. Never judge a raw `monkeydo` run by its status code — read
   the summary line.
@@ -433,6 +441,14 @@ whose lit-ness actually changed are drawn — measured at 7ms against 24ms, 20 d
   **twice**, since both buffers hold the old tiers. `theDeltaCoversBothBuffersNotJustTheLastDraw`
   is the guard that matters here: a delta taken against the last draw alone looks right on
   screen and leaves every other frame a step behind.
+
+**An over-goal ring opts out of the delta too**, and for two reasons at once rather than the
+block ring's one: its mark is a *run* of `DotGrid.MARK_DOTS` cells rather than a single one,
+so the force set the delta carries would be six comparisons per dot instead of two; and its
+lapped dots are solid blocks, which a nine-pixel cross cannot rub out. Both are in
+`overs[ring]` in the eligibility key, in *both* places that key is compared. A goal moves
+once a minute, so the gate had already skipped nearly every frame there was anything to save
+on. `anOverRingOptsOutOfTheDelta` is the guard.
 
 A mark is a solid block and a dot is a cross, so repainting a ring covers only 9 of the 25
 pixels a mark occupies. `MatrixRenderer` blacks the cell before repainting —
@@ -601,6 +617,67 @@ The justification is a claim about the lattice and is asserted as one —
 only on the innermost ring, where sixteen (block, level) pairs light no dot at all; **ring 2
 draws every rung**, so its exclusion still rests on the dot count and on nothing else — worth
 knowing before anyone relaxes the cut.
+
+### Past the goal, a lapped dot changes shape rather than colour
+
+Steps and intensity minutes can be beaten, and past 100% the overflow runs a second lap:
+the span is re-pointed at the lap and the ring's two tiers are swapped, so unfilled means
+"goal met" and filled means "gone past it".
+
+**The tier swap alone does not read, and that was measured.** Band 0.77 against over 0.84 on
+the moss ring, on five-pixel crosses — rendered side by side, 100%, 134% and 250% could not
+be told apart. Tinting harder is not available: `OVER_TINT` is boxed in between the band and
+`MARKER_TINT`, which `everyThemeKeepsTheTierOrder` pins. So a **lapped dot is drawn as a
+solid `MatrixRenderer.LAP_BLOCK` square** rather than as a cross. Same law as the temperature
+mark and the date watermark: on a field of thin crosses, only a change of density reads.
+
+Five things follow and none is obvious:
+
+- **`LAP_BLOCK` is 4, not `DotGrid.DOT`.** All three solid sizes read identically at 1:1, so
+  the size answers to luminance alone: one full lap on ring 0 costs 5.43% as crosses, 7.27% at
+  4x4, 9.65% at 5x5. 3x3 is nine pixels — free — and is the one that fails, because a smaller
+  footprint reads *dimmer*, which is backwards. The price of 4 over 5 is that the block does
+  not cover the cross it replaces: the right and bottom arm tips, two pixels, survive a
+  *growing* lap until `FrameGate.sinceClear` blacks the screen a few seconds later.
+- **An over ring walks its own loop**, beside the block ring's. `lit && overs[ring]` in the
+  span loop is a test paid on all ~1100 dots to serve a ring that usually is not over. Split,
+  the span loop is byte-for-byte unchanged, so **no frame without a lap in it moved at all** —
+  which is what discharges the re-measure-both-rows rule for this change.
+- **The hands outrank the lap's shape as well as its colour.** A backed dot is an ordinary
+  cross in the backing colour, in every loop; a block there makes the hands read denser
+  wherever a lap runs under them. This was a real bug, caught by
+  `aLappedDotIsFilledAndAnUnlappedDotIsNot`.
+- **A lapped dot swallows the strike it would have carried**, and the watermark cursor
+  advances with it. There is no numeral left to preserve under a 16-pixel block, so this is
+  honest rather than a compromise — but the cursor must still land exactly at the end of the
+  ring's slice, which `aLapSwallowsTheStrikesItCovers` is what holds.
+- **The luminance figures are awake-only figures.** Every ring full with both goal sources
+  past double is 10.3% of screen on the worst theme, and 10% is the threshold Garmin blanks an
+  *always-on* face at — `StatMap.overs(false)` is all false, so always-on never reports a lap.
+  `overGoalCostsLittleLuminance` walks every theme and states that explicitly rather than
+  asserting a budget that does not govern. Note it needs its own `lapFrameLuminance()`: the
+  ordinary `frameLuminance()` charges every dot nine pixels, which is why the shape change
+  slipped past every luminance test in the file until that existed.
+
+**The waterline is a radial tick, and it sits outside the lap.** Two decisions, both of which
+look wrong until rendered:
+
+- **One dot per band of radius**, in `DotGrid.markedDotsFor()`. Not everything inside the
+  mark's window, which is a wedge — the window is a pitch of arc at the ring's *inner* edge,
+  so it is two dots wide at the outer. And not one dot per lattice *row*, the obvious reading
+  of "radial", which collapses to a single dot at three o'clock where the ring's radial
+  direction runs *along* a row. A band of radius is orientation-free; that is the whole
+  property. It comes out 3–5 dots on every ring, which is what the lattice gives rather than a
+  choice.
+- **Placed one pitch of arc *past* the lap's end**, in `StatMap.markers()`. Inside the lap it
+  is solid against solid with only its colour left — the exact failure that made the lap solid.
+  Outside it, it lands on plain crosses where a solid block is again unique. It still marks the
+  boundary, from the outside. The `>= 1.0` suppression now tests the *offset* position, since
+  that is what would wrap.
+
+The temperature mark stays a single dot. `markedWide` is in the cache key because a ring
+crossing its goal keeps the same position while changing how many cells it occupies, and
+`markedAt` is flat, `MARK_DOTS` per ring, padded with -1 at the tail.
 
 ### Every other source reports a span, not a level
 
