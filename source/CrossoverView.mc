@@ -84,6 +84,16 @@ class CrossoverView extends WatchUi.WatchFace {
     //! hidden states without depending on the simulator's display controls.
     function updateForMode(dc as Dc, mode as Number) as Void {
         var started = System.getTimer();
+        if (shouldClearTransitionAt(mode, started)) {
+            // System overlays animate successive positions into the same
+            // framebuffer. A true no-op leaves every old position behind; one
+            // native clear gives the compositor a clean black surface without
+            // bringing source reads or the 1,112-dot renderer back into the
+            // outgoing transition.
+            dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_BLACK);
+            dc.clear();
+            return;
+        }
         if (!shouldUpdateAt(mode, started)) {
             return;
         }
@@ -340,6 +350,14 @@ class CrossoverView extends WatchUi.WatchFace {
         return shouldUpdateAt(mode, System.getTimer());
     }
 
+    //! Is this callback part of the short outgoing animation that needs its
+    //! previous system-overlay position erased? Public only for lifecycle tests.
+    function shouldClearTransitionAt(mode as Number, now as Number) as Boolean {
+        return mode != System.DISPLAY_MODE_OFF && _leaving &&
+               now >= _hiddenAt &&
+               now - _hiddenAt < TRANSITION_QUIET_MS;
+    }
+
     //! Time-injected form for the transition tests. Outgoing callbacks stay
     //! cheaper than the frame preamble. Once the animation window has elapsed,
     //! an update without a matching onShow is treated as an overlay returning
@@ -351,8 +369,7 @@ class CrossoverView extends WatchUi.WatchFace {
         if (!_leaving) {
             return true;
         }
-        if (now >= _hiddenAt &&
-                now - _hiddenAt < TRANSITION_QUIET_MS) {
+        if (shouldClearTransitionAt(mode, now)) {
             return false;
         }
         // Timer wrap also lands here: a wrapped timestamp must never leave the

@@ -176,7 +176,9 @@ the largest thing this turned out not to need.
 # Previously: the frame budget (complete)
 
 **Current:** done — Phase 6 removes redundant work from physical-watch view
-transition bursts while preserving the two-buffer delta rules.
+transition bursts while preserving the two-buffer delta rules. Outgoing overlay
+callbacks clear to black rather than doing nothing, so animated system controls
+cannot leave trails, but still avoid every source read and dot draw.
 
 - [x] Phase 0 — baseline the frame cost on a fresh simulator
 - [x] Phase 1a — cost the skipped frame, which nothing measured before

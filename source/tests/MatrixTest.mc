@@ -3040,6 +3040,12 @@ module MatrixTest {
 
         var hidingAt = System.getTimer();
         view.onHide();
+        Test.assertMessage(view.shouldClearTransitionAt(
+                System.DISPLAY_MODE_HIGH_POWER, hidingAt),
+            "an outgoing transition did not request its cheap black clear");
+        Test.assertMessage(!view.shouldClearTransitionAt(
+                System.DISPLAY_MODE_OFF, hidingAt),
+            "a display-off transition tried to draw a clearing frame");
         Test.assertMessage(
             !view.shouldUpdate(System.DISPLAY_MODE_HIGH_POWER),
             "a hidden face accepted a high-power transition update");
