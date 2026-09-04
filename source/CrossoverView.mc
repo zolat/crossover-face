@@ -10,19 +10,12 @@ class CrossoverView extends WatchUi.WatchFace {
     //! Tracks sleep state for devices that predate System.getDisplayMode().
     private var _asleep as Boolean = false;
 
-    //! Suppress only the short outgoing animation, never the whole hidden
-    //! lifetime. The flashlight overlay can call onHide without a matching
-    //! onShow; a permanent hidden flag therefore prevents its pixels ever being
-    //! repaired. One second covers the observed transition burst while letting
-    //! an unpaired overlay recover on its first later callback.
-    const TRANSITION_QUIET_MS = 1000;
-    private var _leaving as Boolean = false;
-    private var _hiddenAt as Number = 0;
-
-    //! A normal low-power update still paints the complete AMOLED frame once a
-    //! minute. Only additional calls in that same minute are transition noise
-    //! and may take the no-change path.
-    private var _lowPowerMinuteKey as Number = -1;
+    //! The complete face lives here rather than in whichever screen Dc Garmin
+    //! supplies to a particular callback. Layers are composited by the system
+    //! during regular updates and transition animations, so an unchanged frame
+    //! can leave these pixels alone without exposing a cleared screen surface.
+    const LAYER_COLOR_DEPTH = 16;
+    private var _faceDc as Dc? = null;
 
     //! The two prints, allocated once and refilled every frame. FrameGate copies
     //! the values it needs, so handing it the same buffer every frame is safe.
@@ -48,32 +41,33 @@ class CrossoverView extends WatchUi.WatchFace {
         WatchFace.initialize();
     }
 
-    //! The dot cache is built here rather than in the app's onStart, which
-    //! has a far tighter watchdog budget and tripped on it. onLayout runs once,
-    //! before the first frame, so the face is complete the first time it draws.
+    //! Build the fixed lattice and the one authoritative render surface. The
+    //! screen itself is cleared only as the opaque backing behind that layer;
+    //! every later pixel mutation happens off-screen in the layer's own Dc.
     function onLayout(dc as Dc) as Void {
+        clearLayers();
+        var layer = new WatchUi.Layer({
+            :locX => 0,
+            :locY => 0,
+            :width => dc.getWidth(),
+            :height => dc.getHeight(),
+            :colorDepth => LAYER_COLOR_DEPTH
+        });
+        _faceDc = layer.getDc();
+        addLayer(layer);
+
+        dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_BLACK);
+        dc.clear();
         DotGrid.ensureBuilt();
-        FrameGate.transition();
+        FrameGate.forget();
         holdHandsAtSystemTime();
     }
 
-    //! Coming back from a menu, which pops rather than re-laying out. Settings
-    //! reload at the point they change; the fixed lattice remains valid for the
-    //! whole application lifetime. Both display buffers must be repainted
-    //! immediately here: a system surface such as the flashlight can occupy the
-    //! alternate buffer, and deferring its repair leaves that surface ghosted on
-    //! top of the face until another value changes.
+    //! The layer survives system overlays and view transitions. Settings reload
+    //! at the point they change and invalidate FrameGate there; merely becoming
+    //! visible again does not make an unchanged layer stale.
     function onShow() as Void {
-        _leaving = false;
         DotGrid.ensureBuilt();
-        FrameGate.forget();
-    }
-
-    //! Suppress the outgoing animation burst, but only for a bounded interval.
-    //! See shouldUpdateAt() for the unpaired-overlay recovery.
-    function onHide() as Void {
-        _leaving = true;
-        _hiddenAt = System.getTimer();
     }
 
     function onUpdate(dc as Dc) as Void {
@@ -84,7 +78,7 @@ class CrossoverView extends WatchUi.WatchFace {
     //! hidden states without depending on the simulator's display controls.
     function updateForMode(dc as Dc, mode as Number) as Void {
         var started = System.getTimer();
-        if (!shouldUpdateAt(mode, started)) {
+        if (!shouldUpdate(mode)) {
             return;
         }
         var lowPower = (mode == System.DISPLAY_MODE_LOW_POWER);
@@ -158,34 +152,31 @@ class CrossoverView extends WatchUi.WatchFace {
             DateGlyph.ensure(day);
         }
 
-        // What of this frame is worth drawing. Awake, most frames repeat the
-        // one before and are not drawn at all; of the rest, almost all move a
-        // single ring and only that ring is walked. Always-on still paints one
-        // complete frame per real minute, but duplicate callbacks during a
-        // transition take the same no-change path.
+        // What of the authoritative layer needs changing. Most callbacks see
+        // the same visual state and leave it untouched; Garmin still composites
+        // the complete layer for the callback and for every animation frame.
         var clock = System.getClockTime();
         Drift.fillFor(clock.min, _drift);
-
-        if (lowPower) {
-            var minuteKey = clock.hour * 60 + clock.min;
-            if (minuteKey != _lowPowerMinuteKey) {
-                _lowPowerMinuteKey = minuteKey;
-                FrameGate.transition();
-            }
-        }
-
-        // Garmin may issue several identical onUpdate calls while a view or
-        // display-mode transition is in progress, including a burst still
-        // labelled low-power on physical AMOLED watches. The first callback
-        // defines the complete frame; the rest must be the same cheap no-change
-        // path as an ordinary awake update.
-        if (!FrameGate.plan(
-                fieldPrint(backing, day, _drift, clock.min, mode),
-                ringPrint(spans, markers, overs, blocks))) {
+        var field = fieldPrint(backing, day, _drift, clock.min, mode);
+        var rings = ringPrint(spans, markers, overs, blocks);
+        if (!FrameGate.plan(field, rings)) {
             Diagnostics.recordSkip(System.getTimer() - started);
             return;
         }
-        var dirty = FrameGate.dirty;
+
+        // onLayout establishes this on the real watch. The explicit fallback
+        // keeps the face functional if a device cannot provide a layer Dc: it
+        // draws a complete direct frame on every callback rather than applying
+        // unsafe deltas to an unowned screen surface.
+        var targetDc = dc;
+        var persistent = false;
+        var layerDc = _faceDc;
+        if (layerDc != null) {
+            targetDc = layerDc;
+            persistent = true;
+        } else {
+            FrameGate.everything();
+        }
 
         // Held back, the unfilled tier is the entire image rather than a
         // backdrop to the fills, so it gets its own table — brighter than the
@@ -194,9 +185,16 @@ class CrossoverView extends WatchUi.WatchFace {
         var palette = hideFills
             ? Palette.heldBack
             : (lowPower ? Palette.alwaysOn : Palette.active);
-        MatrixRenderer.drawAt(dc, spans, markers, overs, blocks, palette,
+        MatrixRenderer.drawAt(targetDc, spans, markers, overs, blocks, palette,
                               lowPower ? Palette.rampAlwaysOn : Palette.rampActive,
-                              backing, dirty, FrameGate.clears, _drift);
+                              backing, FrameGate.dirty, FrameGate.clears, _drift);
+        if (persistent) {
+            FrameGate.commit(field, rings);
+        } else {
+            // Do not remember direct-screen pixels: Garmin may clear them
+            // before the next callback, which is the failure this layer fixes.
+            FrameGate.forget();
+        }
         Diagnostics.record(System.getTimer() - started);
     }
 
@@ -310,15 +308,12 @@ class CrossoverView extends WatchUi.WatchFace {
 
     function onEnterSleep() as Void {
         _asleep = true;
-        _lowPowerMinuteKey = -1;
-        FrameGate.transition();
         WatchUi.requestUpdate();
     }
 
     function onExitSleep() as Void {
         _asleep = false;
         holdHandsAtSystemTime();
-        FrameGate.transition();
         // High-power mode schedules its own immediate onUpdate. Requesting one
         // here creates an extra synchronous callback just as a button press may
         // be trying to leave the face; Garmin's Analog sample likewise only
@@ -335,30 +330,10 @@ class CrossoverView extends WatchUi.WatchFace {
                        : System.DISPLAY_MODE_HIGH_POWER;
     }
 
-    //! Whether an update has any visible consumer right now.
+    //! Display-off callbacks have no visible consumer. All other callbacks are
+    //! accepted even during transitions: the layer makes them cheap and safe,
+    //! so no lifecycle timing or debounce is needed.
     function shouldUpdate(mode as Number) as Boolean {
-        return shouldUpdateAt(mode, System.getTimer());
-    }
-
-    //! Time-injected form for the transition tests. Outgoing callbacks stay
-    //! cheaper than the frame preamble. Once the animation window has elapsed,
-    //! an update without a matching onShow is treated as an overlay returning
-    //! and both buffers are repaired.
-    function shouldUpdateAt(mode as Number, now as Number) as Boolean {
-        if (mode == System.DISPLAY_MODE_OFF) {
-            return false;
-        }
-        if (!_leaving) {
-            return true;
-        }
-        if (now >= _hiddenAt &&
-                now - _hiddenAt < TRANSITION_QUIET_MS) {
-            return false;
-        }
-        // Timer wrap also lands here: a wrapped timestamp must never leave the
-        // face permanently hidden.
-        _leaving = false;
-        FrameGate.forget();
-        return true;
+        return mode != System.DISPLAY_MODE_OFF;
     }
 }

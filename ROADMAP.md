@@ -175,8 +175,9 @@ the largest thing this turned out not to need.
 
 # Previously: the frame budget (complete)
 
-**Current:** done — Phase 6 removes redundant work from physical-watch view
-transition bursts while preserving the two-buffer delta rules.
+**Current:** superseded by Phase 7. Phase 6 made transitions instant on the
+physical watch, but its inferred two-buffer lifecycle produced flashlight
+animation ghosts and intermittent black frames.
 
 - [x] Phase 0 — baseline the frame cost on a fresh simulator
 - [x] Phase 1a — cost the skipped frame, which nothing measured before
@@ -189,6 +190,8 @@ transition bursts while preserving the two-buffer delta rules.
       claim in a comment
 - [x] Phase 5 — draw only the dots that changed, not the whole ring
 - [x] Phase 6 — make view and power-mode transition bursts draw once, then skip
+- [~] Phase 7 — move the authoritative frame into a system-composited layer;
+      simulator-complete, physical-watch verification pending
 
 Plans: `~/.claude/plans/can-you-review-for-stateless-puffin.md`,
 `~/.claude/plans/are-there-any-more-staged-piglet.md`
@@ -522,3 +525,55 @@ other frame a step behind.
   *worse* than delta redraw on a partial frame and better on a repair, so if it is ever
   taken it is for the repair frame, and it still costs the fill-edge quantisation Phase 4
   described.
+
+---
+
+# Phase 7: make the frame independent of transition surfaces (spike)
+
+**Current:** simulator-complete; the Crossover physical-watch loop is the gate.
+
+Phase 6 proved the performance diagnosis and falsified its framebuffer model. Skipping
+duplicate `onUpdate()` work made the widget list feel like a native Garmin face, but a
+flashlight animation could leave transient copies of itself and the face could flash
+black. More clears, a one-second `onHide()` debounce, and repainting an assumed pair of
+buffers moved those symptoms without eliminating them.
+
+The common cause is that the screen `Dc` is not application storage. Connect IQ may call
+`onUpdate()` repeatedly during transitions, but gives the face no identity or persistence
+contract for the surface behind any one call. Returning without drawing is cheap only if
+the old pixels are still there; the physical failures show that is not always true.
+
+The spike now keeps the complete face in one opaque 16-bit `WatchUi.Layer`. Garmin owns
+compositing that layer during normal updates and animations. `FrameGate` decides only
+whether the layer itself changed, and `MatrixRenderer` applies a change once to that one
+authoritative surface. As a result there is no `onHide()` suppression, debounce, periodic
+damage repair, held duplicate draw, alternate-buffer prime, second remembered span or
+second remembered mark.
+
+The state fingerprint is committed only after rendering succeeds. If a layer Dc is ever
+unavailable, the fallback deliberately draws a complete direct frame on every callback
+and never remembers those screen pixels; correctness degrades to the slower pre-layer
+behaviour rather than to a black or stale frame.
+
+## Evidence so far
+
+- strict Crossover build succeeds;
+- 127 Monkey C tests pass in the private simulator, including layer reuse, configuration
+  invalidation, display-off behaviour and uncommitted-plan recovery;
+- the live face loads in 4.5 seconds and renders correctly in a fresh private simulator;
+- simulator application heap is 64.8 KiB of 123.8 KiB with the layer active;
+- the 390 x 390 x 16-bit pixel store is about 304 KiB in Garmin's separate graphics pool,
+  not in the application heap.
+
+An older private simulator instance stopped accepting both this build and the known-good
+Phase 6 build after a test run. A fresh isolated instance accepted the layer build
+immediately, proving that timeout was harness state rather than a layer startup failure.
+
+## Physical gate
+
+Repeat wake, widget-list, flashlight, notification and settings transitions on the
+Crossover. The spike passes only if all three hold together: native-feeling transition
+latency remains, no flashlight positions survive, and no black frame appears. If native
+layer compositing itself causes unacceptable load, the fallback design is an explicit
+cached bitmap blitted on every callback; returning early against the screen `Dc` is no
+longer an acceptable option.

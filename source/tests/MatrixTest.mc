@@ -1532,15 +1532,13 @@ module MatrixTest {
         var rings = stillRings();
         var field = stillField();
         field[4] = 15.0;
-        for (var i = 0; i < FrameGate.HOLD; i++) {
-            FrameGate.plan(field, rings);
-        }
-        Test.assertMessage(!FrameGate.plan(field, rings),
+        planAndCommit(field, rings);
+        Test.assertMessage(!planAndCommit(field, rings),
             "an unchanged frame must skip before the date is moved");
 
         var tomorrow = stillField();
         tomorrow[4] = 16.0;
-        Test.assertMessage(FrameGate.plan(tomorrow, rings),
+        Test.assertMessage(planAndCommit(tomorrow, rings),
             "the frame the date changes on must be drawn");
         Test.assertMessage(FrameGate.clears,
             "and drawn from black — a repaint leaves yesterday's strokes");
@@ -2710,25 +2708,8 @@ module MatrixTest {
             "stay on screen as a ghost of the last reading");
         Test.assertMessage(MatrixRenderer.drawnMark[1] != first,
             "the remembered mark must follow the reading");
-        Test.assertEqualMessage(MatrixRenderer.previousMark[1], first,
-            "the cell the mark left must still be owed an erase");
         logger.debug("moved a mark, rubbed out " + MatrixRenderer.erased +
                      " stale cell(s)");
-
-        // The second of the HOLD draws is the one that used to be wrong. It is
-        // for the *other* buffer, which still shows the mark at its old cell —
-        // so it has to rub out that cell too, not just the current one. With a
-        // single slot it would rub out the new cell twice and leave sixteen
-        // stray pixels of the old mark under a nine-pixel cross.
-        var moved = DotGrid.markedDotFor(1, 0.75);
-        MatrixRenderer.draw(dc, spans, marks, overs, emptyBlocks(), Palette.active,
-                            Palette.rampActive, null,
-                            onlyRingDirty(1), false);
-        Test.assertMessage(MatrixRenderer.erased >= 2,
-            "the repeat draw must rub out both the cell the mark is in and " +
-            "the one it came from — the other buffer still shows the old one");
-        Test.assertEqualMessage(MatrixRenderer.drawnMark[1], moved,
-            "and the mark itself must not move on the repeat");
 
         // A ring that is not redrawn keeps the mark it has on screen: nothing
         // rubbed it out, so the renderer must not forget it either.
@@ -2824,11 +2805,10 @@ module MatrixTest {
     }
 
     //! Awake, the system asks for a frame every second and almost all of them
-    //! are the frame before it. Skipping those is the largest saving the face
-    //! has left — but a skip shows whatever is already on screen, so the rules
-    //! that bound it matter more than the saving.
+    //! are the frame before it. The authoritative layer remains complete while
+    //! those callbacks are skipped; system overlays never alter its pixels.
     (:test)
-    function unchangedFramesAreSkippedButNeverIndefinitely(logger as Logger) as Boolean {
+    function unchangedFramesLeaveTheLayerUntouched(logger as Logger) as Boolean {
         FrameGate.forget();
         FrameGate.drawn = 0;
         FrameGate.suppressed = 0;
@@ -2836,53 +2816,31 @@ module MatrixTest {
         var field = stillField();
         var still = stillRings();
 
-        // forget() asks for HOLD full draws, not one: on a double-buffered
-        // device the first lands in only one of the two buffers.
-        for (var i = 0; i < FrameGate.HOLD; i++) {
-            Test.assertMessage(FrameGate.plan(field, still),
-                "the frames after forgetting must all be drawn");
-            Test.assertMessage(FrameGate.clears,
-                "and drawn from black, since nothing vouches for the screen");
-        }
-        Test.assertMessage(!FrameGate.plan(field, still),
+        Test.assertMessage(planAndCommit(field, still),
+            "the first layer frame must be drawn");
+        Test.assertMessage(FrameGate.clears,
+            "and drawn from black, since the layer starts undefined");
+        Test.assertMessage(!planAndCommit(field, still),
             "an identical frame must then be skipped");
 
         // A change of any kind must draw, including one only in the last slot.
         var moved = stillRings();
         moved[moved.size() - 1] = 1.0;
-        Test.assertMessage(FrameGate.plan(field, moved),
+        Test.assertMessage(planAndCommit(field, moved),
             "a changed ring must be drawn");
-        settle(field, moved);
-        Test.assertMessage(!FrameGate.plan(field, moved),
+        Test.assertMessage(!planAndCommit(field, moved),
             "and then settle back to skipping");
 
-        // The cap: something drawn over the face from outside is only repaired
-        // by a draw, so skips must not run on forever — and the repair has to
-        // start from black, or damage outside every ring's dots would survive.
-        var run = 0;
-        var repaired = 0;
+        // There is no periodic repair. It existed only because an overlay could
+        // damage the screen Dc; it cannot damage the layer Garmin composites.
         for (var i = 0; i < 40; i++) {
-            if (FrameGate.plan(field, moved)) {
-                Test.assertMessage(run <= FrameGate.MAX_SKIPS,
-                    "went " + run + " frames without drawing, cap is " +
-                    FrameGate.MAX_SKIPS);
-                if (FrameGate.clears) {
-                    repaired++;
-                }
-                run = 0;
-            } else {
-                run++;
-            }
+            Test.assertMessage(!planAndCommit(field, moved),
+                "an unchanged layer was periodically redrawn at callback " + i);
         }
-        Test.assertMessage(run <= FrameGate.MAX_SKIPS,
-            "the gate must never skip more than the cap in a row");
-        Test.assertMessage(repaired > 0,
-            "the periodic repair must clear the screen, or damage outside the " +
-            "dots is never rubbed out");
 
-        // forget() is what onShow uses; it must always draw next.
+        // A real invalidation still forces a complete replacement.
         FrameGate.forget();
-        Test.assertMessage(FrameGate.plan(field, moved),
+        Test.assertMessage(planAndCommit(field, moved),
             "forget() must force the next frame to be drawn");
 
         logger.debug("skipped " + FrameGate.skipPercent() + "% of frames");
@@ -2897,57 +2855,92 @@ module MatrixTest {
         return true;
     }
 
-    //! Waking needs a complete active frame immediately, but blindly repeating
-    //! it one second later is the work that can hold up an outgoing widget
-    //! transition. The other buffer is instead primed on the next frame that
-    //! genuinely changes, and that prime must remain a full repaint so later
-    //! deltas are safe whichever buffer the device hands us.
+    //! Invalidating the layer asks for one complete render. Once committed,
+    //! unchanged callbacks reuse it and the next ring change stays local.
     (:test)
-    function wakeDefersItsSecondFullFrameUntilARealChange(logger as Logger)
+    function invalidationForcesExactlyOneCompleteLayerFrame(logger as Logger)
         as Boolean {
         var field = stillField();
         var rings = stillRings();
-        FrameGate.transition();
+        FrameGate.forget();
 
-        Test.assertMessage(FrameGate.plan(field, rings),
-            "wake must draw one complete active frame immediately");
+        Test.assertMessage(planAndCommit(field, rings),
+            "invalidation must draw one complete frame immediately");
         Test.assertMessage(FrameGate.clears,
-            "the first wake frame must start from black");
+            "the first layer frame must start from black");
         for (var ring = 0; ring < StatMap.RINGS; ring++) {
             Test.assertMessage(FrameGate.dirty[ring],
                 "the first wake frame omitted ring " + ring);
         }
 
-        Test.assertMessage(!FrameGate.plan(field, rings),
-            "an unchanged second after wake must not redraw the whole field");
+        Test.assertMessage(!planAndCommit(field, rings),
+            "an unchanged callback must not redraw the layer");
 
         var moved = stillRings();
         moved[2 * FrameGate.PER_RING + 1] = 0.5;
-        Test.assertMessage(FrameGate.plan(field, moved),
-            "a real post-wake change must still draw");
-        Test.assertMessage(FrameGate.clears,
-            "the first real change must prime the other buffer in full");
-        for (var ring = 0; ring < StatMap.RINGS; ring++) {
-            Test.assertMessage(FrameGate.dirty[ring],
-                "the second-buffer prime omitted ring " + ring);
-        }
-
-        Test.assertMessage(FrameGate.plan(field, moved),
-            "the changed ring is still owed in the first buffer");
+        Test.assertMessage(planAndCommit(field, moved),
+            "a real post-invalidation change must still draw");
         Test.assertMessage(!FrameGate.clears,
-            "only the changed ring needs its held repeat");
+            "one changed ring must not clear the authoritative layer");
         Test.assertMessage(FrameGate.dirty[2],
-            "the changed ring was not repeated into the first buffer");
+            "the changed ring was not planned");
         for (var ring = 0; ring < StatMap.RINGS; ring++) {
             if (ring != 2) {
                 Test.assertMessage(!FrameGate.dirty[ring],
-                    "the held repeat spread to unchanged ring " + ring);
+                    "the change spread to unchanged ring " + ring);
             }
         }
-        Test.assertMessage(!FrameGate.plan(field, moved),
-            "the gate must settle after both buffers carry the change");
+        Test.assertMessage(!planAndCommit(field, moved),
+            "one committed layer write must settle the change");
         FrameGate.forget();
-        logger.debug("wake drew once, skipped, then primed on a real change");
+        logger.debug("one complete layer frame, then local committed changes");
+        return true;
+    }
+
+    //! Planning does not claim pixels were drawn. If the layer Dc is
+    //! unavailable or rendering fails, the same complete plan must remain
+    //! pending until the caller explicitly commits it.
+    (:test)
+    function anUncommittedLayerPlanRemainsPending(logger as Logger)
+        as Boolean {
+        var field = stillField();
+        var rings = stillRings();
+        FrameGate.forget();
+
+        Test.assertMessage(FrameGate.plan(field, rings),
+            "the invalidated layer did not produce a plan");
+        Test.assertMessage(FrameGate.plan(field, rings),
+            "planning alone incorrectly marked the layer as rendered");
+        FrameGate.commit(field, rings);
+        Test.assertMessage(!FrameGate.plan(field, rings),
+            "a committed unchanged layer did not settle");
+
+        FrameGate.forget();
+        logger.debug("a layer plan becomes current only after commit");
+        return true;
+    }
+
+    //! Theme and source configuration live outside the visual fingerprints.
+    //! Reloading either must invalidate the layer even when every sampled
+    //! numeric value happens to remain identical.
+    (:test)
+    function configurationReloadInvalidatesTheRenderLayer(logger as Logger)
+        as Boolean {
+        var field = stillField();
+        var rings = stillRings();
+        FrameGate.forget();
+        settle(field, rings);
+        Test.assertMessage(!planAndCommit(field, rings),
+            "the layer did not settle before configuration changed");
+
+        Config.reload();
+        Test.assertMessage(planAndCommit(field, rings),
+            "configuration reload left an old layer eligible for reuse");
+        Test.assertMessage(FrameGate.clears,
+            "configuration reload did not request a complete layer frame");
+
+        FrameGate.forget();
+        logger.debug("configuration invalidated pixels outside the print");
         return true;
     }
 
@@ -2971,17 +2964,15 @@ module MatrixTest {
         return true;
     }
 
-    //! A system surface can occupy the alternate display buffer while the face
-    //! is hidden. Returning must repaint both buffers immediately; one frame
-    //! leaves the flashlight surface visible until some later value changes.
-    //! The third identical callback must still skip, or this fix would restore
-    //! the unbounded transition work it is meant to avoid.
+    //! System surfaces are composited beside the face layer rather than into
+    //! it. Returning therefore keeps the already-complete layer and does not
+    //! manufacture redraws to repair guessed display buffers.
     (:test)
-    function returningFromASystemSurfaceRepaintsExactlyTwoFrames(
+    function returningFromASystemSurfaceReusesTheRenderLayer(
         logger as Logger) as Boolean {
         var dc = probeDc(logger);
         if (dc == null) {
-            logger.debug("no buffered bitmap available; return not exercised");
+            logger.debug("no buffered bitmap available; layer not exercised");
             return true;
         }
 
@@ -2990,41 +2981,38 @@ module MatrixTest {
                          Source.SOURCE_OFF, Source.SOURCE_OFF]
                         as Array<Number>;
         var view = new CrossoverView();
-        view.onShow();
+        view.onLayout(dc);
+        var layers = view.getLayers();
+        Test.assertMessage(layers != null && layers.size() == 1,
+            "onLayout did not install one authoritative face layer");
+
         var drawn = FrameGate.drawn;
         var suppressed = FrameGate.suppressed;
-
         view.updateForMode(dc, System.DISPLAY_MODE_HIGH_POWER);
         Test.assertEqualMessage(FrameGate.drawn, drawn + 1,
-            "onShow did not repaint the first display buffer");
+            "the new layer did not receive its first frame");
         Test.assertMessage(FrameGate.clears,
-            "the first return frame did not clear the system surface");
+            "the new layer was not defined from black");
 
+        view.onShow();
         view.updateForMode(dc, System.DISPLAY_MODE_HIGH_POWER);
-        Test.assertEqualMessage(FrameGate.drawn, drawn + 2,
-            "onShow did not repaint the alternate display buffer");
-        Test.assertMessage(FrameGate.clears,
-            "the alternate return frame did not clear the system surface");
-
-        view.updateForMode(dc, System.DISPLAY_MODE_HIGH_POWER);
-        Test.assertEqualMessage(FrameGate.drawn, drawn + 2,
-            "returning to the face kept drawing after both buffers were valid");
+        Test.assertEqualMessage(FrameGate.drawn, drawn + 1,
+            "onShow discarded a complete render layer");
         Test.assertEqualMessage(FrameGate.suppressed, suppressed + 1,
-            "the third identical return callback did not skip");
+            "the unchanged return callback did not reuse the layer");
 
-        view.onHide();
         StatMap.rings = savedRings;
         FrameGate.forget();
-        logger.debug("onShow repaired two buffers, then skipped");
+        logger.debug("onShow reused the system-composited render layer");
         return true;
     }
 
-    //! Garmin may call onUpdate while a view transition is removing the face.
-    //! Hidden and display-off callbacks must stop before touching any source;
-    //! otherwise the transition can wait on a history or forecast refresh for
-    //! pixels that nobody will display.
+    //! Display-off callbacks have no consumer and stop before data collection.
+    //! Visible transition callbacks remain eligible: an unchanged one only
+    //! reuses the layer, with no onHide timing or debounce involved.
     (:test)
-    function hiddenAndDisplayOffUpdatesReadNoSources(logger as Logger)
+    function displayOffSkipsSourcesWhileTransitionsReuseTheLayer(
+        logger as Logger)
         as Boolean {
         var view = new CrossoverView();
         var dc = probeDc(logger);
@@ -3033,32 +3021,20 @@ module MatrixTest {
             return true;
         }
 
+        var savedRings = StatMap.rings;
+        StatMap.rings = [Source.SOURCE_OFF, Source.SOURCE_OFF,
+                         Source.SOURCE_OFF, Source.SOURCE_OFF]
+                        as Array<Number>;
+        view.onLayout(dc);
+
         WatchData.forget();
         WeatherData.forget();
         HourlyWeatherData.forget();
         BodyBatteryData.forget();
 
-        var hidingAt = System.getTimer();
-        view.onHide();
         Test.assertMessage(
-            !view.shouldUpdate(System.DISPLAY_MODE_HIGH_POWER),
-            "a hidden face accepted a high-power transition update");
-        view.updateForMode(dc, System.DISPLAY_MODE_HIGH_POWER);
-        Test.assertMessage(!WatchData.sampled && !WeatherData.sampled &&
-                           !HourlyWeatherData.sampled &&
-                           !BodyBatteryData.currentSampled &&
-                           !BodyBatteryData.historySampled,
-            "a hidden update reached a device data source");
-
-        Test.assertMessage(view.shouldUpdateAt(
-                System.DISPLAY_MODE_HIGH_POWER,
-                hidingAt + view.TRANSITION_QUIET_MS + 1),
-            "an overlay without onShow left the face permanently hidden");
-        Test.assertMessage(view.shouldUpdate(
-                System.DISPLAY_MODE_HIGH_POWER),
-            "recovering an unpaired overlay did not re-enable later updates");
-
-        view.onShow();
+            view.shouldUpdate(System.DISPLAY_MODE_HIGH_POWER),
+            "a visible transition callback was incorrectly debounced");
         Test.assertMessage(!view.shouldUpdate(System.DISPLAY_MODE_OFF),
             "a face accepted an update for a display that is off");
         view.updateForMode(dc, System.DISPLAY_MODE_OFF);
@@ -3071,9 +3047,8 @@ module MatrixTest {
             view.shouldUpdate(System.DISPLAY_MODE_LOW_POWER),
             "a shown always-on face must still accept its minute update");
 
-        // The first low-power callback in a minute defines the complete AOD
-        // frame. A transition burst in that same minute must not redraw it
-        // repeatedly; the next real minute will force another complete frame.
+        // The first callback defines the AOD layer. A duplicate transition
+        // callback leaves it untouched while the system composites it again.
         var fillSetting = StatMap.alwaysOnFill;
         StatMap.alwaysOnFill = StatMap.ALWAYS_ON_FILL_HIDDEN;
         var drawn = FrameGate.drawn;
@@ -3086,9 +3061,9 @@ module MatrixTest {
             "the duplicate low-power update did not take the no-change path");
         StatMap.alwaysOnFill = fillSetting;
 
-        view.onHide();
+        StatMap.rings = savedRings;
         FrameGate.forget();
-        logger.debug("hidden and display-off callbacks stopped before sources");
+        logger.debug("off skipped data; transition duplicate reused the layer");
         return true;
     }
 
@@ -3109,12 +3084,20 @@ module MatrixTest {
         return out;
     }
 
-    //! Draw the same frame until every hold has run out, so what follows is
-    //! testing the gate rather than the repeat a change is owed.
-    function settle(field as Array<Float>, rings as Array<Float>) as Void {
-        for (var i = 0; i < FrameGate.HOLD; i++) {
-            FrameGate.plan(field, rings);
+    //! Exercise a plan as the view does: pixels are considered current only
+    //! after the caller reports that rendering completed.
+    function planAndCommit(field as Array<Float>,
+                           rings as Array<Float>) as Boolean {
+        if (!FrameGate.plan(field, rings)) {
+            return false;
         }
+        FrameGate.commit(field, rings);
+        return true;
+    }
+
+    //! Draw the same frame until the authoritative layer has accepted it.
+    function settle(field as Array<Float>, rings as Array<Float>) as Void {
+        planAndCommit(field, rings);
     }
 
     //! Only this ring dirty, for driving the renderer down its partial path.
@@ -3133,25 +3116,22 @@ module MatrixTest {
     //! redrew all four rings because one of them had moved — which this
     //! module's own comment used to accept as the price of a second hand.
     //!
-    //! Three things have to hold, and the third is the one that bites: a moved
-    //! ring is dirty, an unmoved one is not, and a change is repeated into
-    //! HOLD consecutive *draws* rather than one. That last is what makes the
-    //! partial redraw safe if the device hands onUpdate an alternating buffer,
-    //! where the Dc being drawn into is the one from two draws ago.
+    //! A moved ring is dirty, an unmoved one is not, and one successful write
+    //! settles it because every update targets the same render layer.
     (:test)
     function onlyTheRingThatMovedIsDrawn(logger as Logger) as Boolean {
         FrameGate.forget();
         var field = stillField();
         var rings = stillRings();
         settle(field, rings);
-        Test.assertMessage(!FrameGate.plan(field, rings),
+        Test.assertMessage(!planAndCommit(field, rings),
             "a still face must skip");
 
         // Move ring 2's span end and nothing else.
         var moved = stillRings();
         moved[2 * FrameGate.PER_RING + 1] = 0.5;
 
-        Test.assertMessage(FrameGate.plan(field, moved),
+        Test.assertMessage(planAndCommit(field, moved),
             "a ring that moved must open the gate");
         Test.assertMessage(!FrameGate.clears,
             "one ring moving must not clear the whole screen — clearing it " +
@@ -3164,25 +3144,16 @@ module MatrixTest {
             }
         }
 
-        // The hold: the same change is drawn again, still only that ring.
-        Test.assertMessage(FrameGate.plan(field, moved),
-            "a change must be repeated into HOLD consecutive draws, for a " +
-            "device whose buffers alternate");
-        Test.assertMessage(FrameGate.dirty[2],
-            "and the repeat must be of the ring that moved");
-        Test.assertMessage(!FrameGate.dirty[0],
-            "the repeat must not spread to rings that never moved");
-
-        // And then it settles.
-        Test.assertMessage(!FrameGate.plan(field, moved),
-            "once the hold is spent an unmoved face skips again");
-        logger.debug("one ring moved, " + FrameGate.HOLD + " draws, no clear");
+        // The committed write is immediately authoritative.
+        Test.assertMessage(!planAndCommit(field, moved),
+            "one layer write did not settle the moved ring");
+        logger.debug("one ring moved, one layer write, no clear");
 
         // The field is different in kind: drift moves every dot, so there is
         // nothing on screen worth keeping.
         var drifted = stillField();
         drifted[0] = 3.0;
-        Test.assertMessage(FrameGate.plan(drifted, moved),
+        Test.assertMessage(planAndCommit(drifted, moved),
             "a drift step must draw");
         Test.assertMessage(FrameGate.clears,
             "drift moves the whole lattice, so the frame starts from black");
@@ -3527,13 +3498,12 @@ module MatrixTest {
         var wholeFrames = 0;
         var otherRings = 0;
         for (var second = 1; second < 60; second++) {
-            if (FrameGate.plan(field, ringPrintAtSecond(second))) {
+            if (planAndCommit(field, ringPrintAtSecond(second))) {
                 opened++;
                 if (FrameGate.clears) {
                     wholeFrames++;
                 } else {
-                    // On a frame that is not the periodic repair, the sweep
-                    // must cost its own ring and nothing else.
+                    // A sweep tick must cost its own ring and nothing else.
                     for (var ring = 1; ring < StatMap.RINGS; ring++) {
                         if (FrameGate.dirty[ring]) {
                             otherRings++;
@@ -3545,7 +3515,7 @@ module MatrixTest {
             }
         }
         logger.debug("the gate opened on " + opened + " of 59 ticks, cleared " +
-                     wholeFrames + ", drew an unmoved ring outside the repair " +
+                     wholeFrames + ", drew an unmoved ring " +
                      otherRings + " times");
         Test.assertEqualMessage(opened, 59,
             "a moving sweep must never be skipped — it stalled on " +
@@ -3556,24 +3526,17 @@ module MatrixTest {
             "a second tick redrew a ring that had not moved " + otherRings +
             " times — that is the cost this split exists to remove");
 
-        // The periodic repair still runs, and is still the minority. It has to
-        // exist: a face that only ever redraws one ring would never rub out
-        // damage lying between the dots, or on the three rings it is not
-        // drawing. It must not be most of the minute either, or the saving is
-        // spent on repairs.
-        Test.assertMessage(wholeFrames > 0,
-            "the screen must still be cleared periodically, or a notification " +
-            "drawn over the face would stay there");
-        Test.assertMessage(wholeFrames * 2 < opened,
-            "most ticks must draw one ring, but " + wholeFrames + " of " +
-            opened + " cleared and redrew all four");
+        // System overlays cannot alter the authoritative layer, so no sweep
+        // tick is spent repairing pixels owned by another surface.
+        Test.assertEqualMessage(wholeFrames, 0,
+            "a seconds sweep performed a periodic full-layer repair");
 
         // And the gate is still a gate: a tick that does not move it is still
         // skipped, so this is the print changing rather than the gate having
         // been loosened.
         FrameGate.forget();
         settle(field, ringPrintAtSecond(7));
-        Test.assertMessage(!FrameGate.plan(field, ringPrintAtSecond(7)),
+        Test.assertMessage(!planAndCommit(field, ringPrintAtSecond(7)),
             "an unmoved print must still be skipped");
 
         FrameGate.forget();
@@ -3623,16 +3586,11 @@ module MatrixTest {
         return marks;
     }
 
-    //! Two cleared frames, so the renderer has this ring in both buffers and
-    //! the draw after them is delta-eligible. Anything testing the delta has
-    //! to get here first, because the first two draws of any state are full
-    //! ones by design.
-    function settleBuffers(dc as Graphics.Dc, spans as Array<Array<Float> >,
-                           overs as Array<Boolean>, backing as Number?) as Void {
+    //! One cleared frame defines the authoritative layer and makes the next
+    //! span-only change delta-eligible.
+    function settleLayer(dc as Graphics.Dc, spans as Array<Array<Float> >,
+                         overs as Array<Boolean>, backing as Number?) as Void {
         var marks = noMarks();
-        MatrixRenderer.draw(dc, spans, marks, overs, emptyBlocks(), Palette.active,
-                            Palette.rampActive, backing,
-                            FrameGate.everything(), true);
         MatrixRenderer.draw(dc, spans, marks, overs, emptyBlocks(), Palette.active,
                             Palette.rampActive, backing,
                             FrameGate.everything(), true);
@@ -3672,7 +3630,7 @@ module MatrixTest {
         }
         var overs = noOvers();
         var spans = everySpan(0.0, 0.50);
-        settleBuffers(dc, spans, overs, null);
+        settleLayer(dc, spans, overs, null);
 
         var moved = everySpan(0.0, 0.55);
         MatrixRenderer.draw(dc, moved, noMarks(), overs, emptyBlocks(), Palette.active,
@@ -3721,9 +3679,9 @@ module MatrixTest {
 
         var overs = noOvers();
         var spans = everySpan(0.0, 0.50);
-        // Two full draws put this ring in both buffers, which is what makes the
-        // next one delta-eligible.
-        settleBuffers(dc, spans, overs, null);
+        // One full draw defines the layer and makes the next span-only change
+        // delta-eligible.
+        settleLayer(dc, spans, overs, null);
 
         var ring = 2;
         var mine = DateGlyph.firstFor[ring + 1] - DateGlyph.firstFor[ring];
@@ -3760,16 +3718,12 @@ module MatrixTest {
         return true;
     }
 
-    //! The delta must cover **both** buffers, not just the last draw.
-    //!
-    //! This is the one that would rot silently. A partial draw is only correct
-    //! in the buffer it lands in, and on a double-buffered device that buffer
-    //! was written two draws ago — which is why FrameGate repeats a change into
-    //! HOLD draws. A delta measured against the previous span alone looks right
-    //! on screen and leaves every other frame a step behind, which reads as a
-    //! ring that stutters rather than as anything broken.
+    //! A delta is measured against the immediately preceding layer state.
+    //! Remembering an older screen buffer would repaint extra dots and smuggle
+    //! the discarded framebuffer assumption back into the renderer.
     (:test)
-    function theDeltaCoversBothBuffersNotJustTheLastDraw(logger as Logger) as Boolean {
+    function theDeltaUsesTheAuthoritativePreviousLayerSpan(logger as Logger)
+        as Boolean {
         Config.reload();
         DotGrid.ensureBuilt();
         var dc = probeDc(logger);
@@ -3778,7 +3732,7 @@ module MatrixTest {
         }
         var overs = noOvers();
         var first = everySpan(0.0, 0.30);
-        settleBuffers(dc, first, overs, null);
+        settleLayer(dc, first, overs, null);
 
         // Two moves in a row, the way a seconds ring actually advances.
         var second = everySpan(0.0, 0.40);
@@ -3788,29 +3742,25 @@ module MatrixTest {
         MatrixRenderer.draw(dc, third, noMarks(), overs, emptyBlocks(), Palette.active,
                             Palette.rampActive, null, onlyRingDirty(2), false);
 
-        // The buffer this third draw lands in was last written with `first`,
-        // so the dots owed a repaint are those differing from either.
-        var union = differing(2, third[2], first[2]);
-        var justTheLast = differing(2, third[2], second[2]);
-        logger.debug("painted " + MatrixRenderer.painted + ", union " + union +
-                     ", against the last draw alone " + justTheLast);
-        Test.assertMessage(union > justTheLast,
-            "this test proves nothing unless the two-draw span is wider");
-        Test.assertEqualMessage(MatrixRenderer.painted, union,
-            "the delta must cover the span drawn two draws ago as well — " +
-            "it painted " + MatrixRenderer.painted + " where the buffer this " +
-            "draw lands in is " + union + " dots stale");
+        var expected = differing(2, third[2], second[2]);
+        var staleBufferUnion = differing(2, third[2], first[2]);
+        logger.debug("painted " + MatrixRenderer.painted + ", expected " +
+                     expected + ", old-buffer union " + staleBufferUnion);
+        Test.assertMessage(staleBufferUnion > expected,
+            "this test proves nothing unless the old-buffer union is wider");
+        Test.assertEqualMessage(MatrixRenderer.painted, expected,
+            "the delta repainted pixels from a discarded screen buffer");
         return true;
     }
 
-    //! Anything but the span repaints the ring, twice.
+    //! Anything but the span repaints the layer ring once.
     //!
     //! A delta may only differ by span. Both colours, the over flag, the ramp
     //! and the backing repaint the ring wholesale, and a delta across one of
     //! them would leave every unchanged dot showing a tier that no longer
-    //! exists. Twice, because both buffers hold the old colours.
+    //! exists. One complete write replaces it in the authoritative layer.
     (:test)
-    function aChangedTierForcesTwoFullRings(logger as Logger) as Boolean {
+    function aChangedTierForcesOneFullLayerRing(logger as Logger) as Boolean {
         Config.reload();
         DotGrid.ensureBuilt();
         var dc = probeDc(logger);
@@ -3819,7 +3769,7 @@ module MatrixTest {
         }
         var spans = everySpan(0.0, 0.50);
         var overs = noOvers();
-        settleBuffers(dc, spans, overs, null);
+        settleLayer(dc, spans, overs, null);
 
         var whole = ringSize(2);
         // Same span, but the ring has gone past its goal — which swaps both
@@ -3830,17 +3780,13 @@ module MatrixTest {
         Test.assertEqualMessage(MatrixRenderer.painted, whole,
             "the over flag swapped both tiers and the ring was not fully " +
             "repainted — every unchanged dot is showing a colour that is gone");
-        MatrixRenderer.draw(dc, spans, noMarks(), overs, emptyBlocks(), Palette.active,
-                            Palette.rampActive, null, onlyRingDirty(2), false);
-        Test.assertEqualMessage(MatrixRenderer.painted, whole,
-            "the second buffer still holds the old tiers, so the repeat draw " +
-            "must be full as well — this is what HOLD is for");
-        // And only then does the delta come back.
-        MatrixRenderer.draw(dc, spans, noMarks(), overs, emptyBlocks(), Palette.active,
+        // The next span-only change may immediately use a delta.
+        var moved = everySpan(0.0, 0.55);
+        MatrixRenderer.draw(dc, moved, noMarks(), overs, emptyBlocks(), Palette.active,
                             Palette.rampActive, null, onlyRingDirty(2), false);
         Test.assertMessage(MatrixRenderer.painted < whole,
-            "with both buffers holding the new tiers the ring may delta again");
-        logger.debug("over flip: full, full, then " + MatrixRenderer.painted +
+            "one complete layer write did not make the ring delta-eligible");
+        logger.debug("over flip: full, then delta " + MatrixRenderer.painted +
                      " of " + whole);
         return true;
     }
@@ -3856,7 +3802,7 @@ module MatrixTest {
         }
         var spans = everySpan(0.0, 0.50);
         var overs = noOvers();
-        settleBuffers(dc, spans, overs, null);
+        settleLayer(dc, spans, overs, null);
         MatrixRenderer.draw(dc, spans, noMarks(), overs, emptyBlocks(), Palette.active,
                             Palette.rampActive, null,
                             FrameGate.everything(), true);
@@ -3883,7 +3829,7 @@ module MatrixTest {
         }
         var spans = everySpan(0.0, 0.50);
         var overs = noOvers();
-        settleBuffers(dc, spans, overs, null);
+        settleLayer(dc, spans, overs, null);
 
         var marks = noMarks();
         marks[2] = 0.20;
@@ -5047,17 +4993,18 @@ module MatrixTest {
         return true;
     }
 
-    //! Switching a ring into or out of the forecast repaints it twice.
+    //! Switching a ring into or out of the forecast repaints it once in full.
     //!
     //! Both directions, because only one of them is obvious. Into the forecast
     //! is safe by accident — the hourly loop paints everything anyway. **Out**
-    //! of it is the dangerous one: the buffers hold blocks, gutters and dim
-    //! dots while the remembered spans describe the EMPTY span an hourly ring
+    //! of it is the dangerous one: the layer holds blocks, gutters and dim
+    //! dots while the remembered span describes the EMPTY span an hourly ring
     //! reports, so a delta would skip every dot that is unlit under both and
     //! leave the old forecast standing. The palette is keyed by ring rather
     //! than by source, so nothing else in the delta's key moves.
     (:test)
-    function switchingARingToTheForecastRepaintsItTwice(logger as Logger)
+    function switchingARingToTheForecastRepaintsOneCompleteLayerRing(
+        logger as Logger)
             as Boolean {
         var dc = probeDc(logger);
         if (dc == null) {
@@ -5069,9 +5016,9 @@ module MatrixTest {
         var hours = blocksFor(0, everyBlockAt(2));
         var spans = everySpan(0.0, 0.5);
 
-        // An ordinary source, settled into both buffers so a delta is live.
+        // An ordinary source, settled into the layer so a delta is live.
         StatMap.rings[0] = Source.SOURCE_BATTERY;
-        settleBuffers(dc, spans, overs, null);
+        settleLayer(dc, spans, overs, null);
         MatrixRenderer.draw(dc, spans, marks, overs, emptyBlocks(), Palette.active,
                             Palette.rampActive, null, onlyRingDirty(0), false);
         Test.assertMessage(MatrixRenderer.painted < ringSize(0),
@@ -5084,22 +5031,21 @@ module MatrixTest {
                             Palette.rampActive, null, onlyRingDirty(0), false);
         Test.assertEqualMessage(MatrixRenderer.painted, ringSize(0),
             "switching into the forecast must repaint the ring whole");
-        MatrixRenderer.draw(dc, spans, marks, overs, hours, Palette.active,
-                            Palette.rampActive, null, onlyRingDirty(0), false);
-        Test.assertEqualMessage(MatrixRenderer.painted, ringSize(0),
-            "and again, so both buffers hold the forecast");
-
         // Back out of it. This is the direction that would rot.
         StatMap.rings[0] = Source.SOURCE_BATTERY;
         MatrixRenderer.draw(dc, spans, marks, overs, emptyBlocks(), Palette.active,
                             Palette.rampActive, null, onlyRingDirty(0), false);
         Test.assertEqualMessage(MatrixRenderer.painted, ringSize(0),
             "leaving the forecast must repaint the ring whole, or the old " +
-            "blocks stay in a buffer");
-        MatrixRenderer.draw(dc, spans, marks, overs, emptyBlocks(), Palette.active,
+            "blocks stay in the layer");
+
+        // One complete write settles that shape change; a subsequent span move
+        // may use the ordinary delta path immediately.
+        var moved = everySpan(0.0, 0.55);
+        MatrixRenderer.draw(dc, moved, marks, overs, emptyBlocks(), Palette.active,
                             Palette.rampActive, null, onlyRingDirty(0), false);
-        Test.assertEqualMessage(MatrixRenderer.painted, ringSize(0),
-            "and again, because both buffers held the forecast");
+        Test.assertMessage(MatrixRenderer.painted < ringSize(0),
+            "one complete layer write did not settle the source change");
 
         StatMap.rings[0] = saved;
         Config.reload();

@@ -19,11 +19,8 @@ class CrossoverApp extends Application.AppBase {
 
     //! Called when the user changes settings in Garmin Connect or Express.
     function onSettingsChanged() as Void {
+        // Config.reload() also invalidates the authoritative render layer.
         Config.reload();
-        // Palette and source changes are not part of the geometry fingerprint;
-        // the next frame must not be allowed to skip merely because its old
-        // source values happen to match the new ones.
-        FrameGate.transition();
         WatchUi.requestUpdate();
     }
 
