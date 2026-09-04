@@ -39,8 +39,13 @@ module HandBacking {
     const HOUR_REACH as Number = Lattice.HOUR_REACH;
     const MINUTE_REACH as Number = Lattice.MINUTE_REACH;
 
-    //! Unit vectors for both hands: [hourX, hourY, minuteX, minuteY].
-    //! Computed once per frame — the per-dot test is then just dot products.
+    //! Unit vectors and turn positions for both hands:
+    //! [hourX, hourY, minuteX, minuteY, hourTurn, minuteTurn].
+    //!
+    //! One clock read owns both representations. The renderer needs the axes
+    //! for the exact bar and the turns for its cheap angular gate; deriving
+    //! them in separate calls used to read the clock twice and allocate a
+    //! second array on every drawn frame.
     function axes() as Array<Float> {
         var clock = System.getClockTime();
         var hourDegrees = ((clock.hour % 12) * 30.0) + (clock.min * 0.5);
@@ -50,21 +55,9 @@ module HandBacking {
         // Screen y grows downward and 0 degrees points at twelve o'clock.
         return [
             Math.sin(hour).toFloat(), -Math.cos(hour).toFloat(),
-            Math.sin(minute).toFloat(), -Math.cos(minute).toFloat()
-        ] as Array<Float>;
-    }
-
-    //! Where each hand points, in turns clockwise from twelve: [hour, minute].
-    //!
-    //! The same two angles axes() turns into unit vectors, in the units the dot
-    //! cache stores positions in — so a window placed on one of these compares
-    //! directly against `DotGrid.positionOf`. Computed once a frame beside the
-    //! axes; the per-dot work is the comparison, not this.
-    function turns() as Array<Float> {
-        var clock = System.getClockTime();
-        return [
-            ((((clock.hour % 12) * 30.0) + (clock.min * 0.5)) / 360.0).toFloat(),
-            ((clock.min * 6.0) / 360.0).toFloat()
+            Math.sin(minute).toFloat(), -Math.cos(minute).toFloat(),
+            (hourDegrees / 360.0).toFloat(),
+            (minuteDegrees / 360.0).toFloat()
         ] as Array<Float>;
     }
 

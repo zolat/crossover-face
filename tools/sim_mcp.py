@@ -26,7 +26,16 @@ from simctl import instance as instances
 from simctl import paths, settings as settings_module, window
 from simctl.runner import Runner
 
-mcp = FastMCP("crossover-simulator")
+MCP_INSTRUCTIONS = """\
+Use the default isolated instance (omit `instance`) for normal work. It is namespaced
+for this MCP client and checkout so Codex and Claude cannot sideload over each other.
+Never pass `instance="shared"` unless the user explicitly asks to use the shared
+simulator; that instance is also used by `make sim` and `make test`. Keep the same
+instance and `device` through load, settings, screenshot, test, and release operations;
+omitting `device` means the Crossover. Call `sim_release` when finished with a loaded face.
+"""
+
+mcp = FastMCP("crossover-simulator", instructions=MCP_INSTRUCTIONS)
 
 SHOT_DIR = Path(paths.shared_tmpdir()) / "crossover-shots"
 

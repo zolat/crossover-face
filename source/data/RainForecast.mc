@@ -3,14 +3,14 @@ import Toybox.System;
 import Toybox.Time;
 import Toybox.Weather;
 
-//! The next twelve hours of rain, packed into two integers.
+//! The next twelve hours of rain, packed into the block channel.
 //!
 //! Beside WeatherData rather than inside it. The one-call rule there is about
 //! three readings that must not disagree with each other — the band and the
 //! mark drawn inside it come from a single `getCurrentConditions()`. This is a
 //! different API product with no such coupling, and folding it in would make
 //! every face pay for a call that only matters when a ring is assigned to it.
-//! Source.fillHours() is the early return that keeps that promise.
+//! Source.fillBlocks() is the early return that keeps that promise.
 //!
 //! **The anchoring is free, and that is the whole trick.** The hour hand at
 //! local hour `H` points at clock position `H mod 12`, and the forecast `N`
@@ -18,22 +18,16 @@ import Toybox.Weather;
 //! hour's own hour-of-day, mod 12. So a forecast entry is bucketed by *its own*
 //! local hour and lands where the hand will be when it arrives. Nothing rotates.
 //!
-//! Two words rather than a twelve-entry array: they ride in the frame print,
-//! which FrameGate compares as floats element by element, and they must survive
-//! that intact. `levels` is two bits a block and tops out at 0xFFFFFF, `known`
-//! is one bit a block and tops out at 0xFFF — both inside the range a Float
-//! represents exactly, which theHourlyMasksSurviveTheFramePrint pins.
+//! Everything about how a block is packed and how wide a level draws lives in
+//! HourBands, which knows nothing about rain. All this module decides is which
+//! block an entry belongs in and what a percentage is worth on that scale.
 module RainForecast {
 
     //! How far ahead the ring reaches. One turn of the dial.
     const WINDOW_S = HourBands.HOURS * 3600;
 
-    //! One sub-band per this many percent. tierFor() derives from it, so the
-    //! scale and the geometry cannot drift apart.
-    const STEP_PERCENT = 100 / (HourBands.BANDS + 1);
-
     //! Every block known. Not a forecast — what always-on reports when the
-    //! fills are held back, where "known and dry everywhere" is the only
+    //! fills are held back, where "known and empty everywhere" is the only
     //! reading that draws a plain unfilled ring.
     const ALL_KNOWN = 0xFFF;
 
@@ -46,7 +40,8 @@ module RainForecast {
     //! The local hour this sample was bucketed against. See refresh().
     var anchorHour as Number = -1;
 
-    var levels as Number = 0;
+    //! HourBands.LEVEL_WORDS words of four-bit levels, and one of known bits.
+    var levels as Array<Number> = [0, 0] as Array<Number>;
     var known as Number = 0;
 
     //! Take a fresh sample if the last one has expired — or if the hour has
@@ -67,7 +62,8 @@ module RainForecast {
         takenAt = Sample.now();
         sampled = true;
         anchorHour = clock.hour;
-        levels = 0;
+        levels[0] = 0;
+        levels[1] = 0;
         known = 0;
 
         if (!(Toybox has :Weather) || !(Weather has :getHourlyForecast)) {
@@ -99,7 +95,7 @@ module RainForecast {
                 // the hour, so the block stays dim rather than reading as dry.
                 continue;
             }
-            levels = withTier(levels, block, tierFor(chance));
+            HourBands.raise(levels, block, levelFor(chance));
             known = known | (1 << block);
         }
     }
@@ -120,34 +116,19 @@ module RainForecast {
         return (anchor + (offset / 3600)) % HourBands.HOURS;
     }
 
-    //! Which sub-band a percentage reaches: 0 dry, up to BANDS soaked.
-    function tierFor(percent as Number) as Number {
-        if (percent < 0) {
-            return 0;
-        }
-        var tier = percent / STEP_PERCENT;
-        return (tier > HourBands.BANDS) ? HourBands.BANDS : tier;
-    }
-
-    //! `levels` with this block raised to `tier`, never lowered.
+    //! What a percentage chance is worth on the block scale.
     //!
-    //! Garmin should give one entry per hour, but nothing documents that, and
-    //! two entries landing in one block is the case where "will it rain in this
-    //! hour" has an obvious answer: whichever said more. Taking the maximum is
-    //! also what makes the merge order-independent, so a reordered forecast
-    //! array cannot change the picture.
+    //! One line, and deliberately so: the scale itself belongs to HourBands,
+    //! so a second source filling the block ring reads the same sixteen levels
+    //! off its own units without copying anything. All that is rain-specific
+    //! here is that the units are percent.
     //!
-    //! Subtracting the existing bits rather than masking them out: they are
-    //! exactly the bits being replaced, so the subtraction clears them, and it
-    //! avoids leaning on how Monkey C widens a bitwise complement.
-    function withTier(packed as Number, block as Number,
-                      tier as Number) as Number {
-        var shift = block * 2;
-        var existing = (packed >> shift) & 3;
-        if (tier <= existing) {
-            return packed;
-        }
-        return packed - (existing << shift) + (tier << shift);
+    //! Truncating rather than rounding, which HourBands does for the shared
+    //! reason: an hour has to reach a full 1/15 of the scale — 6.7% — before
+    //! it lights anything, so a day of two-percent hours reads as the dry day
+    //! it is rather than as a ring of pips.
+    function levelFor(percent as Number) as Number {
+        return HourBands.levelFromFraction(percent / 100.0);
     }
 
     //! Drop the sample, so the next read goes to the watch. For the tests, and

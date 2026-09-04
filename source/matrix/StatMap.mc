@@ -30,9 +30,16 @@ module StatMap {
     //! carries the same radial grain the rings do. Upright, every cross is the
     //! same `+` and the field reads as a plain lattice with the rings drawn on
     //! it. Both light nine pixels a dot, so neither costs luminance.
+    //!
+    //! The third is Upright with the day of the month written into it — see
+    //! DateGlyph. It is a *rotation* value because it is a choice about the
+    //! shape of the field's own dots and nothing else, and because the field it
+    //! is drawn on has to be the even one for a numeral to show in it at all.
+    //! Appended, never inserted: the stored value is an index.
     enum Rotation {
         ROTATION_RADIAL = 0,        //! Each cross follows its ring.
-        ROTATION_UPRIGHT = 1        //! Every cross stays upright.
+        ROTATION_UPRIGHT = 1,       //! Every cross stays upright.
+        ROTATION_UPRIGHT_DATE = 2   //! Upright, with today's date struck in.
     }
 
     //! Which set of colours the rings carry. The theme decides every colour
@@ -83,7 +90,7 @@ module StatMap {
         alwaysOnFill = readNumber(PROPERTY_ALWAYS_ON_FILL, ALWAYS_ON_FILL_SHOWN,
                                   ALWAYS_ON_FILL_SHOWN, ALWAYS_ON_FILL_HIDDEN);
         rotation = readNumber(PROPERTY_ROTATION, ROTATION_RADIAL,
-                              ROTATION_RADIAL, ROTATION_UPRIGHT);
+                              ROTATION_RADIAL, ROTATION_UPRIGHT_DATE);
 
         var defaults = [Source.SOURCE_STEPS, Source.SOURCE_INTENSITY_MINUTES,
                         Source.SOURCE_BATTERY, Source.SOURCE_BODY_BATTERY]
@@ -164,39 +171,46 @@ module StatMap {
         return out;
     }
 
-    //! Values per ring in the hourly channel: packed levels, then known bits.
-    const HOURLY_VALUES = 2;
+    //! Values per ring in the block channel: two words of packed levels,
+    //! then the known bits. See HourBands for the layout.
+    const BLOCK_VALUES = 3;
 
-    //! Every ring's packed hourly forecast, laid out flat. Read once per frame,
-    //! beside spans().
+    //! Every ring's packed blocks, laid out flat. Read once per frame, beside
+    //! spans().
     //!
     //! A parallel channel rather than a wider span. That a span is exactly two
     //! numbers is what lets a level and a range be treated alike everywhere
     //! downstream, and twelve disjoint blocks with a radial axis is a different
     //! shape entirely — so it travels beside the span, exactly as a marker does.
     //!
-    //! No `awake` parameter, deliberately. An hourly forecast moves hourly, so
-    //! it is worth precisely as much in always-on as awake; only seconds has a
-    //! reading that goes stale between the one frame a minute that mode gets.
-    function hourly() as Array<Number> {
-        var out = new [RINGS * HOURLY_VALUES] as Array<Number>;
+    //! Named for the shape rather than for the forecast that first filled it.
+    //! Any source with one reading per clock position rides this channel, and
+    //! the renderer never learns which one did.
+    //!
+    //! No `awake` parameter, deliberately. What rides here moves hourly at
+    //! best, so it is worth precisely as much in always-on as awake; only
+    //! seconds has a reading that goes stale between the one frame a minute
+    //! that mode gets.
+    function blocks() as Array<Number> {
+        var out = new [RINGS * BLOCK_VALUES] as Array<Number>;
         for (var i = 0; i < RINGS; i++) {
-            Source.fillHours(rings[i], out, i * HOURLY_VALUES);
+            Source.fillBlocks(rings[i], out, i * BLOCK_VALUES);
         }
         return out;
     }
 
-    //! Every hour known and dry, for always-on when the fills are held back.
+    //! Every block known and empty, for always-on when the fills are held back.
     //!
     //! **Not all zeroes**, which is the trap. Zero `known` means every block is
     //! *unknown*, which draws the dim tier across the whole ring — that is data,
-    //! in the one mode whose entire purpose is to show none. Known-and-dry is
+    //! in the one mode whose entire purpose is to show none. Known-and-empty is
     //! what renders the plain unfilled field the mode is asking for.
-    function noHourly() as Array<Number> {
-        var out = new [RINGS * HOURLY_VALUES] as Array<Number>;
+    function noBlocks() as Array<Number> {
+        var out = new [RINGS * BLOCK_VALUES] as Array<Number>;
         for (var i = 0; i < RINGS; i++) {
-            out[i * HOURLY_VALUES] = 0;
-            out[i * HOURLY_VALUES + 1] = RainForecast.ALL_KNOWN;
+            out[i * BLOCK_VALUES] = 0;
+            out[i * BLOCK_VALUES + 1] = 0;
+            out[i * BLOCK_VALUES + 2] = RainForecast.ALL_KNOWN;
         }
         return out;
     }

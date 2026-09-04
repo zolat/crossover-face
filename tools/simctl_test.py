@@ -16,6 +16,7 @@ import tempfile
 import unittest
 from collections import OrderedDict
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -272,6 +273,12 @@ class LockReentrancy(unittest.TestCase):
 
 
 class InstanceNaming(unittest.TestCase):
+    def test_client_namespace_separates_the_same_checkout(self):
+        with mock.patch.dict(os.environ, {"CROSSOVER_SIM_NAMESPACE": "codex"}):
+            self.assertEqual(
+                instances.default_name(), f"codex-{paths.repo_root().name}"
+            )
+
     def test_each_checkout_gets_its_own_deterministic_port(self):
         first = instances.isolated("alpha").port
         self.assertEqual(first, instances.isolated("alpha").port)  # stable

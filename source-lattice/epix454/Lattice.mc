@@ -39,7 +39,9 @@ module Lattice {
     const COLS as Number = 42;
     const ROWS as Number = 42;
 
-    //! The lattice's own radius: half the screen, less a 5px margin.
+    //! The largest lattice that fits the drawn-hand watchdog. A native 222px
+    //! radius with 1512 dots trips; this 210px radius is the measured safe
+    //! boundary while retaining the same 10px grain as the other watches.
     const RADIUS as Number = 210;
 
     //! Radius punched out of the middle. On the Crossover this is what the

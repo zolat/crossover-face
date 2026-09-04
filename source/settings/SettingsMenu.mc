@@ -33,9 +33,11 @@ const SOURCE_LABELS = [
 
 //! On-device settings, reached from the watch's own Watch Face menu.
 //!
-//! Watch faces cannot take input during normal operation; AppBase.getSettingsView()
-//! is the sanctioned exception. This matters for a sideloaded face, where the
-//! phone-side settings in Garmin Connect are not dependable.
+//! Watch faces do not receive ordinary button input during normal operation.
+//! AppBase.getSettingsView() is the sanctioned persistent-settings surface;
+//! the Epix's WatchFaceDelegate touch-and-hold is deliberately transient.
+//! This menu matters for a sideloaded face, where phone-side settings in
+//! Garmin Connect are not dependable.
 class SettingsMenu extends WatchUi.Menu2 {
 
     function initialize() {
@@ -88,7 +90,8 @@ class SettingsMenu extends WatchUi.Menu2 {
 
     private function rotationLabel() as ResourceId {
         var labels = [Rez.Strings.RotationRadial,
-                      Rez.Strings.RotationUpright] as Array<ResourceId>;
+                      Rez.Strings.RotationUpright,
+                      Rez.Strings.RotationUprightDate] as Array<ResourceId>;
         return labels[StatMap.rotation];
     }
 
@@ -131,8 +134,9 @@ class SettingsMenuDelegate extends WatchUi.Menu2InputDelegate {
             push(new ChoiceMenu(Rez.Strings.RotationTitle,
                 StatMap.PROPERTY_ROTATION,
                 [Rez.Strings.RotationRadial,
-                 Rez.Strings.RotationUpright] as Array<ResourceId>,
-                sequential(2), StatMap.rotation));
+                 Rez.Strings.RotationUpright,
+                 Rez.Strings.RotationUprightDate] as Array<ResourceId>,
+                sequential(3), StatMap.rotation));
         } else if (id == :diagnostics) {
             // Nothing to open — re-reading it is the useful action, since the
             // figure moves while you are looking at it.

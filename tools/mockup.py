@@ -1,14 +1,14 @@
-"""Render dot-matrix watch face mockups for the Instinct Crossover AMOLED.
+"""Render dot-matrix watch-face mockups for every supported device.
 
 Iterating on colour through a compile + sideload loop costs a minute a time;
-this costs a second. Renders the real geometry at true 390x390, composites it
-into Garmin's own device art, and overlays the analogue hands using the exact
-polylines the simulator uses — so what you review is the watch, not a grid.
+this costs a second. It renders each target's native geometry, composites it
+into Garmin's device art, and adds physical or dot hands as appropriate — so
+what you review is the watch, not an abstract grid.
 
-Geometry and hand data come from the installed device files, never hard-coded:
-    ~/.Garmin/ConnectIQ/Devices/instinctcrossoveramoled/{simulator.json,device.png}
+Device art comes from the installed profile. Lattice and drawn-hand constants
+mirror ``source-lattice/*/Lattice.mc`` and are pinned by the Monkey C tests.
 
-Usage:  python3 tools/mockup.py [outdir]
+Usage:  python3 tools/mockup.py [outdir] [device]
 """
 
 from __future__ import annotations
@@ -295,12 +295,23 @@ WEAK_HELD_BACK = WEAK_ACTIVE
 # fall. Mirrors Palette.WEAK_UNKNOWN.
 WEAK_UNKNOWN = 0.25
 
-# The hourly forecast's geometry. Mirrors HourBands.mc: twelve blocks round the
-# ring, a gutter after each, three radial sub-bands across the ring's thickness.
+# The block ring's geometry. Mirrors HourBands.mc: twelve blocks round the ring,
+# a gutter after each, three radial sub-bands across the ring's thickness, and a
+# partial band whose *width* carries whatever the bands cannot. A block holds a
+# level from 0 to HOUR_LEVELS; what filled it is the source's business.
 HOURS = 12
 HOUR_BANDS = 3
+HOUR_LEVELS = 15
+HOUR_LEVELS_PER_BAND = HOUR_LEVELS // HOUR_BANDS
 HOUR_BLOCK_DEGREES = 22.5
 HOUR_FILL = HOUR_BLOCK_DEGREES / (360.0 / HOURS)
+# The block sits in the MIDDLE of its wedge, so half the gutter falls either
+# side and each hour mark lands in the middle of a gutter. Mirrors
+# HourBands.LEAD/TRAIL/BLOCK_CENTRE — and note LEAD + FILL/2 is exactly 0.5 for
+# any FILL, which is what centring buys.
+HOUR_LEAD = (1.0 - HOUR_FILL) / 2
+HOUR_TRAIL = HOUR_LEAD + HOUR_FILL
+HOUR_CENTRE = HOUR_LEAD + HOUR_FILL / 2
 
 
 def hour_block(position: float) -> int:
@@ -310,7 +321,8 @@ def hour_block(position: float) -> int:
 def inside_block(position: float) -> bool:
     """False in the gutter after the block. Mirrors HourBands.insideBlock."""
     at = position * HOURS
-    return (at - int(at)) < HOUR_FILL
+    into = at - int(at)
+    return HOUR_LEAD <= into < HOUR_TRAIL
 
 
 def band_edge(ring: int, tier: int) -> float:
@@ -324,28 +336,59 @@ def band_edge(ring: int, tier: int) -> float:
     return edge * edge
 
 
-def hourly_colour(ring, position, dist_sq, tiers, always_on, held_back):
-    """One dot of a forecast ring. Mirrors MatrixRenderer's second inner loop.
+def level_for(percent):
+    """A percentage as a block level. Mirrors RainForecast.levelFor: truncating,
+    so a reading has to reach a full rung before it lights anything."""
+    if percent is None:
+        return None
+    if percent <= 0:
+        return 0
+    return min(HOUR_LEVELS, int(percent / 100.0 * HOUR_LEVELS))
 
-    `tiers` is twelve entries, each 0-HOUR_BANDS or None for an hour the
-    forecast said nothing about."""
+
+def full_bands_for(level: int) -> int:
+    """Whole sub-bands a level fills. Mirrors HourBands.fullBandsFor."""
+    return (level * HOUR_BANDS) // HOUR_LEVELS
+
+
+def partial_half_for(level: int) -> float:
+    """Half-width of the partial band's window, in wedge units. Mirrors
+    HourBands.partialHalfFor — no minimum, because on this lattice the geometry
+    already lights at least one dot at every level."""
+    return (HOUR_FILL / 2) * (((level * HOUR_BANDS) % HOUR_LEVELS) / HOUR_LEVELS)
+
+
+def hourly_colour(ring, position, dist_sq, levels, always_on, held_back):
+    """One dot of a block ring. Mirrors MatrixRenderer's second inner loop.
+
+    `levels` is twelve entries, each 0-HOUR_LEVELS or None for a block the
+    source said nothing about. A level fills whole sub-bands outward and then
+    part of the way across the next band, centred in the block."""
     colour = THEME[ring % len(THEME)]
     if always_on:
         colour = scale(colour, LIFT)
     weak = WEAK_HELD_BACK if held_back else (
         WEAK_ALWAYS_ON if always_on else WEAK_ACTIVE)
-    if held_back or tiers is None:
-        # Held back, every hour reads known and dry — never unknown, which
+    if held_back or levels is None:
+        # Held back, every hour reads known and empty — never unknown, which
         # would draw the dim tier right round the ring and put data in the one
         # mode whose whole purpose is to carry none.
         return scale(colour, weak)
-    if not inside_block(position):
-        return scale(colour, weak)
-    tier = tiers[hour_block(position)]
-    if tier is None:
+    at = position * HOURS
+    block = int(at)
+    into = at - block
+    if not (HOUR_LEAD <= into < HOUR_TRAIL):
+        return scale(colour, weak)          # a gutter, either side of the block
+    level = levels[block]
+    if level is None:
         return scale(colour, WEAK_UNKNOWN)
-    if tier > 0 and dist_sq <= band_edge(ring, tier):
+    bands = full_bands_for(level)
+    if bands > 0 and dist_sq <= band_edge(ring, bands):
         return colour
+    window = partial_half_for(level)
+    if (window > 0.0 and dist_sq <= band_edge(ring, bands + 1)
+            and abs(into - HOUR_CENTRE) < window):
+        return colour                       # the partial band
     return scale(colour, weak)
 
 
@@ -419,6 +462,86 @@ def hand_at(dx: float, dy: float, axes) -> int:
     return NO_HAND
 
 
+# --- date watermark ----------------------------------------------------------
+# Mirrors source/matrix/DateGlyph.mc. A *struck* dot draws one of its two
+# strokes and not the other -- five lit pixels where the field draws nine, in
+# the same cell and the same colour. A numeral drawn in struck dots is a
+# watermark: the density step reads as a shape when you look for it and
+# disappears into the field when you are reading the rings.
+#
+# It cannot cost luminance, because a struck dot lights a strict subset of the
+# pixels it lit before. Measured here: 4.82% without, 4.64% with.
+#
+# Rotation was the first idea and the mockups killed it: turning a dot 45
+# degrees is free too, and the measured luminance does not move at all -- but
+# at a five-pixel dot a `+` and an `x` are too close to tell apart, and the
+# numeral read as a faint sheen rather than a number. STRIKE_ROTATE renders
+# that version, and build/gate/true-size.png is the comparison it lost.
+
+SCALE = 2                       # lattice cells per font pixel
+FONT_COLS, FONT_ROWS = 3, 5
+FONT_SPAN = 2 * FONT_COLS + 1   # two digits with a one-column gutter
+GUTTER = FONT_COLS
+GLYPH_COLS = FONT_SPAN * SCALE  # 14
+GLYPH_ROWS = FONT_ROWS * SCALE  # 10
+
+def glyph_origin():
+    """The centred window used by DateGlyph on the selected lattice."""
+    return ((COLS - GLYPH_COLS) // 2, ROWS // 2 + 4)
+
+# 3x5 digits, row-major, bit 14 top-left.
+DIGITS = [
+    0b111101101101111,      # 0
+    0b010110010010111,      # 1
+    0b111001111100111,      # 2
+    0b111001111001111,      # 3
+    0b101101111001001,      # 4
+    0b111100111001111,      # 5
+    0b111100111101111,      # 6
+    0b111001001001001,      # 7
+    0b111101111101111,      # 8
+    0b111101111001111,      # 9
+]
+
+# Which ARMS entry the struck stroke comes from: the 45-degree cross's first
+# arm. Taken from the table rather than written out, so the dot size reaches it.
+GLYPH_ARM = 2
+
+
+def digit_lit(digit: int, col: int, row: int) -> bool:
+    """Is this pixel of this digit lit?"""
+    return bool(DIGITS[digit] >> (14 - (row * FONT_COLS + col)) & 1)
+
+
+def glyph_cells(day: int, origin=None) -> set:
+    """The lattice cells today's date strikes, as (col, row) pairs."""
+    origin = glyph_origin() if origin is None else origin
+    col0, row0 = origin
+    out = set()
+    for r in range(GLYPH_ROWS):
+        for c in range(GLYPH_COLS):
+            font_col = c // SCALE
+            if font_col == GUTTER:
+                continue
+            digit = (day // 10) if font_col < GUTTER else (day % 10)
+            if digit_lit(digit % 10, font_col % (GUTTER + 1), r // SCALE):
+                out.add((col0 + c, row0 + r))
+    return out
+
+
+def arm_for(dx: int, dy: int, col: int, row: int, rotate: bool,
+            glyph: set, hand: int = NO_HAND):
+    """Which strokes this dot draws.
+
+    A struck dot returns a two-value arm, which draw_dot renders as one line;
+    every other dot returns the usual four.
+    """
+    if hand == NO_HAND and glyph and (col, row) in glyph:
+        return ARMS[GLYPH_ARM][:2]
+    # Mirrors StatMap.Rotation: turned to follow the ring, or upright.
+    return ARMS[orientation_at(dx, dy)] if rotate else ARMS[0]
+
+
 # --- rendering ---------------------------------------------------------------
 
 
@@ -427,8 +550,15 @@ def render(spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
            backing: tuple[int, int, int] | None = None,
            at_time: tuple[int, int] = (10, 9),
            drift: tuple[int, int] = (0, 0), marks=None,
-           overs=None, rotate: bool = True) -> Image.Image:
+           overs=None, rotate: bool = True,
+           date: int | None = None) -> Image.Image:
     img = Image.new("RGB", (SIZE, SIZE), (0, 0, 0))
+    # The watermark's cells, resolved once rather than per dot.
+    # Drawn hands own the ordinary time view. Their date appears when hands are
+    # off (the persistent choice or a temporary touch-and-hold peek), which is
+    # also what keeps the largest merged render inside its watchdog.
+    glyph = glyph_cells(date) if (date is not None and
+                                  (not DRAWN_HANDS or backing is None)) else set()
     draw = ImageDraw.Draw(img)
     # Which dot each ring marks, worked out once rather than per dot.
     mark_dots = {}
@@ -471,8 +601,7 @@ def render(spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
                         colour = hourly_colour(
                             ring, position, dist_sq,
                             (hourly or {}).get(ring), always_on, held_back)
-                        arm = ARMS[orientation_at(dx, dy)] if rotate \
-                            else ARMS[0]
+                        arm = arm_for(dx, dy, col, row, rotate, glyph, hand)
                         draw_dot(draw, x - half + drift[0],
                                  y - half + drift[1], colour, arm)
                         continue
@@ -513,8 +642,7 @@ def render(spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
                 draw.rectangle([left, top, left + DOT - 1, top + DOT - 1],
                                fill=colour)
                 continue
-            # Mirrors StatMap.Rotation: turned to follow the ring, or upright.
-            arm = ARMS[orientation_at(dx, dy)] if rotate else ARMS[0]
+            arm = arm_for(dx, dy, col, row, rotate, glyph, hand)
             draw_dot(draw, left, top, colour, arm)
     return img
 
@@ -529,10 +657,15 @@ def orientation_at(dx: int, dy: int) -> int:
 
 
 def draw_dot(draw, left: int, top: int, colour, arm=ARMS[0]) -> None:
-    """One dot: two strokes through its centre, at the given orientation."""
+    """One dot: two strokes through its centre, at the given orientation.
+
+    A two-value arm is a *struck* dot -- one stroke, five lit pixels. See the
+    date watermark above.
+    """
     x, y = left + DOT // 2, top + DOT // 2
     draw.line([x - arm[0], y - arm[1], x + arm[0], y + arm[1]], fill=colour)
-    draw.line([x - arm[2], y - arm[3], x + arm[2], y + arm[3]], fill=colour)
+    if len(arm) > 2:
+        draw.line([x - arm[2], y - arm[3], x + arm[2], y + arm[3]], fill=colour)
 
 
 # --- device compositing ------------------------------------------------------
@@ -712,7 +845,7 @@ def main(outdir: str = "build/mockups", device: str = DEFAULT_DEVICE) -> int:
           "Worst case — every stat 100%, always-on").save(path)
     written.append(path)
 
-    # 6. Hand backing — the awake-only option, hands drawn at system time.
+    # 6. Physical backing or drawn hands, shown in all three configured states.
     when = (10, 9)
     panels = []
     for label, backing in (("OFF", None), ("WHITE", (255, 255, 255)),
@@ -721,7 +854,10 @@ def main(outdir: str = "build/mockups", device: str = DEFAULT_DEVICE) -> int:
         panels.append((f"{label}   luminance {measure(face) * 100:.2f}%",
                        composite(face, at_time=when)))
     path = os.path.join(outdir, "05-hand-backing.png")
-    sheet(panels, "Behind hands — awake only, hands held at system time").save(path)
+    title = ("Drawn hands — off, white and grey, or dark"
+             if DRAWN_HANDS else
+             "Behind physical hands — awake only, hands held at system time")
+    sheet(panels, title).save(path)
     written.append(path)
 
     # 7. Rings assigned to weather — temperature is a range, not a level, and
@@ -741,7 +877,10 @@ def main(outdir: str = "build/mockups", device: str = DEFAULT_DEVICE) -> int:
     #     says when, how deep into the ring's own thickness says how likely.
     #     Two hours are left as None so the unknown tier is visible: a forecast
     #     that ran short must not read as a forecast of no rain.
-    hours = [0, 0, 1, 2, 3, 3, 2, 1, 0, 0, None, None]
+    # Percentages, so the scale is exercised as the watch would fill it: a
+    # 10% hour is a pip rather than the nothing the old four-step scale drew.
+    hours = [level_for(p) for p in
+             (0, 5, 10, 20, 35, 55, 75, 90, 100, 60, None, None)]
     hourly_assign = (SOURCE_RAIN_HOURS, 6, 2, 3)
     panels = []
     for label, kwargs in (("AWAKE", {}),
@@ -754,7 +893,20 @@ def main(outdir: str = "build/mockups", device: str = DEFAULT_DEVICE) -> int:
                        composite(face)))
     path = os.path.join(outdir, "07b-rain-next-12h.png")
     sheet(panels, "Ring 1 = rain next 12h — one block per hour ahead, "
-                  "deeper = more likely; last two hours unforecast").save(path)
+                  "0/5/10/20/35/55/75/90/100/60%; last two unforecast"
+          ).save(path)
+    written.append(path)
+
+    # 7c. The scale itself, every level in turn, so the sixteen readings can be
+    #     compared side by side rather than inferred from one forecast.
+    panels = []
+    for first in (0, HOUR_LEVELS + 1 - HOURS):
+        levels = list(range(first, first + HOURS))
+        face = render(values, assign=hourly_assign, hourly={0: levels})
+        panels.append((f"LEVELS {levels[0]}-{levels[-1]}", composite(face)))
+    path = os.path.join(outdir, "07c-block-levels.png")
+    sheet(panels, "Every rung of the 16-step block scale: whole sub-bands "
+                  "outward, then width across the block").save(path)
     written.append(path)
 
     # 8. Past the goal — steps on ring 1, read as a second lap. Mirrors
@@ -849,6 +1001,33 @@ def main(outdir: str = "build/mockups", device: str = DEFAULT_DEVICE) -> int:
     path = os.path.join(outdir, "12-duotones.png")
     sheet(panels, "Duotones - two alternating hues, awake, always-on and "
                   "the temperature ramp").save(path)
+    written.append(path)
+
+    # 12. The date watermark: the day of the month struck into the field.
+    #     Every figure on this sheet is *below* the plain face's, because a
+    #     struck dot lights five pixels where the field lights nine.
+    panels = []
+    plain = render(values, rotate=False)
+    panels.append((f"NO WATERMARK   lum {measure(plain) * 100:.2f}%",
+                   composite(plain)))
+    for day in (5, 15, 28):
+        face = render(values, rotate=False, date=day)
+        panels.append((f"DAY {day:02d}   lum {measure(face) * 100:.2f}%",
+                       composite(face)))
+    path = os.path.join(outdir, "13-date-watermark.png")
+    sheet(panels, "Date watermark - the day struck into the dot field, "
+                  "one stroke per dot instead of two").save(path)
+    written.append(path)
+
+    # The same faces uncomposited and at 1:1, which is the honest look at it:
+    # the device art and its bezel shrink the dial by a third.
+    panels = [("UPRIGHT", render(values, rotate=False)),
+              ("UPRIGHT + DATE", render(values, rotate=False, date=15)),
+              ("FOLLOW THE RINGS + DATE", render(values, date=15))]
+    panels = [(f"{n}   lum {measure(f) * 100:.2f}%", f) for n, f in panels]
+    path = os.path.join(outdir, "13b-date-true-size.png")
+    sheet(panels, "Date watermark at 1:1 - and on the radial field, which the "
+                  "setting does not offer").save(path)
     written.append(path)
 
     # 11. Burn-in drift: how long any one pixel stays lit over a full cycle.

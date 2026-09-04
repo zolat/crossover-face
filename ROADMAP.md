@@ -1,7 +1,7 @@
 # Roadmap
 
-**Current:** done — the face runs on the Epix 2 family, with the hands drawn out of its own
-dots. One item is deliberately left open; see *Left on the table*.
+**Current:** automated integration complete — the face runs on the Epix 2 family with
+drawn dot hands and a touch-and-hold data peek. Real-Epix validation is the final gate.
 
 Out-of-band device work, not a phase of the performance roadmap that follows.
 
@@ -24,7 +24,8 @@ them lit through always-on because there they are the only thing saying the time
     416       40     203   22  1272   epix2, epix2pro47mm
     454       42     210   23  1380   epix2pro51mm
 
-103/103 on all five devices, simctl 43/43.
+123/123 on all five devices, simctl 44/44, five strict builds, and all eight package
+variants.
 
 ## What was measured rather than assumed
 
@@ -42,36 +43,21 @@ them lit through always-on because there they are the only thing saying the time
   approximation and the bar test is exact, so an exactly-sized window clips the hand by
   0.00027 of a turn. Found by the agreement test on its first run, not by eye.
 
-## The frame A/B, and what it did and did not settle
+## The post-merge frame A/B
 
-CLAUDE.md's rule is that adding per-dot work means re-measuring both rows, and this added
-some to the Crossover's hot loop. Measured same-session, same machine, merge base against
-this branch, one isolated simulator per leg and the legs alternated — two binaries with one
-PRG stem cannot share an instance, because `load()` decides a push has landed by that file's
-mtime and swapping them under one name never moves it.
+Measured on the same machine and simulator profile, alternating current `main` and the
+integrated branch in isolated instances:
 
-    row                    base                    branch
-    defaults, hands off    21ms / 27  80% skipped  20ms / 29  80% skipped
-    defaults, hands ON     80ms / 101 80% skipped  79ms / 102 80% skipped
-                          101ms / 159 76% skipped  96ms / 113 80% skipped
-    seconds + temp         (leg invalid)           24-27ms / 93-111  0% skipped
-    memory                 57k of 123k             59k of 123k
+    row                         current main           integrated
+    defaults                    18ms avg / 22 worst    19ms avg / 23 worst
+    hand backing                22ms avg / 27 worst    20ms avg / 23 worst
+    hands + seconds + temp      watchdog trip           6ms avg / 20 worst
+    memory                      61k of 123k             64-66k of 123k
 
-**No regression on the row that changed most.** Hands ON is where the gate replaced the bar
-test, and it comes out level or slightly ahead on the worst frame. The +2k of memory is the
-two new per-*ring* arrays and HandStyle; nothing per-dot was added to the cache.
-
-Two caveats, both real:
-
-- **the machine drifted between samples.** A leg's two samples differ by up to 4x in the
-  hands-off row, which is load rather than code — exactly the trap CLAUDE.md warns about.
-  The paired samples within a row are what to read, not any figure against another day's.
-- **the seconds + temperature row never got a valid base leg.** The base binary was called
-  `base.prg`, and simctl derives the settings filename from the PRG *stem*, so it wrote
-  `BASE.SET` and the base leg quietly reported default rings for every row. Fixed by renaming
-  the binary, but the rerun ran into a slept display and was abandoned rather than reported
-  half-measured. The branch's own figure for that row, 24-27ms at 0% skipped, is the same
-  class as the 31ms / 97 worst on record.
+The integrated busy row skipped 0% of frames and remained alive. Reading the clock once per
+frame and replacing temporary ring-window arrays with scalar bounds also fixes that
+current-main worst-case crash. On Epix, the expensive combination is separated by design:
+drawn hands show the time, while touch-and-hold hides them and reveals the upright date.
 
 ## Left on the table
 
@@ -79,16 +65,6 @@ Two caveats, both real:
   matching the Crossover's own 10px — trips the watchdog with the hands on. Bisected: 1388
   runs, 1444 does not. 1380 ships, at a 22px rim. The lever is `PITCH`, which drags `DOT`,
   `DotGrid.ARMS`, `Drift`'s offsets and the Python mirror with it — a phase, not an edit.
-- **No delta test drove the hands until now**, and the gap was found from the
-  outside: date-watermark-texture reported that its own delta test ran with
-  `backing = null`, which prompted an audit here that found every one of mine
-  did too. `null` is the easy argument to pass, so it is a shared blind spot
-  rather than a coincidence. Closed by
-  `turningTheHandsOnOrOffRepaintsTheRingTwice`, which is mutation-checked:
-  removing `lastBacking` from the delta's eligibility key fails that test and
-  nothing else in the suite.
-- **The frame A/B's seconds row is unfinished**, and the second attempt at it hit a slept
-  display. See above.
 - **Dark hands were chosen on the mockups, not on hardware.** Rendered at six times of day,
   a bright hand is more of what is already there and genuinely hard to find among ~1400 lit
   crosses; cut out of the field it is the only dark shape on a lit disc and reads at a
@@ -105,6 +81,8 @@ Two caveats, both real:
   in Python for.
 - **The Epix face crop is a percent or two out.** Good enough to see the face by, not good
   enough to measure; `MatrixTest` is the luminance authority anyway.
+- **A continuous-arc face is a separate experiment.** This release keeps the established
+  lattice and dot language; an arc renderer should be evaluated independently.
 
 # Previously: Rain, next 12h (complete)
 
@@ -114,16 +92,97 @@ Out-of-band feature work, not a phase of the performance roadmap that follows: t
 complete and this does not extend it.
 
 - [x] Rain, next 12h — an hourly forecast in one ring
+- [x] Block levels — width as the second axis, so a block reads sixteen ways rather than four
+- [x] Block centring — a block sits between its two hour marks, not against the first one
+- [x] Date watermark — the day of the month written into the grain of the dot field
 
-Plan: `~/.claude/plans/i-want-to-plan-starry-graham.md`
+Plans: `~/.claude/plans/i-want-to-plan-starry-graham.md`,
+`~/.claude/plans/encapsulated-finding-owl.md`,
+`~/.claude/plans/could-we-subtely-wite-curried-forest.md`
+
+## The date watermark, and what the mockups settled
+
+The ask was to write the date into the field by **rotating** dots — turning a chosen few
+45 degrees so a numeral appears in the grain rather than on top of it. Orientation is the
+one channel this face has that costs no light: every cross lights nine pixels whichever way
+it points.
+
+**Rotation is free and does not read.** Measured in `tools/mockup.py`, a face with a rotated
+numeral in it and one without measure the same 4.821% — identical to every digit. But at a
+five-pixel dot a `+` and a `×` are too close to tell apart, and at a 3x5 font the numeral is
+a faint sheen at 1:1 and nothing at all on the wrist. The face has form here: the
+temperature mark had to become a solid block because "a white cross among them is just
+another cross — it was tried and it vanished".
+
+**What reads is density, not orientation.** A *struck* dot draws one of its two strokes and
+not the other — five lit pixels instead of nine, same cell, same colour. Four markings were
+rendered at 1:1 and at wrist scale:
+
+| marking | luminance | reads as a number? |
+|---|---|---|
+| none | 4.82% | — |
+| rotate 45°, 3x5 font | 4.82% | no — a faint texture patch |
+| rotate 45°, double-size font | 4.82% | faintly, at close range |
+| **half-weight stroke, double-size** | **4.64%** | **yes** |
+
+**And it is free in the safe direction.** A struck dot lights a strict subset of the pixels
+it lit before, so the frame total can only fall — no luminance bound needed re-measuring,
+and the argument is arithmetic rather than a measurement.
+`strikingADotOnlyRemovesLight` asserts the premise it rests on.
+
+**Double-size, because a one-dot stroke is not a stroke.** A 3x5 digit at one lattice cell
+to the font pixel is 30x50px, which sounds ample; its strokes are one dot wide and have no
+coherent area to read as strokes. At two cells they are 20px wide and the numeral is there.
+The window is 14x10 cells, horizontally centred, in the lower half — the only placement of
+that size that clears the hand pivot, and all 140 of its cells hold a dot.
+
+**The frame cost is below this machine's noise floor, and saying so took twelve legs.**
+One integer comparison per dot is per-dot work, which CLAUDE.md requires re-measuring both
+rows for. Two builds — a `const` reproducing the loop with no comparison in it at all,
+which is the only honest "before" — interleaved back to back, two rounds:
+
+| rings | leg | round 0 | round 1 |
+|---|---|---|---|
+| defaults | A pre-watermark loop | 29ms / 46 worst | 40ms / 73 |
+| | B watermark off | 37ms / 83 | 35ms / 56 |
+| | C watermark on | 34ms / 66 | 34ms / 64 |
+| seconds + temperature | A pre-watermark loop | 11ms / 56 | 14ms / 84 |
+| | B watermark off | 12ms / 66 | 13ms / 71 |
+| | C watermark on | 13ms / 74 | 14ms / 81 |
+
+**Read the defaults row as the null result it is.** A→C reverses direction between the two
+rounds — C is 3ms *below* B in round 0 and A is 6ms above C in round 1 — which cannot be a
+cost of the comparison and is the machine moving under the measurement. The seconds row,
+where nothing is ever skipped and the sample is therefore steadier, is monotone and tiny:
++1ms for the comparison, +1ms more for the strike. Idle is unmoved at 0-1ms in every leg,
+so `DateGlyph.today()`'s day-key arithmetic does not show up on a skipped frame.
+
+What *is* consistently measurable is memory: **61k to 63k**, in every leg the watermark was
+on, for the two ≤140-entry tables. Against 123k granted.
+
+Three things about the mechanism are load-bearing:
+
+- **The struck dots are named by index, in the order the renderer walks them**, so
+  membership costs one integer comparison per dot rather than a lookup. The lattice scan
+  that finds them runs in index order, which is why the list comes out sorted with no sort
+  and no reverse map.
+- **The cursor advances in the branch that consumed it**, not at the top of the loop — one
+  comparison for an ordinary dot instead of a test and a local. That only works because
+  the delta redraw is told never to skip a struck dot (`i != glyphNext`), or a skipped dot
+  would leave the cursor a step behind and shift the whole numeral along the ring.
+- **The day is in the *field* print**, so midnight clears the screen. A dot struck yesterday
+  and not today has four pixels a repaint cannot remove — the repaint draws the cross's
+  other stroke, which is exactly those four.
 
 ## What it is
 
 A ring's 360 degrees become twelve 30-degree hour slots, one per hour ahead. A 22.5-degree
 block in each leaves a countable gutter. How far a block reaches out through the ring's own
-42px thickness is the chance of rain: three radial sub-bands at 25/50/75%. An hour the
-forecast said nothing about draws a fourth tier at 0.25, darker than the 0.55 unfilled one,
-so "no data" cannot read as "forecast says dry".
+42px thickness is the chance of rain — and then how far it spreads *across* the block's own
+width. A block holds a level from 0 to 15: the whole part of `L * BANDS / LEVELS` is that
+many full-width sub-bands, the remainder is the angular half-width of the next band out,
+centred in the block. An hour the forecast said nothing about draws a fourth tier at 0.25,
+darker than the 0.55 unfilled one, so "no data" cannot read as "forecast says dry".
 
 ## What the measurements settled
 
@@ -140,7 +199,32 @@ Four is clean on ring 0 and lumpy on ring 1. The source must work on either, so 
 **The outer two rings only, and that is a lattice fact rather than taste.** The worst
 (block, sub-band) holds 8 dots on ring 0 and 6 on ring 1, against 4 on ring 2 and 2 on ring
 3. `onlyTheOuterTwoRingsResolveTwelveHoursInThreeBands` asserts it, so if the lattice ever
-changes the test says whether `Source.HOURLY_TOP_RING` still means what it claims.
+changes the test says whether `Source.BLOCKS_TOP_RING` still means what it claims. The
+level scale sharpens this only on the innermost ring, where sixteen (block, level) pairs
+light no dot at all — ring 2 draws every rung, so its exclusion still rests on the dot count
+and on nothing else.
+
+**Width is worth eleven readings an hour, and it is free.** The three sub-bands cap the
+radial axis; the angular one was untouched, with every lit band drawn full width across 8-13
+dots. Level 15 is exactly the three full bands the old top tier drew, so nothing the widened
+scale can draw was already impossible and **no luminance bound needed re-measuring**. Dots
+lit in the worst block, per level:
+
+| ring | level 1 | 5 | 10 | 15 |
+|---|---|---|---|---|
+| 0 (outer) | 2 | 8 | 17 | 27 |
+| 1 | 1 | 6 | 13 | 20 |
+
+**No minimum window, and that was measured rather than assumed.** The obvious worry is that
+a level-1 window — a fifth of one sub-band — falls clean between two dots of a square
+lattice, so the bottom of the scale draws nothing and 10% is indistinguishable from the dry
+hour it used to be. On the offered rings the geometry already delivers it, monotonically;
+`everyNonZeroLevelLightsAtLeastOneDot` and `aLevelIsMonotonicInDotsLit` hold it there. A
+floor sized off `DotGrid.markerHalf` is the fix if that ever changes, not a coarser scale.
+
+**The block loop costs 2.7ms more.** 87.3/87.8/87.8ms against 85.9/84.3/85.4 for the old
+whole-band fill, on ring 0's 436 dots at the worst level, A/B'd out of one binary under one
+load. The span loop is byte-for-byte unchanged, so no other ring moved.
 
 **The hour-hand anchoring costs nothing.** The hand at local hour H points at clock position
 H mod 12, so the forecast N hours out belongs at (H + N) mod 12 — which is that forecast
@@ -181,17 +265,24 @@ Two caveats, both real:
 
 ## Left on the table
 
-- **Nothing has been seen.** `screencapture -l` still returns *could not create image from
-  window*, which is the ROADMAP's existing note about Screen Recording permission, and the
-  Mac display slept during this session besides. Every claim about what the face *looks*
-  like rests on `tools/mockup.py`'s panel and on dot counts asserted in the suite, not on a
-  render anybody looked at. Granting the permission and re-running
-  `python3 -m simctl.window shot` is the first thing to do next.
-- **The gutter's alignment is unexamined.** Blocks occupy the *leading* 22.5 degrees of each
-  wedge, so every boundary lands on an hour mark and the hour hand sits in its own block
-  from :00 to :45 and in the gutter after that. Centring the block instead keeps the hand
-  inside its band the whole hour but moves the boundaries off the marks. One constant either
-  way, and it should be decided looking at a render.
+- ~~**Nothing has been seen.**~~ Settled: the face has now been screenshotted awake with a
+  graded forecast on the outer ring, and the lit pixels per block were counted off the
+  capture — 0% and 5% dark, 10% a two-dot pip, monotone round to 100%, the unforecast hour
+  on the dim tier. The earlier *could not create image from window* was the Mac display
+  asleep, not a missing permission; `caffeinate -u` wakes it, `-d` only stops it sleeping
+  again. It needed a temporary stub for the forecast and a forced ring assignment, so the
+  *data path* from `Weather` is still unexercised — see the last bullet.
+- ~~**The gutter's alignment is unexamined.**~~ Settled by looking at it on the wrist, which
+  is what this item asked for. Leading alignment put every block 3.75 degrees anticlockwise of
+  its slot's centre — about 12px of arc on the outer ring, and plainly visible against the
+  printed dial. Blocks are now centred: the gutter is split 3.75 degrees either side of each
+  hour mark, and the hand is inside its own block from :07.5 to :52.5 rather than leaving
+  early at :45. Measured before and after off simulator captures of the same stubbed
+  forecast: **aggregate lit centroid 11.57 -> 15.46 degrees** into a 30-degree slot, against a
+  15.00 target, the residual being hand occlusion. Centring the block also made every rung
+  above level 1 more even, and ring 1's full block a flat 21 dots across all twelve; the cost
+  is level 1 drawing 1 dot at four hours and 3 at the rest, where a floor to even it up would
+  collapse it into level 2. Costs about 1ms a drawn block ring, inside run-to-run spread.
 - **On-watch verification.** `getHourlyForecast()` returns null in the simulator, so every
   hour is unknown there and the whole ring draws the dim tier. Nothing has exercised the
   bucketing against a real forecast, and the array's length is undocumented — the dim tier

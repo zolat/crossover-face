@@ -141,10 +141,12 @@ module DotGrid {
 
     //! Squared outer radius of each radial sub-band, flat: ring * BANDS + band.
     //!
-    //! What the hourly forecast reads instead of a span. A block reaching tier
-    //! t lights every dot in its ring out to bandEdge[ring * BANDS + t - 1],
-    //! so the renderer's radial test is one array lookup and one comparison
-    //! against dx*dx + dy*dy, which the dot loop already has to hand.
+    //! What a block ring reads instead of a span. A block filling t whole
+    //! sub-bands lights every dot in its ring out to
+    //! bandEdge[ring * BANDS + t - 1], so the renderer's radial test is one
+    //! array lookup and one comparison against dx*dx + dy*dy, which the dot
+    //! loop already has to hand. The partial band beyond it reads the next
+    //! entry along and adds a window across the block's width.
     //!
     //! Per *ring*, twelve numbers in all — not per dot. A per-dot band index
     //! would be a fifth parallel array of 1112 entries for something two
@@ -177,6 +179,15 @@ module DotGrid {
 
     //! Set while the cache does not yet describe the lattice.
     var stale as Boolean = true;
+
+    //! Bumped by every build(), so anything caching an index into the arrays
+    //! above can tell that they have been rewritten under it.
+    //!
+    //! A rebuild reuses the arrays when the lattice has not changed size, which
+    //! is every rebuild there is — so a stale cache of dot indices cannot be
+    //! spotted by comparing sizes or references. DateGlyph keeps such a cache;
+    //! this counter is how it knows.
+    var generation as Number = 0;
 
     //! Mark the cache for rebuilding, without doing the work here. Settings
     //! are reloaded from app callbacks, whose watchdog budget is far tighter
@@ -639,5 +650,6 @@ module DotGrid {
         }
 
         stale = false;
+        generation++;
     }
 }

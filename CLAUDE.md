@@ -19,7 +19,7 @@ covers the working knowledge that spans files and is easy to break.
 ```sh
 make build      # debug .prg for the simulator
 make sim        # build, start the simulator if needed, sideload, stream println
-make test       # build with -t, run the 103-test suite (takes the simulator lock)
+make test       # build with -t, run the 123-test suite (takes the simulator lock)
 make test-lock  # self-test tools/sim_lock.sh
 make test-simctl # tests for tools/simctl (no simulator, no build needed)
 make package    # signed .iq for the store
@@ -151,6 +151,21 @@ decision the Epix inverts: there, backing is suppressed in low power to save lig
 brass keeps telling the time; here it is the only thing on the glass that does.
 `HandStyle.ALWAYS_ON` is the switch and
 `handsSurviveAlwaysOnExactlyWhenTheFaceDrawsThem` ties it to `DRAWN`.
+
+### Touch-and-hold peeks behind drawn hands
+
+The live watch face cannot intercept Epix button keys; those remain system controls.
+`WatchFaceDelegate.onPress()` is different: Garmin defines it as touch-and-hold and supports
+it on the Epix 2 family. `CrossoverDelegate` uses that event to toggle `CrossoverView`'s
+transient peek. A peek removes drawn hands without changing `handBacking`, and `onEnterSleep`
+restores them so always-on never loses the time. Physical-hand builds return false and leave
+the gesture to the system.
+
+The date watermark is also a peek detail on drawn-hand watches. Hands + date + a busy ring
+crossed the 416/454 watchdog after the two branches merged; each feature alone was safe.
+`showsDate()` therefore defers the date while Epix hands are visible and reveals it when a
+peek or Hands: Off makes the field unobstructed. Crossover keeps the date normally because
+its hardware hands cost the renderer nothing.
 
 ### Per-device resources go in one shared folder, not four
 
@@ -492,32 +507,81 @@ but the rebuild it schedules must still land in `onLayout`, never `onStart`.
 
 ### One source does not report a span at all
 
-`SOURCE_RAIN_HOURS` ("Rain, next 12h") turns a ring into a twelve-hour forecast: the ring's
-360° is twelve 30° hour slots, a 22.5° block in each leaving a countable gutter, and how far
-a block reaches out through the ring's **own 42px thickness** is the chance — three radial
-sub-bands at 25/50/75%. Twelve disjoint blocks with a radial axis is not something two floats
-can say, so it reports `Source.EMPTY` as its span and its real payload travels beside it:
-`Source.fillHours()` → `StatMap.hourly()` → the view → both the print and the renderer. The
-same move a marker makes, and for the same reason.
+`SOURCE_RAIN_HOURS` ("Rain, next 12h") turns a ring into a twelve-hour forecast, and it is the
+first source to fill a shape the face now has a general name for: **blocks**. The ring's 360°
+is twelve 30° hour slots, a 22.5° block **centred in each** leaving a countable gutter that
+straddles the hour mark, and how much of each block is filled is the reading. Twelve disjoint blocks with a radial axis is not something
+two floats can say, so it reports `Source.EMPTY` as its span and its real payload travels
+beside it: `Source.fillBlocks()` → `StatMap.blocks()` → the view → both the print and the
+renderer. The same move a marker makes, and for the same reason.
 
-Four things about it are load-bearing:
+**A block holds a level from 0 to `HourBands.LEVELS` (15), not a sub-band index.** The lattice
+caps the radial axis at three sub-bands and there is no arguing with it, but a block is also
+8–13 dots *wide*, and that axis was unused while every lit band was drawn full width. So level
+`L` fills `L * BANDS / LEVELS` bands: the whole part is that many full-width sub-bands, the
+remainder is the angular half-width of the next band out, centred in the block. Sixteen
+readings an hour rather than four — a 10% hour is a two-dot pip on its hour mark rather than
+the nothing the old 25/50/75 scale drew for it.
+
+Consequences worth knowing before touching it:
+
+- **The scale is linear in area and its top is 100%**, not "75% or more". A full ring means a
+  certainty and one whole sub-band means a third. `HourBands.fullBandsFor()` /
+  `partialHalfFor()` are the only place that curve lives.
+- **The block is centred in its slot, and it was not always.** It used to sit at the wedge's
+  *leading* edge — starting exactly on hour mark `H`, with the whole gutter bunched up before
+  mark `H+1`. That put every block 3.75° anticlockwise of its slot's centre, about 12px of arc
+  on the outer ring: invisible to every test the face had, and obvious on the wrist against the
+  printed dial. `HourBands.LEAD` is the half-gutter that fixes it, and
+  `everyBlockIsCentredInItsHourSlot` is what holds it — written against the *symmetry* of the
+  lit arc, so `HOUR_BLOCK_DEGREES` stays a free choice. `BLOCK_CENTRE` is then exactly 0.5 for
+  any block width, because `LEAD` is by definition half of what `FILL` leaves over.
+- **Centring costs the bottom rung its evenness**, and a floor does not buy it back. It puts
+  blocks 1, 4, 7 and 10 with their centres on the lattice's 45° diagonals, where dots sit
+  further apart, so level 1 draws 1 dot at those four hours and 3 at the rest. A minimum window
+  of a lattice pitch or less changes nothing; 1.4 pitches evens level 1 to 3–4 dots, which is
+  exactly what level 2 draws — collapsing two rungs into one. Every rung above 1 came out
+  *more* even than before, and ring 1's full block is now a flat 21 dots across all twelve.
+- **Level `LEVELS` is exactly the old top tier**, so the widened scale can draw nothing that
+  was not already drawable and **no luminance bound needed re-measuring**.
+  `eachSubBandLightsItsShareOfTheRing` asserts that equality rather than assuming it.
+- **There is no minimum window, and that was measured.** The obvious worry is that a level-1
+  window — a fifth of one band — falls between two dots and the bottom of the scale draws
+  nothing. On the offered rings it does not: the worst block at level 1 holds two dots on ring
+  0 and one on ring 1, and every level is monotonic in every block.
+  `everyNonZeroLevelLightsAtLeastOneDot` and `aLevelIsMonotonicInDotsLit` are what keep that
+  true; if either fails, a floor sized off `DotGrid.markerHalf` — which solves the same problem
+  for the temperature mark — is the fix, not a coarser scale.
+- **A block ring costs about 2.7ms more per drawn frame** than the whole-band fill did (87ms
+  against 85ms on ring 0's 436 dots, worst case, A/B'd out of one binary). The span loop is
+  byte-for-byte unchanged, so no other ring moved.
+
+Five things about the channel are load-bearing:
 
 - **The hour-hand anchoring is free.** The hand at local hour `H` points at clock position
   `H mod 12`, so the forecast `N` hours out belongs at `(H + N) mod 12` — which *is* that
   forecast hour's own hour-of-day, mod 12. `RainForecast` buckets an entry by its own local
   hour and it lands where the hand will be. **Nothing rotates anywhere.** Code that turns a
   table once an hour was written the hard way.
-- **The two packed words must be in the ring print.** An hourly ring's span is `EMPTY` on
+- **All three packed words must be in the ring print.** A block ring's span is `EMPTY` on
   every frame it draws and it carries no mark and no overflow, so without them nothing about
-  that ring ever changes and the gate never marks it dirty. `PER_RING` is 6 for this.
-- **It opts out of the delta redraw**, via `lastHourly` in the eligibility key — in *both*
+  that ring ever changes and the gate never marks it dirty. `PER_RING` is 7 for this. Three
+  words because a level is four bits: twelve blocks is 48 bits, and neither a Float nor a
+  Number round-trips that, so the levels take two words of six blocks each (`0xFFFFFF`) beside
+  the twelve known bits (`0xFFF`) — all three inside a Float's exact integer range.
+- **It opts out of the delta redraw**, via `lastBlocks` in the eligibility key — in *both*
   places that key is compared, the delta test and the `stableFor` update. The palette is
   keyed by ring rather than by source, so switching a ring in or out of the forecast moves
   nothing else in the key. The direction that rots is *leaving* it: the buffers hold blocks
   and gutters while the remembered spans describe `EMPTY`.
-- **`StatMap.noHourly()` reports every hour known and *dry*, not all zeroes.** Zero `known`
+- **`StatMap.noBlocks()` reports every block known and *empty*, not all zeroes.** Zero `known`
   means every hour is unknown, which draws the dim tier right round the ring — data, in the
   held-back mode whose entire purpose is to carry none.
+- **Nothing outside `Source.usesBlocks()` names the kind.** The renderer, the loader and the
+  picker all have to ask which *shape* a ring draws, and four copies of `== SOURCE_RAIN_HOURS`
+  is how the second block source ends up drawn as an empty span in three of them. A second one
+  is a case in `Source.fillBlocks()` and nothing else: `HourBands` owns the packing
+  (`raise`/`levelAt`) and the scale (`levelFromFraction`), and knows nothing about rain.
 
 Three sub-bands rather than four was measured, not chosen: four splits a 42px ring into
 10.5px bands that beat against the 10px lattice pitch, and ring 1 comes out 7.0/5.7/9.0/6.7
@@ -525,12 +589,15 @@ dots per block against three-way's 8.3/9.0/11.0. `DotGrid.bandEdges()` therefore
 **integer** thickness `ringBounds()` uses, never `markerWidths()`'s 42.25 — the float one puts
 ring 1's top edge inside ring 1's own outermost dots.
 
-It is offered on the **outer two rings only** (`Source.HOURLY_TOP_RING`), enforced in three
+It is offered on the **outer two rings only** (`Source.BLOCKS_TOP_RING`), enforced in three
 places that must agree: `StatMap.load()` maps it to Off elsewhere, the on-device picker walks
 `Source.offeredFor(ring)`, and `settings.xml` lists it in the `ring1`/`ring2` blocks alone.
 The justification is a claim about the lattice and is asserted as one —
 `onlyTheOuterTwoRingsResolveTwelveHoursInThreeBands` measures the worst (block, sub-band) at
-8 and 6 dots on rings 0 and 1, against 4 and 2 on rings 2 and 3.
+8 and 6 dots on rings 0 and 1, against 4 and 2 on rings 2 and 3. The level scale sharpens that
+only on the innermost ring, where sixteen (block, level) pairs light no dot at all; **ring 2
+draws every rung**, so its exclusion still rests on the dot count and on nothing else — worth
+knowing before anyone relaxes the cut.
 
 ### Every other source reports a span, not a level
 
@@ -560,7 +627,12 @@ profiles carry no `analogHands`.
 Stored values are **list indices**, so `resources/properties.xml`, `resources/settings/settings.xml`,
 `resources/strings/strings.xml`, the enums in `StatMap`/`Source`, and the label arrays in
 `source/settings/SettingsMenu.mc` all have to agree. Eight properties today: `theme`,
-`handBacking`, `alwaysOnFill`, `dotRotation`, `ring1`–`ring4`.
+`handBacking`, `alwaysOnFill`, `dotRotation`, `ring1`–`ring4`. `dotRotation` carries three
+values, not two — the third is the date watermark below.
+
+A `ChoiceMenu` is given how many values it offers as well as its labels. Adding a label
+without moving that count leaves the new row unreachable with no other symptom, which is
+what `rotationSettingIsClamped` now walks every value to catch.
 
 **The indices are the same on every watch, deliberately.** `resources-drawn-hands/` overrides
 only `handBacking`'s *default* and some labels; forking the schema per device would multiply
@@ -680,6 +752,63 @@ cached either way and toggling the setting needs no rebuild. Do not move this in
 `DotGrid.build()`: it would cost a full ~1100-dot rebuild per toggle, and the next step from
 there is making the ring mapping conditional again. `rotationDoesNotReachTheCache` is the
 guard. Every orientation lights nine pixels, so neither setting moves the luminance.
+
+### The date is written into the grain, not on top of it
+
+`ROTATION_UPRIGHT_DATE` writes the day of the month into the field by drawing a few dozen
+dots **struck**: one of the cross's two strokes and not the other, five lit pixels instead
+of nine, in the same cell and the same colour the ring was already using. `DateGlyph` owns
+the window, the font and the list of dots; nothing else learns what a digit is.
+
+**It cannot cost luminance, and that is arithmetic rather than a measurement.** A struck dot
+lights a strict subset of the pixels it lit before, so a frame's total can only fall — which
+is why this is the one addition to the face that needed no budget re-measured.
+`strikingADotOnlyRemovesLight` asserts the premise, since the claim dies the moment a strike
+becomes anything but one stroke of a cross the field already draws.
+
+Four things are load-bearing and none is obvious:
+
+- **Rotation was the idea and it does not read.** Turning a dot 45 degrees is free too —
+  measured, the luminance does not move in any digit — but at a five-pixel dot a `+` and a
+  `×` are too close to tell apart, and a numeral made of them is a sheen. This is the same
+  law that made the temperature mark a solid block: on a field of thin crosses, only a
+  change of *density* reads. Don't re-litigate it without rendering it; `tools/mockup.py`
+  does both and ROADMAP has the table.
+- **The font is double-size because a one-dot stroke is not a stroke.** `SCALE = 2`, so a
+  3x5 digit is 6x10 lattice cells and its strokes are 20px wide. The window is 14x10 cells
+  at `(ORIGIN_COL, ORIGIN_ROW) = (12, 23)` — horizontally centred, lower half, the only
+  placement of that size clearing the hand pivot. All 140 cells hold a dot, and
+  `everyWatermarkCellHoldsADot` fails if a nudge costs the numeral a hole.
+- **The struck dots are a *sorted list of indices*, walked with a cursor.** That is one
+  integer comparison per dot against a call and a division, and it is the same trade
+  `StatMap.litBetween()` gets. Two things keep it honest: the lattice scan that builds the
+  list runs in index order, so it comes out sorted with no sort and no reverse map; and the
+  cursor is re-seeded per ring from `firstFor`, because a ring the gate left clean is never
+  walked. **The cursor advances inside the draw branch that consumed it**, which is what
+  leaves an ordinary dot with a single `else if` — and that only works because the delta
+  redraw is told never to skip a struck dot (`i != glyphNext` in its condition). Move the
+  advance back to the top of the loop and you pay a test and a local on all ~1100 dots.
+- **The day is in the *field* print, so midnight clears the screen.** A dot struck yesterday
+  and not today has four pixels that a repaint cannot remove: the repaint draws the cross's
+  other stroke, which is exactly those four. The slot holds 0.0 whenever the watermark is
+  off, so a face without it never re-prints on a date change — and reading the clock is
+  confined to the mode that uses it. `DateGlyph.today()` keys on the epoch second divided by
+  a day, so `Gregorian.info` is called once a day rather than on every frame including the
+  skipped ones.
+
+`DotGrid.generation` exists for this and nothing else. `build()` reuses its arrays when the
+lattice has not changed size, which is every rebuild there is, so nothing about the arrays
+says they have been rewritten — and a cache of *indices* into them cannot notice. The
+counter is what `DateGlyph` reads; `aRebuiltLatticeRefreshesTheWatermark` holds it there.
+
+The watermark stays on in always-on and in held-back always-on, deliberately: it is the
+date, and it can only take light off the mode measured against the burn-in budget.
+
+It is a third value of `dotRotation` rather than a property of its own, which keeps the
+settings at eight — but note that the choice was made while the marking was still a
+rotation, and a struck dot does not actually need the upright field. A separate on/off
+property would additionally allow "follow the rings + date"; `tools/mockup.py`'s
+`13b-date-true-size.png` renders that combination.
 
 ### The 10% luminance budget
 

@@ -252,20 +252,42 @@ class Runner:
         installed = paths.installed_prg(self.instance.root, self.prg)
         deadline = time.time() + timeout
         last = None
+        ready_frames = 0
         while time.time() < deadline:
             pushed = installed.exists() and installed.stat().st_mtime >= started
             if pushed:
+                crash = read_crash(self.instance.root, started)
+                if crash is not None:
+                    return {"ok": False, "stage": "runtime",
+                            "error": crash["error"], "crash": crash,
+                            "log": str(log)}
+                if child.poll() is not None:
+                    detail = log.read_text(errors="replace").strip()[-2000:]
+                    return {"ok": False, "stage": "runtime",
+                            "error": detail or "monkeydo exited before the face was ready",
+                            "crash": read_crash(self.instance.root, started),
+                            "log": str(log)}
                 found = window.main_window(self.instance.pid())
                 if found is not None:
                     try:
                         shot = window.capture(found)
                         if not window.is_black(shot):
-                            return {"ok": True, "pid": self.instance.pid(),
-                                    "port": self.instance.port, "window": found.window_id,
-                                    "monkeydo": child.pid,
-                                    "seconds": round(time.time() - started, 1)}
-                        last = "the face is drawing black"
+                            # One non-black frame can be Garmin's IQ error
+                            # screen arriving just before CIQ_LOG is flushed.
+                            # Require a second live frame so a crash cannot be
+                            # mistaken for readiness.
+                            ready_frames += 1
+                            if ready_frames >= 2:
+                                return {"ok": True, "pid": self.instance.pid(),
+                                        "port": self.instance.port,
+                                        "window": found.window_id,
+                                        "monkeydo": child.pid,
+                                        "seconds": round(time.time() - started, 1)}
+                        else:
+                            ready_frames = 0
+                            last = "the face is drawing black"
                     except window.CaptureError as error:
+                        ready_frames = 0
                         last = str(error)
             else:
                 last = "the app was never pushed to this instance"
