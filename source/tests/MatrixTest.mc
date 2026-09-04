@@ -119,13 +119,15 @@ module MatrixTest {
     //! The face must never draw a half-built field. That was the bug the
     //! chunked build shipped: it filled 150 dots per frame, and in always-on
     //! a frame is a *minute*, so the face crawled into existence over eight of
-    //! them. One build, complete before the first draw, is the contract — and
-    //! a reload must mark the cache stale so a layout change is picked up.
+    //! them. One build, complete before the first draw, is the contract. No
+    //! setting changes the geometry, so reloading settings must leave that
+    //! completed cache alone.
     (:test)
     function theCacheIsWholeBeforeAnythingDrawsIt(logger as Logger) as Boolean {
+        DotGrid.invalidate();
         Config.reload();
         Test.assertMessage(DotGrid.stale,
-            "reloading settings must mark the cache stale");
+            "an explicit geometry invalidation must survive a settings reload");
 
         DotGrid.ensureBuilt();          // what onLayout does, once
         Test.assertMessage(!DotGrid.stale, "one build must finish the cache");
@@ -138,9 +140,15 @@ module MatrixTest {
         // recompute the same values, so comparing them proves nothing —
         // scribble on the cache and check the scribble survives.
         DotGrid.positionOf[EXPECTED_DOTS - 1] = -1.0;
+        var generation = DotGrid.generation;
+        Config.reload();
+        Test.assertMessage(!DotGrid.stale,
+            "settings that do not move geometry must not invalidate the cache");
         DotGrid.ensureBuilt();
         Test.assertEqualMessage(DotGrid.positionOf[EXPECTED_DOTS - 1], -1.0,
-            "a built cache must not be rebuilt on the next frame");
+            "a settings reload rebuilt the fixed lattice");
+        Test.assertEqualMessage(DotGrid.generation, generation,
+            "a settings reload moved the lattice generation");
         DotGrid.invalidate();
         DotGrid.ensureBuilt();
         Test.assertMessage(DotGrid.positionOf[EXPECTED_DOTS - 1] >= 0.0,
@@ -321,6 +329,59 @@ module MatrixTest {
         Test.assertEqualMessage(Source.span(Source.SOURCE_OFF, true)[1], 0.0,
             "Off must still be empty after the renumbering");
         logger.debug(Source.COUNT + " sources, all reporting in both modes");
+        return true;
+    }
+
+    //! The live view refills caller-owned frame channels instead of allocating
+    //! spans, flags and block words every second. The refill path must remain
+    //! exactly equivalent to the allocating convenience API used by tests and
+    //! tooling, for every source and in both power modes.
+    (:test)
+    function frameChannelsRefillInPlaceWithoutChangingTheirMeaning(
+        logger as Logger) as Boolean {
+        var reused = [-1.0, -1.0] as Array<Float>;
+        for (var kind = 0; kind < Source.COUNT; kind++) {
+            for (var mode = 0; mode < 2; mode++) {
+                var awake = (mode == 0);
+                Source.fillSpan(kind, awake, reused);
+                var allocated = Source.span(kind, awake);
+                Test.assertEqualMessage(reused[0], allocated[0],
+                    "source " + kind + " refill changed its span start");
+                Test.assertEqualMessage(reused[1], allocated[1],
+                    "source " + kind + " refill changed its span end");
+            }
+        }
+
+        var spans = everySpan(-1.0, -1.0);
+        var expected = StatMap.spans(true);
+        StatMap.fillSpans(spans, true);
+        for (var ring = 0; ring < StatMap.RINGS; ring++) {
+            Test.assertEqualMessage(spans[ring][0], expected[ring][0],
+                "ring " + ring + " refill changed its span start");
+            Test.assertEqualMessage(spans[ring][1], expected[ring][1],
+                "ring " + ring + " refill changed its span end");
+        }
+
+        StatMap.fillNoSpans(spans);
+        var blocks = new [StatMap.RINGS * StatMap.BLOCK_VALUES]
+                     as Array<Number>;
+        var overs = new [StatMap.RINGS] as Array<Boolean>;
+        var marks = new [StatMap.RINGS] as Array<Float>;
+        StatMap.fillNoBlocks(blocks);
+        StatMap.fillNoOvers(overs);
+        StatMap.fillNoMarkers(marks);
+        for (var ring = 0; ring < StatMap.RINGS; ring++) {
+            Test.assertEqualMessage(spans[ring][0], StatMap.NEVER_LIT[0],
+                "held-back ring " + ring + " retained a live span");
+            Test.assertMessage(!overs[ring],
+                "held-back ring " + ring + " retained an overflow flag");
+            Test.assertEqualMessage(marks[ring], Source.NO_MARKER,
+                "held-back ring " + ring + " retained a marker");
+            Test.assertEqualMessage(
+                blocks[ring * StatMap.BLOCK_VALUES + 2], HourBands.ALL_KNOWN,
+                "held-back ring " + ring + " did not become known-and-empty");
+        }
+        logger.debug("all frame channels refilled in caller-owned storage");
         return true;
     }
 
@@ -2819,7 +2880,7 @@ module MatrixTest {
             "the periodic repair must clear the screen, or damage outside the " +
             "dots is never rubbed out");
 
-        // forget() is what onShow and waking use; it must always draw next.
+        // forget() is what onShow uses; it must always draw next.
         FrameGate.forget();
         Test.assertMessage(FrameGate.plan(field, moved),
             "forget() must force the next frame to be drawn");
@@ -2836,12 +2897,150 @@ module MatrixTest {
         return true;
     }
 
+    //! Waking needs a complete active frame immediately, but blindly repeating
+    //! it one second later is the work that can hold up an outgoing widget
+    //! transition. The other buffer is instead primed on the next frame that
+    //! genuinely changes, and that prime must remain a full repaint so later
+    //! deltas are safe whichever buffer the device hands us.
+    (:test)
+    function wakeDefersItsSecondFullFrameUntilARealChange(logger as Logger)
+        as Boolean {
+        var field = stillField();
+        var rings = stillRings();
+        FrameGate.transition();
+
+        Test.assertMessage(FrameGate.plan(field, rings),
+            "wake must draw one complete active frame immediately");
+        Test.assertMessage(FrameGate.clears,
+            "the first wake frame must start from black");
+        for (var ring = 0; ring < StatMap.RINGS; ring++) {
+            Test.assertMessage(FrameGate.dirty[ring],
+                "the first wake frame omitted ring " + ring);
+        }
+
+        Test.assertMessage(!FrameGate.plan(field, rings),
+            "an unchanged second after wake must not redraw the whole field");
+
+        var moved = stillRings();
+        moved[2 * FrameGate.PER_RING + 1] = 0.5;
+        Test.assertMessage(FrameGate.plan(field, moved),
+            "a real post-wake change must still draw");
+        Test.assertMessage(FrameGate.clears,
+            "the first real change must prime the other buffer in full");
+        for (var ring = 0; ring < StatMap.RINGS; ring++) {
+            Test.assertMessage(FrameGate.dirty[ring],
+                "the second-buffer prime omitted ring " + ring);
+        }
+
+        Test.assertMessage(FrameGate.plan(field, moved),
+            "the changed ring is still owed in the first buffer");
+        Test.assertMessage(!FrameGate.clears,
+            "only the changed ring needs its held repeat");
+        Test.assertMessage(FrameGate.dirty[2],
+            "the changed ring was not repeated into the first buffer");
+        for (var ring = 0; ring < StatMap.RINGS; ring++) {
+            if (ring != 2) {
+                Test.assertMessage(!FrameGate.dirty[ring],
+                    "the held repeat spread to unchanged ring " + ring);
+            }
+        }
+        Test.assertMessage(!FrameGate.plan(field, moved),
+            "the gate must settle after both buffers carry the change");
+        FrameGate.forget();
+        logger.debug("wake drew once, skipped, then primed on a real change");
+        return true;
+    }
+
+    //! Some physical AMOLED firmwares report the new display mode before the
+    //! corresponding sleep callback. Mode is therefore part of the field
+    //! fingerprint in its own right; otherwise identical data could leave the
+    //! previous mode's palette on screen.
+    (:test)
+    function displayModeChangesTheFieldFingerprint(logger as Logger)
+        as Boolean {
+        var view = new CrossoverView();
+        var drift = [0, 0] as Array<Number>;
+        var high = copyOf(view.fieldPrint(
+            null, 0, drift, 0, System.DISPLAY_MODE_HIGH_POWER));
+        var low = copyOf(view.fieldPrint(
+            null, 0, drift, 0, System.DISPLAY_MODE_LOW_POWER));
+        Test.assertMessage(!FrameGate.same(high, low),
+            "a power-mode palette change disappeared from the field print");
+        logger.debug("display mode occupies field-print slot " +
+                     (high.size() - 1));
+        return true;
+    }
+
+    //! Garmin may call onUpdate while a view transition is removing the face.
+    //! Hidden and display-off callbacks must stop before touching any source;
+    //! otherwise the transition can wait on a history or forecast refresh for
+    //! pixels that nobody will display.
+    (:test)
+    function hiddenAndDisplayOffUpdatesReadNoSources(logger as Logger)
+        as Boolean {
+        var view = new CrossoverView();
+        var dc = probeDc(logger);
+        if (dc == null) {
+            logger.debug("no buffered bitmap available; lifecycle not exercised");
+            return true;
+        }
+
+        WatchData.forget();
+        WeatherData.forget();
+        HourlyWeatherData.forget();
+        BodyBatteryData.forget();
+
+        view.onHide();
+        Test.assertMessage(
+            !view.shouldUpdate(System.DISPLAY_MODE_HIGH_POWER),
+            "a hidden face accepted a high-power transition update");
+        view.updateForMode(dc, System.DISPLAY_MODE_HIGH_POWER);
+        Test.assertMessage(!WatchData.sampled && !WeatherData.sampled &&
+                           !HourlyWeatherData.sampled &&
+                           !BodyBatteryData.currentSampled &&
+                           !BodyBatteryData.historySampled,
+            "a hidden update reached a device data source");
+
+        view.onShow();
+        Test.assertMessage(!view.shouldUpdate(System.DISPLAY_MODE_OFF),
+            "a face accepted an update for a display that is off");
+        view.updateForMode(dc, System.DISPLAY_MODE_OFF);
+        Test.assertMessage(!WatchData.sampled && !WeatherData.sampled &&
+                           !HourlyWeatherData.sampled &&
+                           !BodyBatteryData.currentSampled &&
+                           !BodyBatteryData.historySampled,
+            "a display-off update reached a device data source");
+        Test.assertMessage(
+            view.shouldUpdate(System.DISPLAY_MODE_LOW_POWER),
+            "a shown always-on face must still accept its minute update");
+
+        // The first low-power callback in a minute defines the complete AOD
+        // frame. A transition burst in that same minute must not redraw it
+        // repeatedly; the next real minute will force another complete frame.
+        var fillSetting = StatMap.alwaysOnFill;
+        StatMap.alwaysOnFill = StatMap.ALWAYS_ON_FILL_HIDDEN;
+        var drawn = FrameGate.drawn;
+        var suppressed = FrameGate.suppressed;
+        view.updateForMode(dc, System.DISPLAY_MODE_LOW_POWER);
+        view.updateForMode(dc, System.DISPLAY_MODE_LOW_POWER);
+        Test.assertEqualMessage(FrameGate.drawn, drawn + 1,
+            "a duplicate low-power transition update drew the field twice");
+        Test.assertEqualMessage(FrameGate.suppressed, suppressed + 1,
+            "the duplicate low-power update did not take the no-change path");
+        StatMap.alwaysOnFill = fillSetting;
+
+        view.onHide();
+        FrameGate.forget();
+        logger.debug("hidden and display-off callbacks stopped before sources");
+        return true;
+    }
+
     //! A field print with nothing happening: no drift, no backing.
     function stillField() as Array<Float> {
-        // Five values, matching CrossoverView.fieldPrint(): drift x and y, the
-        // backing colour, the minute the hands are at, and the day the
-        // watermark is drawing. Zero here is the watermark switched off.
-        return [0.0, 0.0, -1.0, 0.0, 0.0] as Array<Float>;
+        // Six values, matching CrossoverView.fieldPrint(): drift x and y, the
+        // backing colour, the minute the hands are at, the day watermark and
+        // display mode. Zero is both no watermark and high-power mode.
+        return [0.0, 0.0, -1.0, 0.0, 0.0, 0.0] as Array<Float>;
     }
 
     //! A ring print with every ring empty and unmarked.

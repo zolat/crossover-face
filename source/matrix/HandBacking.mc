@@ -24,6 +24,8 @@ module HandBacking {
     const HOUR_REACH = 131;
     const MINUTE_REACH = 176;
 
+    var _axes as Array<Float> = [0.0, 0.0, 0.0, 0.0] as Array<Float>;
+
     //! Unit vectors for both hands: [hourX, hourY, minuteX, minuteY].
     //! Computed once per frame — the per-dot test is then just dot products.
     function axes() as Array<Float> {
@@ -33,10 +35,11 @@ module HandBacking {
         var hour = Math.toRadians(hourDegrees);
         var minute = Math.toRadians(minuteDegrees);
         // Screen y grows downward and 0 degrees points at twelve o'clock.
-        return [
-            Math.sin(hour).toFloat(), -Math.cos(hour).toFloat(),
-            Math.sin(minute).toFloat(), -Math.cos(minute).toFloat()
-        ] as Array<Float>;
+        _axes[0] = Math.sin(hour).toFloat();
+        _axes[1] = -Math.cos(hour).toFloat();
+        _axes[2] = Math.sin(minute).toFloat();
+        _axes[3] = -Math.cos(minute).toFloat();
+        return _axes;
     }
 
     //! Is this dot underneath either hand?

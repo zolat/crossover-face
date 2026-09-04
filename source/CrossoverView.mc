@@ -10,11 +10,35 @@ class CrossoverView extends WatchUi.WatchFace {
     //! Tracks sleep state for devices that predate System.getDisplayMode().
     private var _asleep as Boolean = false;
 
+    //! onUpdate may be called while a view transition is removing the face.
+    //! Once onHide has run the system already has the pixels it is sliding out;
+    //! doing source work or repainting behind that transition can only delay it.
+    private var _shown as Boolean = false;
+
+    //! A normal low-power update still paints the complete AMOLED frame once a
+    //! minute. Only additional calls in that same minute are transition noise
+    //! and may take the no-change path.
+    private var _lowPowerMinuteKey as Number = -1;
+
     //! The two prints, allocated once and refilled every frame. FrameGate copies
     //! the values it needs, so handing it the same buffer every frame is safe.
-    private var _fieldPrint as Array<Float> = new [5] as Array<Float>;
+    private var _fieldPrint as Array<Float> = new [6] as Array<Float>;
     private var _ringPrint as Array<Float> =
         new [StatMap.RINGS * FrameGate.PER_RING] as Array<Float>;
+
+    //! Refilled in place on every accepted update. These used to account for
+    //! eight short-lived arrays on an ordinary frame before the gate could even
+    //! decide to skip it.
+    private var _spans as Array<Array<Float> > = [
+        [0.0, 0.0], [0.0, 0.0], [0.0, 0.0], [0.0, 0.0]
+    ] as Array<Array<Float> >;
+    private var _blocks as Array<Number> =
+        new [StatMap.RINGS * StatMap.BLOCK_VALUES] as Array<Number>;
+    private var _overs as Array<Boolean> =
+        new [StatMap.RINGS] as Array<Boolean>;
+    private var _markers as Array<Float> =
+        new [StatMap.RINGS] as Array<Float>;
+    private var _drift as Array<Number> = [0, 0] as Array<Number>;
 
     function initialize() {
         WatchFace.initialize();
@@ -24,25 +48,38 @@ class CrossoverView extends WatchUi.WatchFace {
     //! has a far tighter watchdog budget and tripped on it. onLayout runs once,
     //! before the first frame, so the face is complete the first time it draws.
     function onLayout(dc as Dc) as Void {
-        Config.reload();
         DotGrid.ensureBuilt();
-        FrameGate.forget();
+        FrameGate.transition();
         holdHandsAtSystemTime();
     }
 
-    //! Coming back from the settings menu, which pops rather than re-laying
-    //! out. Rebuilding the cache here keeps it off the first frame back — the
-    //! menu's own Config.reload() only marks it stale — and the gate must
-    //! forget a frame it can no longer vouch for.
+    //! Coming back from a menu, which pops rather than re-laying out. Settings
+    //! reload at the point they change; the fixed lattice remains valid for the
+    //! whole application lifetime. Only the gate must forget a frame it can no
+    //! longer vouch for.
     function onShow() as Void {
-        Config.reload();
+        _shown = true;
         DotGrid.ensureBuilt();
-        FrameGate.forget();
+        FrameGate.transition();
+    }
+
+    //! Stop all later transition-time callbacks at the first instruction.
+    function onHide() as Void {
+        _shown = false;
     }
 
     function onUpdate(dc as Dc) as Void {
+        updateForMode(dc, displayMode());
+    }
+
+    //! The body of an update, separated so lifecycle tests can drive OFF and
+    //! hidden states without depending on the simulator's display controls.
+    function updateForMode(dc as Dc, mode as Number) as Void {
+        if (!shouldUpdate(mode)) {
+            return;
+        }
         var started = System.getTimer();
-        var lowPower = isLowPower();
+        var lowPower = (mode == System.DISPLAY_MODE_LOW_POWER);
         // Held back in always-on when asked: the field keeps its colour but
         // loses its waterlines, and the data comes back on a wrist raise.
         //
@@ -54,19 +91,35 @@ class CrossoverView extends WatchUi.WatchFace {
         // Read blocks first. A Body Battery history refresh seeds the current
         // value too, so a face showing both forms makes one sensor-history call
         // on its hourly rebuild rather than asking for current and then history.
-        var blocks = hideFills ? StatMap.noBlocks() : StatMap.blocks();
-        var spans = hideFills ? StatMap.noSpans() : StatMap.spans(!lowPower);
+        var blocks = _blocks;
+        var spans = _spans;
+        if (hideFills) {
+            StatMap.fillNoBlocks(blocks);
+            StatMap.fillNoSpans(spans);
+        } else {
+            StatMap.fillBlocks(blocks);
+            StatMap.fillSpans(spans, !lowPower);
+        }
         // Which rings are past a goal they can beat, read from the same power
         // mode the spans were: a lap span without its flag would read as a
         // fill of the same length. Always-on never reports one, so held-back
         // always-on needs nothing extra here.
-        var overs = StatMap.overs(!lowPower);
+        var overs = _overs;
+        if (hideFills) {
+            StatMap.fillNoOvers(overs);
+        } else {
+            StatMap.fillOvers(overs, !lowPower);
+        }
         // Awake-only, for the same reason the hand backing is: the mark is a
         // dozen white dots, which is the most expensive thing per dot the face
         // can draw, in the mode that is measured against the burn-in budget and
         // the mode nobody is reading closely. It comes back on a wrist raise.
-        var markers = lowPower ? StatMap.noMarkers()
-                               : StatMap.markers(spans, overs);
+        var markers = _markers;
+        if (lowPower) {
+            StatMap.fillNoMarkers(markers);
+        } else {
+            StatMap.fillMarkers(markers, spans, overs);
+        }
         // The block channel is handed to both the print and the
         // renderer. The renderer must never read the clock for itself: an hour
         // rolling over between the two would leave the gate certain a ring had
@@ -81,11 +134,11 @@ class CrossoverView extends WatchUi.WatchFace {
 
         // The date watermark, brought up to date before anything reads it.
         //
-        // Here rather than in fieldPrint(), because always-on never calls that
-        // — and the watermark stays on in always-on. It costs nothing there
-        // that it does not cost awake: a struck dot lights fewer pixels than
-        // the dot it replaces, so the mode measured against the burn-in budget
-        // can only come out lower.
+        // Here rather than in fieldPrint(), because the glyph cache has to be
+        // current before either the gate or renderer reads it. It costs nothing
+        // in always-on that it does not cost awake: a struck dot lights fewer
+        // pixels than the dot it replaces, so the mode measured against the
+        // burn-in budget can only come out lower.
         //
         // Off the mode, nothing is read at all: today() is arithmetic on the
         // epoch second in the common case, but it is still two system calls
@@ -99,20 +152,32 @@ class CrossoverView extends WatchUi.WatchFace {
 
         // What of this frame is worth drawing. Awake, most frames repeat the
         // one before and are not drawn at all; of the rest, almost all move a
-        // single ring and only that ring is walked. Always-on never asks: a
-        // frame comes once a minute there, so there is nothing to save and its
-        // compositing is the least predictable.
-        var dirty;
+        // single ring and only that ring is walked. Always-on still paints one
+        // complete frame per real minute, but duplicate callbacks during a
+        // transition take the same no-change path.
+        var clock = System.getClockTime();
+        Drift.fillFor(clock.min, _drift);
+
         if (lowPower) {
-            dirty = FrameGate.everything();
-        } else {
-            if (!FrameGate.plan(fieldPrint(backing, day),
-                                ringPrint(spans, markers, overs, blocks))) {
-                Diagnostics.recordSkip(System.getTimer() - started);
-                return;
+            var minuteKey = clock.hour * 60 + clock.min;
+            if (minuteKey != _lowPowerMinuteKey) {
+                _lowPowerMinuteKey = minuteKey;
+                FrameGate.transition();
             }
-            dirty = FrameGate.dirty;
         }
+
+        // Garmin may issue several identical onUpdate calls while a view or
+        // display-mode transition is in progress, including a burst still
+        // labelled low-power on physical AMOLED watches. The first callback
+        // defines the complete frame; the rest must be the same cheap no-change
+        // path as an ordinary awake update.
+        if (!FrameGate.plan(
+                fieldPrint(backing, day, _drift, clock.min, mode),
+                ringPrint(spans, markers, overs, blocks))) {
+            Diagnostics.recordSkip(System.getTimer() - started);
+            return;
+        }
+        var dirty = FrameGate.dirty;
 
         // Held back, the unfilled tier is the entire image rather than a
         // backdrop to the fills, so it gets its own table — brighter than the
@@ -121,9 +186,9 @@ class CrossoverView extends WatchUi.WatchFace {
         var palette = hideFills
             ? Palette.heldBack
             : (lowPower ? Palette.alwaysOn : Palette.active);
-        MatrixRenderer.draw(dc, spans, markers, overs, blocks, palette,
-                            lowPower ? Palette.rampAlwaysOn : Palette.rampActive,
-                            backing, dirty, FrameGate.clears);
+        MatrixRenderer.drawAt(dc, spans, markers, overs, blocks, palette,
+                              lowPower ? Palette.rampAlwaysOn : Palette.rampActive,
+                              backing, dirty, FrameGate.clears, _drift);
         Diagnostics.record(System.getTimer() - started);
     }
 
@@ -149,15 +214,19 @@ class CrossoverView extends WatchUi.WatchFace {
     //!
     //! Filled into a buffer this view owns rather than returned fresh: it is
     //! built every frame, and FrameGate keeps values rather than the array.
-    function fieldPrint(backing as Number?, day as Number) as Array<Float> {
-        var drift = Drift.current();
+    function fieldPrint(backing as Number?, day as Number,
+                        drift as Array<Number>, minute as Number,
+                        mode as Number) as Array<Float> {
         var out = _fieldPrint;
         out[0] = drift[0].toFloat();
         out[1] = drift[1].toFloat();
         out[2] = (backing == null) ? -1.0 : backing.toFloat();
-        out[3] = (backing == null) ? 0.0
-                                   : System.getClockTime().min.toFloat();
+        out[3] = (backing == null) ? 0.0 : minute.toFloat();
         out[4] = day.toFloat();
+        // Defensive as well as descriptive: if Garmin changes display mode
+        // before delivering the matching sleep callback, the palette change is
+        // still a whole-field change and cannot be skipped.
+        out[5] = mode.toFloat();
         return out;
     }
 
@@ -233,24 +302,36 @@ class CrossoverView extends WatchUi.WatchFace {
 
     function onEnterSleep() as Void {
         _asleep = true;
-        FrameGate.forget();
-        WatchUi.requestUpdate();
+        _lowPowerMinuteKey = -1;
+        FrameGate.transition();
+        if (_shown) {
+            WatchUi.requestUpdate();
+        }
     }
 
     function onExitSleep() as Void {
         _asleep = false;
         holdHandsAtSystemTime();
-        FrameGate.forget();
-        WatchUi.requestUpdate();
+        FrameGate.transition();
+        // High-power mode schedules its own immediate onUpdate. Requesting one
+        // here creates an extra synchronous callback just as a button press may
+        // be trying to leave the face; Garmin's Analog sample likewise only
+        // requests the enter-sleep repaint, not the wake repaint.
     }
 
-    //! True when the frame about to be drawn is subject to AMOLED burn-in
-    //! protection, i.e. always-on mode.
-    private function isLowPower() as Boolean {
+    //! Display state for the frame about to be drawn.
+    private function displayMode() as Number {
         if (System has :getDisplayMode) {
-            return System.getDisplayMode() == System.DISPLAY_MODE_LOW_POWER;
+            return System.getDisplayMode();
         }
-        // Pre-5.0.0 devices: the rules apply whenever a protected screen sleeps.
-        return System.getDeviceSettings().requiresBurnInProtection && _asleep;
+        // Pre-5.0.0 devices have no OFF state to distinguish here.
+        return _asleep ? System.DISPLAY_MODE_LOW_POWER
+                       : System.DISPLAY_MODE_HIGH_POWER;
+    }
+
+    //! Whether an update has any visible consumer. Public only so the lifecycle
+    //! contract can be pinned without asking the simulator to change modes.
+    function shouldUpdate(mode as Number) as Boolean {
+        return _shown && mode != System.DISPLAY_MODE_OFF;
     }
 }

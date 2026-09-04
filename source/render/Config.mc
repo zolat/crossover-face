@@ -12,12 +12,10 @@ module Config {
     function reload() as Void {
         StatMap.load();
         Palette.build();
-        // Nothing settable moves the lattice any more, but the cache is still
-        // dropped here rather than trusted: building it is the one piece of
-        // work that must not run inside onStart, whose watchdog is far tighter
-        // than a view's and which tripped it outright. Mark the cache stale;
-        // onLayout builds it, and the renderer catches any path that skipped
-        // onLayout.
-        DotGrid.invalidate();
+        // No setting changes the lattice geometry. Rebuilding all 1,112 dots
+        // every time the face returns from a menu adds exactly the synchronous
+        // work a view transition has to wait for, while producing byte-for-byte
+        // identical cache contents. DotGrid starts stale and onLayout builds it
+        // once; only an explicit geometry change should invalidate it.
     }
 }

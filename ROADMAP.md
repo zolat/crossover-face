@@ -175,7 +175,8 @@ the largest thing this turned out not to need.
 
 # Previously: the frame budget (complete)
 
-**Current:** done — Phase 5 landed the lever Phase 4 picked.
+**Current:** done — Phase 6 removes redundant work from physical-watch view
+transition bursts while preserving the two-buffer delta rules.
 
 - [x] Phase 0 — baseline the frame cost on a fresh simulator
 - [x] Phase 1a — cost the skipped frame, which nothing measured before
@@ -187,6 +188,7 @@ the largest thing this turned out not to need.
       draw, so the next optimisation is chosen on numbers rather than on the
       claim in a comment
 - [x] Phase 5 — draw only the dots that changed, not the whole ring
+- [x] Phase 6 — make view and power-mode transition bursts draw once, then skip
 
 Plans: `~/.claude/plans/can-you-review-for-stateless-puffin.md`,
 `~/.claude/plans/are-there-any-more-staged-piglet.md`
@@ -213,11 +215,12 @@ each worth under a millisecond; 1e in particular traded a semantic change — a 
 to 30s stale — for that, and is dropped rather than banked. 1a stays: it is the only figure
 that will notice if the preamble ever grows.
 
-1d landed in part, and had to. The two prints are preallocated and `FrameGate.copy()` keeps
+1d is now complete. The two prints are preallocated and `FrameGate.copy()` keeps
 values rather than the caller's array — not for the microsecond, but because the gate
 storing a reference to a buffer the view refills would compare an array with itself and
-freeze the face to one draw per cap. `spans`, `overs` and `markers` still allocate per
-frame; at ≤1ms that is not worth the churn of changing.
+freeze the face to one draw per cap. The spans, blocks, overflow flags, markers, drift,
+hand axes and renderer mark scratch are now caller-owned buffers too, so an ordinary
+update creates none of those short-lived arrays.
 
 **Phase 2b is not taken.** Splitting the dot loop on `turned` duplicates the loop body, and
 the loop now runs on one ring in five frames out of six rather than on four rings every
@@ -225,13 +228,17 @@ frame. The cost it addresses shrank by more than the change would save.
 
 ## Left on the table
 
-- **The repair cadence is the remaining lever.** `MAX_SKIPS = 5` means one frame in six is
-  a full clear and redraw, and in the seconds configuration that single frame is now most
-  of what the face costs. It is set where it is because it inherits the old cap's promise —
-  damage drawn over the face from outside is gone within a few seconds. Raising it trades
-  that promise for frame time and is a product decision, not a technical one.
+- ~~**The repair cadence is the remaining lever.**~~ Taken in Phase 6: `MAX_SKIPS = 30`.
+  A normal wrist raise now ends before its periodic repair, while shows and power-mode
+  changes still force a valid complete frame and low-power still paints one complete frame
+  per actual minute.
 - **The hand-backing coverage bitset**, worth ~4ms of a full redraw but only with backing
   on, which this configuration does not use.
+- **Compiled weak-field background spike.** Distinct from Phase 4's runtime mirror: a
+  palette-indexed resource would avoid populating the buffer and could replace the weak
+  dots in a full frame with one blit, leaving the existing delta path for changed dots.
+  Defer until physical-watch testing says the one remaining complete transition frame is
+  itself visible; the simulator's ~20ms blit floor can otherwise make it a regression.
 - **On-watch verification of the partial redraw.** The simulator cannot answer whether the
   Dc handed to `onUpdate` holds what was last presented. `HOLD` and the two-slot mark erase
   are written to be correct either way, but only the watch can confirm it: `make install`,

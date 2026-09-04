@@ -181,12 +181,32 @@ module MatrixRenderer {
     var blockHi as Array<Float> = [] as Array<Float>;
     var blockUnlit as Array<Number> = [] as Array<Number>;
 
+    //! Per-frame mark scratch, retained with the renderer's other tables.
+    var markAt as Array<Number> = new [StatMap.RINGS] as Array<Number>;
+
+    //! Axes ignored while hand backing is off. A constant avoids allocating a
+    //! four-float placeholder on every drawn frame in the default setting.
+    const NO_AXES = [0.0, 0.0, 0.0, 0.0] as Array<Float>;
+
     function draw(dc as Dc, spans as Array<Array<Float> >,
                   markers as Array<Float>, overs as Array<Boolean>,
                   blocks as Array<Number>,
                   palette as Array<Number>, ramp as Array<Number>,
                   backing as Number?,
                   dirty as Array<Boolean>, clears as Boolean) as Void {
+        drawAt(dc, spans, markers, overs, blocks, palette, ramp, backing,
+               dirty, clears, Drift.current());
+    }
+
+    //! Draw with the drift snapshot already used by the frame fingerprint.
+    //! The live view calls this path so it reads the clock once and cannot
+    //! allocate or cross a drift boundary between planning and rendering.
+    function drawAt(dc as Dc, spans as Array<Array<Float> >,
+                    markers as Array<Float>, overs as Array<Boolean>,
+                    blocks as Array<Number>,
+                    palette as Array<Number>, ramp as Array<Number>,
+                    backing as Number?, dirty as Array<Boolean>,
+                    clears as Boolean, drift as Array<Number>) as Void {
         // Normally a no-op: onLayout has already built the cache. This is the
         // safety net for a settings change, which comes back through onShow.
         DotGrid.ensureBuilt();
@@ -254,7 +274,6 @@ module MatrixRenderer {
 
         // Drift shifts where dots are drawn, never which dots exist, so the
         // field translates rigidly instead of popping dots in and out.
-        var drift = Drift.current();
         var centreX = (dc.getWidth() / 2) + drift[0];
         var centreY = (dc.getHeight() / 2) + drift[1];
 
@@ -275,8 +294,7 @@ module MatrixRenderer {
         // call left in the dot loop; reading its four floats out of an array
         // per dot as well would put most of that cost straight back.
         var hasBacking = (backing != null);
-        var axes = hasBacking ? HandBacking.axes()
-                              : ([0.0, 0.0, 0.0, 0.0] as Array<Float>);
+        var axes = hasBacking ? HandBacking.axes() : NO_AXES;
         var hourX = axes[0];
         var hourY = axes[1];
         var minuteX = axes[2];
@@ -311,8 +329,6 @@ module MatrixRenderer {
         var glyphFirst = DateGlyph.firstFor;
         var gx = arms[DateGlyph.ARM];
         var gy = arms[DateGlyph.ARM + 1];
-
-        var markAt = new [StatMap.RINGS] as Array<Number>;
 
         var half = DotGrid.DOT / 2;
         var lastColour = -1;

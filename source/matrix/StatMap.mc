@@ -151,9 +151,18 @@ module StatMap {
     function noSpans() as Array<Array<Float> > {
         var out = new [RINGS] as Array<Array<Float> >;
         for (var i = 0; i < RINGS; i++) {
-            out[i] = NEVER_LIT;
+            out[i] = [0.0, 0.0] as Array<Float>;
         }
+        fillNoSpans(out);
         return out;
+    }
+
+    //! Refill an existing span table with spans nothing can light.
+    function fillNoSpans(out as Array<Array<Float> >) as Void {
+        for (var i = 0; i < RINGS; i++) {
+            out[i][0] = NEVER_LIT[0];
+            out[i][1] = NEVER_LIT[1];
+        }
     }
 
     //! Current span for every ring. Read once per frame.
@@ -166,9 +175,18 @@ module StatMap {
     function spans(awake as Boolean) as Array<Array<Float> > {
         var out = new [RINGS] as Array<Array<Float> >;
         for (var i = 0; i < RINGS; i++) {
-            out[i] = Source.span(rings[i], awake);
+            out[i] = [0.0, 0.0] as Array<Float>;
         }
+        fillSpans(out, awake);
         return out;
+    }
+
+    //! Refill an existing table without allocating an outer array or one span
+    //! per ring. This is the path used by the once-per-second view callback.
+    function fillSpans(out as Array<Array<Float> >, awake as Boolean) as Void {
+        for (var i = 0; i < RINGS; i++) {
+            Source.fillSpan(rings[i], awake, out[i]);
+        }
     }
 
     //! Values per ring in the block channel: two words of packed levels,
@@ -193,10 +211,15 @@ module StatMap {
     //! that mode gets.
     function blocks() as Array<Number> {
         var out = new [RINGS * BLOCK_VALUES] as Array<Number>;
+        fillBlocks(out);
+        return out;
+    }
+
+    //! Refill the block channel in caller-owned storage.
+    function fillBlocks(out as Array<Number>) as Void {
         for (var i = 0; i < RINGS; i++) {
             Source.fillBlocks(rings[i], out, i * BLOCK_VALUES);
         }
-        return out;
     }
 
     //! Every block known and empty, for always-on when the fills are held back.
@@ -207,12 +230,17 @@ module StatMap {
     //! what renders the plain unfilled field the mode is asking for.
     function noBlocks() as Array<Number> {
         var out = new [RINGS * BLOCK_VALUES] as Array<Number>;
+        fillNoBlocks(out);
+        return out;
+    }
+
+    //! Refill the block channel with known-and-empty values.
+    function fillNoBlocks(out as Array<Number>) as Void {
         for (var i = 0; i < RINGS; i++) {
             out[i * BLOCK_VALUES] = 0;
             out[i * BLOCK_VALUES + 1] = 0;
             out[i * BLOCK_VALUES + 2] = HourBands.ALL_KNOWN;
         }
-        return out;
     }
 
     //! Which rings are past their goal, and so drawing a second lap. Read once
@@ -225,10 +253,23 @@ module StatMap {
     //! nothing lit up.
     function overs(awake as Boolean) as Array<Boolean> {
         var out = new [RINGS] as Array<Boolean>;
+        fillOvers(out, awake);
+        return out;
+    }
+
+    //! Refill the overflow flags in caller-owned storage.
+    function fillOvers(out as Array<Boolean>, awake as Boolean) as Void {
         for (var i = 0; i < RINGS; i++) {
             out[i] = Source.over(rings[i], awake);
         }
-        return out;
+    }
+
+    //! No overflow flags, without reading goal sources that are invisible in
+    //! the held-back always-on mode.
+    function fillNoOvers(out as Array<Boolean>) as Void {
+        for (var i = 0; i < RINGS; i++) {
+            out[i] = false;
+        }
     }
 
     //! The position each ring marks, or Source.NO_MARKER. Read once per frame.
@@ -246,6 +287,14 @@ module StatMap {
     function markers(spans as Array<Array<Float> >,
                      overs as Array<Boolean>) as Array<Float> {
         var out = new [RINGS] as Array<Float>;
+        fillMarkers(out, spans, overs);
+        return out;
+    }
+
+    //! Refill marker positions in caller-owned storage.
+    function fillMarkers(out as Array<Float>,
+                         spans as Array<Array<Float> >,
+                         overs as Array<Boolean>) as Void {
         for (var i = 0; i < RINGS; i++) {
             if (overs[i]) {
                 var lap = spans[i][1];
@@ -254,17 +303,21 @@ module StatMap {
                 out[i] = Source.marker(rings[i]);
             }
         }
-        return out;
     }
 
     //! Every ring unmarked, for always-on when the fills are held back. The
     //! mark is part of the data, so it goes when the data does.
     function noMarkers() as Array<Float> {
         var out = new [RINGS] as Array<Float>;
+        fillNoMarkers(out);
+        return out;
+    }
+
+    //! Refill marker positions with the sentinel in caller-owned storage.
+    function fillNoMarkers(out as Array<Float>) as Void {
         for (var i = 0; i < RINGS; i++) {
             out[i] = Source.NO_MARKER;
         }
-        return out;
     }
 
     //! The span a mark occupies: a window of the given half-width around a

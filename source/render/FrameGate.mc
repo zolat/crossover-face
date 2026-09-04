@@ -28,15 +28,14 @@ import Toybox.Lang;
 //!
 //! Four things keep not-drawing safe:
 //!
-//!   - **never in always-on.** There the system asks once a minute, so there is
-//!     nothing worth saving, and it is the mode whose compositing is least
-//!     predictable. The view does not consult the gate at all in low power;
+//!   - **one complete always-on frame per minute.** The view explicitly starts
+//!     a transition frame when the minute changes, so only duplicate callbacks
+//!     inside that minute can be skipped;
 //!   - **a cap on consecutive skips.** Anything that damages the frame buffer
 //!     from outside — a notification banner, a system alert — is repaired only
-//!     by a draw. Past the cap the next frame is a full clear and redraw, so
-//!     damage is gone within a few seconds;
-//!   - **an explicit forget().** Coming back from sleep, from the settings menu
-//!     or from a settings change, the whole field is drawn again;
+//!     by a draw. Past the cap the next frame is a full clear and redraw;
+//!   - **an explicit transition().** Shows, power-mode changes and settings
+//!     changes draw one complete frame before duplicates may be skipped;
 //!   - **every change is drawn HOLD times, not once.** See HOLD.
 //!
 //! Prints are compared value by value rather than hashed. A collision here
@@ -44,9 +43,10 @@ import Toybox.Lang;
 //! handful of floats against the ~280-dot walk it saves.
 module FrameGate {
 
-    //! Draw at least this often regardless, so anything drawn over the face
-    //! from outside is repaired within a few seconds rather than persisting.
-    const MAX_SKIPS = 5;
+    //! Draw at least this often regardless. Thirty seconds keeps a bounded
+    //! repair while avoiding a complete field repaint inside the roughly
+    //! ten-second high-power window of an ordinary wrist raise.
+    const MAX_SKIPS = 30;
 
     //! How many consecutive draws a change is repeated into.
     //!
@@ -84,6 +84,14 @@ module FrameGate {
 
     var _field as Array<Float>? = null;
     var _rings as Array<Float>? = null;
+    var _forceFull as Boolean = true;
+
+    //! A lifecycle transition draws one complete frame immediately, but does
+    //! not blindly draw the same field again on the following callback. The
+    //! other buffer is primed on the next frame that genuinely needed drawing
+    //! anyway. Until then a skipped callback leaves the presented buffer alone.
+    var _firstAfterTransition as Boolean = false;
+    var _transitionNeedsSecondBuffer as Boolean = false;
 
     //! Values per ring in the ring print: span start, span end, mark, over,
     //! and the block channel's three packed words.
@@ -104,17 +112,20 @@ module FrameGate {
     //! `field` is what moves every dot at once; `rings` is PER_RING values for
     //! each ring, laid out flat.
     function plan(field as Array<Float>, rings as Array<Float>) as Boolean {
+        var firstAfterTransition = _firstAfterTransition;
         // Holds are armed by a *change*, never by the state of this frame.
         // Re-arming them every frame the clear is still owed would stop them
         // ever draining, and the face would redraw itself forever.
         var previousField = _field;
-        if (previousField == null || !same(previousField, field)) {
+        if (_forceFull || previousField == null ||
+                !same(previousField, field)) {
             // A real change to the whole field — a drift step, or the hands
             // moving under the backing. Held like any other change, because it
             // is one.
-            clearsHeld = HOLD;
+            var repeat = firstAfterTransition ? 1 : HOLD;
+            clearsHeld = repeat;
             for (var ring = 0; ring < StatMap.RINGS; ring++) {
-                held[ring] = HOLD;
+                held[ring] = repeat;
             }
         } else if (sinceClear >= MAX_SKIPS) {
             // The periodic repair, and deliberately **one** frame rather than
@@ -135,7 +146,7 @@ module FrameGate {
         for (var ring = 0; ring < StatMap.RINGS; ring++) {
             if (previousRings == null ||
                     ringMoved(previousRings, rings, ring)) {
-                held[ring] = HOLD;
+                held[ring] = firstAfterTransition ? 1 : HOLD;
             }
         }
 
@@ -146,6 +157,20 @@ module FrameGate {
             dirty[ring] = (held[ring] > 0);
             if (dirty[ring]) {
                 anything = true;
+            }
+        }
+
+        // After the first transition frame, the other buffer may still hold the
+        // previous picture. Do not manufacture a draw merely to replace it;
+        // when a real change eventually opens the gate, make that draw a full
+        // one. It primes the second buffer before any later delta can depend on
+        // both buffers carrying the active palette.
+        var primesTransitionBuffer = _transitionNeedsSecondBuffer &&
+                                     !firstAfterTransition && anything;
+        if (primesTransitionBuffer) {
+            clears = true;
+            for (var ring = 0; ring < StatMap.RINGS; ring++) {
+                dirty[ring] = true;
             }
         }
 
@@ -161,7 +186,7 @@ module FrameGate {
         // Only a draw retires a hold, so a change is repeated into consecutive
         // *draws* rather than merely surviving a couple of seconds.
         for (var ring = 0; ring < StatMap.RINGS; ring++) {
-            if (dirty[ring]) {
+            if (held[ring] > 0) {
                 held[ring]--;
             }
         }
@@ -169,6 +194,12 @@ module FrameGate {
             clearsHeld--;
         }
         sinceClear = clears ? 0 : (sinceClear + 1);
+        if (firstAfterTransition) {
+            _firstAfterTransition = false;
+        } else if (primesTransitionBuffer) {
+            _transitionNeedsSecondBuffer = false;
+        }
+        _forceFull = false;
         skipped = 0;
         drawn++;
         return true;
@@ -188,14 +219,31 @@ module FrameGate {
     //! Force the next frames to be drawn in full. Anything that can change the
     //! face without changing a print has to say so here.
     function forget() as Void {
-        _field = null;
-        _rings = null;
+        _forceFull = true;
         skipped = 0;
         sinceClear = MAX_SKIPS;
         clearsHeld = HOLD;
         for (var ring = 0; ring < StatMap.RINGS; ring++) {
             held[ring] = HOLD;
         }
+        _firstAfterTransition = false;
+        _transitionNeedsSecondBuffer = false;
+    }
+
+    //! Force one complete frame after a show, wake, sleep or settings boundary,
+    //! then defer the second buffer's complete repaint until some visible value
+    //! actually changes. Transition bursts therefore get one render followed by
+    //! cheap identical-frame returns in either power mode.
+    function transition() as Void {
+        _forceFull = true;
+        skipped = 0;
+        sinceClear = MAX_SKIPS;
+        clearsHeld = 1;
+        for (var ring = 0; ring < StatMap.RINGS; ring++) {
+            held[ring] = 1;
+        }
+        _firstAfterTransition = true;
+        _transitionNeedsSecondBuffer = true;
     }
 
     //! Has this ring's slice of the print moved?
