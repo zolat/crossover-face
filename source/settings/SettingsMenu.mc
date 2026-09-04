@@ -35,9 +35,11 @@ const SOURCE_LABELS = [
 
 //! On-device settings, reached from the watch's own Watch Face menu.
 //!
-//! Watch faces cannot take input during normal operation; AppBase.getSettingsView()
-//! is the sanctioned exception. This matters for a sideloaded face, where the
-//! phone-side settings in Garmin Connect are not dependable.
+//! Watch faces do not receive ordinary button input during normal operation.
+//! AppBase.getSettingsView() is the sanctioned persistent-settings surface;
+//! the Epix's WatchFaceDelegate touch-and-hold is deliberately transient.
+//! This menu matters for a sideloaded face, where phone-side settings in
+//! Garmin Connect are not dependable.
 class SettingsMenu extends WatchUi.Menu2 {
 
     function initialize() {

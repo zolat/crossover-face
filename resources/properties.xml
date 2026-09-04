@@ -13,11 +13,11 @@
          Kept in sync with StatMap.Rotation. -->
     <property id="dotRotation" type="number">0</property>
     <!-- Which Source each ring shows. See Source.Kind:
-         0 steps, 1 heart rate, 2 battery, 3 body battery,
+         0 steps, 1 retired, 2 battery, 3 body battery,
          4 temperature range, 5 rain chance, 6 intensity minutes,
-         7 seconds, 8 off, 9 rain next 12h. Seconds reports nothing in
-         always-on. 9 is offered on ring1 and ring2 only — the inner two
-         10 UV next 12h, 11 Body Battery last 12h. Block sources are offered on
+         7 seconds, 8 off, 9 rain next 12h, 10 UV next 12h,
+         11 Body Battery last 12h. Seconds reports nothing in always-on.
+         Block sources are offered on
          ring1 and ring2 only — the inner two rings have too few dots per hour
          to carry them, and StatMap.load() reads them as off anywhere else.
          New sources are appended after 8

@@ -1,14 +1,14 @@
-"""Render dot-matrix watch face mockups for the Instinct Crossover AMOLED.
+"""Render dot-matrix watch-face mockups for every supported device.
 
 Iterating on colour through a compile + sideload loop costs a minute a time;
-this costs a second. Renders the real geometry at true 390x390, composites it
-into Garmin's own device art, and overlays the analogue hands using the exact
-polylines the simulator uses — so what you review is the watch, not a grid.
+this costs a second. It renders each target's native geometry, composites it
+into Garmin's device art, and adds physical or dot hands as appropriate — so
+what you review is the watch, not an abstract grid.
 
-Geometry and hand data come from the installed device files, never hard-coded:
-    ~/.Garmin/ConnectIQ/Devices/instinctcrossoveramoled/{simulator.json,device.png}
+Device art comes from the installed profile. Lattice and drawn-hand constants
+mirror ``source-lattice/*/Lattice.mc`` and are pinned by the Monkey C tests.
 
-Usage:  python3 tools/mockup.py [outdir]
+Usage:  python3 tools/mockup.py [outdir] [device]
 """
 
 from __future__ import annotations
@@ -23,18 +23,53 @@ from PIL import Image, ImageDraw, ImageFont
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from luminance import measure  # noqa: E402
 
-DEVICE_DIR = os.path.expanduser(
-    "~/.Garmin/ConnectIQ/Devices/instinctcrossoveramoled"
-)
+DEVICES_DIR = os.path.expanduser("~/.Garmin/ConnectIQ/Devices")
 
 # --- lattice -----------------------------------------------------------------
+# PITCH and DOT are shared by every watch: Drift's offsets are tuned to them,
+# and holding them fixed is what makes the luminance budget scale-invariant.
+# Everything else moves with the screen, mirroring source-lattice/*/Lattice.mc
+# one table per file. Any change there has to land here too.
 
-SIZE = 390
 PITCH = 10
 DOT = 5
+
+LATTICES = {
+    #                 SIZE COLS RADIUS HUB  halfW  cw  hour minute  drawn
+    "instinctcrossoveramoled": (390, 38, 190, 21, 14, 46, 131, 176, False),
+    "epix2pro42mm":            (390, 38, 190, 21, 14, 46, 131, 176, True),
+    "epix2":                   (416, 40, 203, 22, 15, 49, 140, 188, True),
+    "epix2pro47mm":            (416, 40, 203, 22, 15, 49, 140, 188, True),
+    "epix2pro51mm":            (454, 42, 210, 23, 15, 51, 145, 195, True),
+}
+DEFAULT_DEVICE = "instinctcrossoveramoled"
+
+DEVICE = DEFAULT_DEVICE
+DEVICE_DIR = os.path.join(DEVICES_DIR, DEFAULT_DEVICE)
+SIZE = 390
 COLS = ROWS = 38
 RADIUS = 190
 HUB = 21
+
+
+def use_device(name: str) -> None:
+    """Point every lattice and hand constant at one watch.
+
+    The Monkey C picks its Lattice at compile time from the jungle; there is no
+    such seam in a script, so the module's globals are rebound instead. Same
+    numbers, same source of truth - see the note on LATTICES.
+    """
+    global DEVICE, DEVICE_DIR, SIZE, COLS, ROWS, RADIUS, HUB
+    global HAND_HALF_WIDTH, HAND_COUNTERWEIGHT, HOUR_REACH, MINUTE_REACH
+    global DRAWN_HANDS
+    if name not in LATTICES:
+        raise SystemExit(f"unknown device {name!r}; known: "
+                         + ", ".join(sorted(LATTICES)))
+    (SIZE, COLS, RADIUS, HUB, HAND_HALF_WIDTH, HAND_COUNTERWEIGHT,
+     HOUR_REACH, MINUTE_REACH, DRAWN_HANDS) = LATTICES[name]
+    ROWS = COLS
+    DEVICE = name
+    DEVICE_DIR = os.path.join(DEVICES_DIR, name)
 
 # --- palette -----------------------------------------------------------------
 # Strong = the stat's hue at full read. Weak = the same hue, dark enough to tint
@@ -393,6 +428,21 @@ HOUR_REACH = 131
 MINUTE_REACH = 176
 HAND_MARGIN = 0
 
+#: Whether this watch's hands are the face's to draw. Set by use_device().
+DRAWN_HANDS = False
+
+#: What handAt()'s three answers paint, mirroring source-hands/*/HandStyle.mc.
+NO_HAND, HOUR, MINUTE = 0, 1, 2
+HAND_HOUR = (0xFF, 0xFF, 0xFF)
+HAND_MINUTE = (0x80, 0x80, 0x80)
+
+
+def hand_colours(backing):
+    """Mirrors HandStyle.coloursFor: one backing colour, or a real pair."""
+    if DRAWN_HANDS and backing == (0xFF, 0xFF, 0xFF):
+        return (None, HAND_HOUR, HAND_MINUTE)
+    return (None, backing, backing)
+
 
 def hand_axes(hour: int, minute: int):
     """Unit vectors for both hands at a given time, screen y downward."""
@@ -403,14 +453,20 @@ def hand_axes(hour: int, minute: int):
     return out
 
 
-def hand_covers(dx: float, dy: float, axes) -> bool:
-    for (ux, uy), reach in zip(axes, (HOUR_REACH, MINUTE_REACH)):
+def hand_at(dx: float, dy: float, axes) -> int:
+    """Which hand covers this dot: NO_HAND, HOUR or MINUTE.
+
+    Mirrors HandBacking.handAt, minute first so it wins where the two cross.
+    ``axes`` arrives hour-first, as hand_axes returns it.
+    """
+    for hand, index, reach in ((MINUTE, 1, MINUTE_REACH), (HOUR, 0, HOUR_REACH)):
+        ux, uy = axes[index]
         along = dx * ux + dy * uy
         if along > reach + HAND_MARGIN or along < -(HAND_COUNTERWEIGHT + HAND_MARGIN):
             continue
         if abs(dx * -uy + dy * ux) <= HAND_HALF_WIDTH + HAND_MARGIN:
-            return True
-    return False
+            return hand
+    return NO_HAND
 
 
 # --- date watermark ----------------------------------------------------------
@@ -436,9 +492,9 @@ GUTTER = FONT_COLS
 GLYPH_COLS = FONT_SPAN * SCALE  # 14
 GLYPH_ROWS = FONT_ROWS * SCALE  # 10
 
-# Where the window's top-left cell sits. Horizontally centred, in the lower
-# half -- the only place a block this size clears the hand pivot.
-GLYPH_ORIGIN = (12, 23)
+def glyph_origin():
+    """The centred window used by DateGlyph on the selected lattice."""
+    return ((COLS - GLYPH_COLS) // 2, ROWS // 2 + 4)
 
 # 3x5 digits, row-major, bit 14 top-left.
 DIGITS = [
@@ -464,8 +520,9 @@ def digit_lit(digit: int, col: int, row: int) -> bool:
     return bool(DIGITS[digit] >> (14 - (row * FONT_COLS + col)) & 1)
 
 
-def glyph_cells(day: int, origin=GLYPH_ORIGIN) -> set:
+def glyph_cells(day: int, origin=None) -> set:
     """The lattice cells today's date strikes, as (col, row) pairs."""
+    origin = glyph_origin() if origin is None else origin
     col0, row0 = origin
     out = set()
     for r in range(GLYPH_ROWS):
@@ -479,13 +536,14 @@ def glyph_cells(day: int, origin=GLYPH_ORIGIN) -> set:
     return out
 
 
-def arm_for(dx: int, dy: int, col: int, row: int, rotate: bool, glyph: set):
+def arm_for(dx: int, dy: int, col: int, row: int, rotate: bool,
+            glyph: set, hand: int = NO_HAND):
     """Which strokes this dot draws.
 
     A struck dot returns a two-value arm, which draw_dot renders as one line;
     every other dot returns the usual four.
     """
-    if glyph and (col, row) in glyph:
+    if hand == NO_HAND and glyph and (col, row) in glyph:
         return ARMS[GLYPH_ARM][:2]
     # Mirrors StatMap.Rotation: turned to follow the ring, or upright.
     return ARMS[orientation_at(dx, dy)] if rotate else ARMS[0]
@@ -503,7 +561,11 @@ def render(spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
            date: int | None = None) -> Image.Image:
     img = Image.new("RGB", (SIZE, SIZE), (0, 0, 0))
     # The watermark's cells, resolved once rather than per dot.
-    glyph = glyph_cells(date) if date is not None else set()
+    # Drawn hands own the ordinary time view. Their date appears when hands are
+    # off (the persistent choice or a temporary touch-and-hold peek), which is
+    # also what keeps the largest merged render inside its watchdog.
+    glyph = glyph_cells(date) if (date is not None and
+                                  (not DRAWN_HANDS or backing is None)) else set()
     draw = ImageDraw.Draw(img)
     # Which dot each ring marks, worked out once rather than per dot.
     mark_dots = {}
@@ -513,6 +575,7 @@ def render(spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
             if at is not None:
                 mark_dots[r] = at
     axes = hand_axes(*at_time) if backing else None
+    hands = hand_colours(backing) if backing else None
     centre = SIZE // 2
     half = DOT // 2
 
@@ -526,8 +589,9 @@ def render(spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
 
             x, y = centre + dx, centre + dy
             marked_here = False
-            if axes is not None and hand_covers(dx, dy, axes):
-                colour = backing
+            hand = hand_at(dx, dy, axes) if axes is not None else NO_HAND
+            if hand != NO_HAND:
+                colour = hands[hand]
             else:
                 ring, position = ring_map(dx, dy)
                 # Awake only, and it outranks the fill: the mark has to be
@@ -544,7 +608,7 @@ def render(spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
                         colour = hourly_colour(
                             ring, position, dist_sq,
                             (hourly or {}).get(ring), always_on, held_back)
-                        arm = arm_for(dx, dy, col, row, rotate, glyph)
+                        arm = arm_for(dx, dy, col, row, rotate, glyph, hand)
                         draw_dot(draw, x - half + drift[0],
                                  y - half + drift[1], colour, arm)
                         continue
@@ -585,7 +649,7 @@ def render(spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
                 draw.rectangle([left, top, left + DOT - 1, top + DOT - 1],
                                fill=colour)
                 continue
-            arm = arm_for(dx, dy, col, row, rotate, glyph)
+            arm = arm_for(dx, dy, col, row, rotate, glyph, hand)
             draw_dot(draw, left, top, colour, arm)
     return img
 
@@ -634,7 +698,10 @@ def composite(face: Image.Image, *, hands: bool = True,
     """Drop a rendered face into the device art, optionally with the hands."""
     with open(os.path.join(DEVICE_DIR, "simulator.json")) as fh:
         sim = json.load(fh)
-    device = Image.open(os.path.join(DEVICE_DIR, "device.png")).convert("RGBA")
+    # The artwork is named by the profile: only the Crossover calls it
+    # device.png, while the Epix family names the file after the device.
+    device = Image.open(
+        os.path.join(DEVICE_DIR, sim.get("image", "device.png"))).convert("RGBA")
 
     loc = sim["display"]["location"]
     ox, oy = loc["x"], loc["y"]
@@ -718,8 +785,11 @@ def sheet(panels: list[tuple[str, Image.Image]], title: str) -> Image.Image:
     return out
 
 
-def main(outdir: str = "build/mockups") -> int:
+def main(outdir: str = "build/mockups", device: str = DEFAULT_DEVICE) -> int:
+    use_device(device)
     os.makedirs(outdir, exist_ok=True)
+    print(f"{device}: {SIZE}x{SIZE}, {COLS}x{ROWS} lattice, radius {RADIUS}, "
+          f"hub {HUB}, hands {'drawn' if DRAWN_HANDS else 'physical'}")
     # steps, heart rate, battery, body battery — as levels
     values = [(0.0, 0.68), (0.0, 0.55), (0.0, 0.82), (0.0, 0.40)]
     written = []
@@ -782,7 +852,7 @@ def main(outdir: str = "build/mockups") -> int:
           "Worst case — every stat 100%, always-on").save(path)
     written.append(path)
 
-    # 6. Hand backing — the awake-only option, hands drawn at system time.
+    # 6. Physical backing or drawn hands, shown in all three configured states.
     when = (10, 9)
     panels = []
     for label, backing in (("OFF", None), ("WHITE", (255, 255, 255)),
@@ -791,7 +861,10 @@ def main(outdir: str = "build/mockups") -> int:
         panels.append((f"{label}   luminance {measure(face) * 100:.2f}%",
                        composite(face, at_time=when)))
     path = os.path.join(outdir, "05-hand-backing.png")
-    sheet(panels, "Behind hands — awake only, hands held at system time").save(path)
+    title = ("Drawn hands — off, white and grey, or dark"
+             if DRAWN_HANDS else
+             "Behind physical hands — awake only, hands held at system time")
+    sheet(panels, title).save(path)
     written.append(path)
 
     # 7. Rings assigned to weather — temperature is a range, not a level, and

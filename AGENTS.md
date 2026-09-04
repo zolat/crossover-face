@@ -2,11 +2,11 @@
 
 ## Project Structure & Module Organization
 
-A Monkey C watch face targets the Garmin Instinct Crossover AMOLED. Lifecycle and view code live directly under `source/`; domain data is in `source/data/`, geometry and ring mapping in `source/matrix/`, drawing in `source/render/`, settings UI in `source/settings/`, and tests in `source/tests/`. Garmin resources live under `resources/`. Python simulator, mockup, luminance, and MTP helpers are under `tools/`. Treat `bin/` and `build/` as generated output.
+This Monkey C watch face targets the Instinct Crossover AMOLED and Epix 2 family. Core code lives under `source/`, split into `data/`, `matrix/`, `render/`, `settings/`, and `tests/`. Garmin resources live under `resources/`; device-specific lattice, hand, and resource overrides use the sibling `source-*` and `resources-*` directories. Python simulator, mockup, luminance, and MTP helpers are under `tools/`. Treat `bin/` and `build/` as generated output.
 
 ## Build, Test, and Development Commands
 
-- `make build` compiles a debug `.prg` for `instinctcrossoveramoled`; strict type checking and warnings are enabled.
+- `make build DEVICE=epix2` compiles a device-namespaced debug `.prg`; omit `DEVICE` for the Crossover. Strict type checking and warnings are enabled.
 - `make test` compiles and runs the Monkey C test suite in the Garmin simulator.
 - `make test-simctl` runs the Python `unittest` suite without a build or simulator.
 - `make test-lock` validates simulator-lock behavior.
@@ -22,7 +22,7 @@ Use four-space indentation. Match Monkey C conventions: `PascalCase` modules, cl
 
 ## Testing Guidelines
 
-Add Monkey C tests to `source/tests/MatrixTest.mc` with `(:test)` and descriptive `camelCase` names. Add Python `test_*` methods to `tools/simctl_test.py`. Run all three test targets before submission. For visual or performance changes, inspect the face and re-measure luminance or frame timing. Trust `make test`'s parsed summary, not raw `monkeydo` exit status.
+Add Monkey C `(:test)` cases to `source/tests/MatrixTest.mc` and Python `test_*` methods to `tools/simctl_test.py`. Run all test targets and the affected device matrix before submission. For visual or performance changes, inspect the face and re-measure luminance or frame timing. Trust `make test`'s summary, not raw `monkeydo` exit status.
 
 ## Commit & Pull Request Guidelines
 
@@ -30,4 +30,4 @@ Recent commits use imperative, sentence-style subjects such as `Centre each fore
 
 ## Workflow & Security
 
-Create feature branches in `.claude/worktrees/<name>`; keep `main` buildable. For emulator work, prefer the `crossover-simulator` MCP and omit `instance` to use Codex's private, checkout-specific simulator. Never pass `instance="shared"` unless explicitly coordinating shared use with Claude; Make targets lock that shared simulator. Call `sim_release` after a loaded session. Never commit signing keys (`*.der`, `*.pem`) or generated artifacts.
+Create branches in `.claude/worktrees/<name>`; keep `main` buildable. Prefer the `crossover-simulator` MCP: omit `instance` for Codex's private simulator and pass the same `device` through load, settings, screenshot, test, and release. Use `instance="shared"` only when explicitly coordinating with Claude; Make targets lock it. Never commit signing keys (`*.der`, `*.pem`) or generated artifacts.

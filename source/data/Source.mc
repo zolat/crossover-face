@@ -206,11 +206,10 @@ module Source {
             case SOURCE_INTENSITY_MINUTES:
                 return isOver(WatchData.intensityMinutes(), awake);
             default:
-                // Nothing else has a goal to beat. Battery, body battery and
-                // rain are bounded by what they measure; heart rate's ceiling
-                // is a display range rather than a goal; seconds is cyclic;
-                // and temperature is a range whose wrap past twelve is the
-                // design rather than an overflow.
+                // Nothing else has a goal to beat. Battery, body battery,
+                // rain and UV are bounded by what they measure; seconds is
+                // cyclic; and temperature is a range whose wrap past twelve
+                // is the design rather than an overflow.
                 return false;
         }
     }

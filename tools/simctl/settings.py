@@ -28,7 +28,7 @@ if __package__ in (None, ""):  # allow `python3 simctl/settings.py`
 
 from simctl import paths, setfile
 
-DEFAULT_PRG = "bin/CrossoverFace.prg"
+DEFAULT_PRG = paths.prg_for()
 
 
 class SettingsError(ValueError):
@@ -45,7 +45,7 @@ class Schema:
     @classmethod
     def load(cls, repo: Path | None = None, prg: str = DEFAULT_PRG) -> "Schema":
         repo = repo or paths.repo_root()
-        schema_path = repo / "bin" / f"{Path(prg).stem}-settings.json"
+        schema_path = paths.settings_schema(repo, prg)
         if not schema_path.exists():
             raise SettingsError(
                 f"no settings schema at {schema_path} — it is build output, so run "

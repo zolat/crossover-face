@@ -1,6 +1,92 @@
 # Roadmap
 
-**Current:** UV ahead and Body Battery history now reuse the block-ring grammar.
+**Current:** Epix 2 family support is integrated with UV ahead and Body Battery history,
+including drawn dot hands and a touch-and-hold data peek.
+
+Out-of-band device work, not a phase of the performance roadmap that follows.
+
+- [x] Phase 0 — download the four Epix profiles, confirm rather than assume
+- [x] Phase 1 — put the screen behind a `Lattice` seam; crossover green through it
+- [x] Phase 2 — the 454 lattice
+- [x] Phase 3 — dot hands
+- [x] Phase 4 — the other three products
+- [x] Phase 5 — device-aware tooling
+
+## What shipped
+
+`manifest.xml` carries five products; `monkey.jungle` gives each one `Lattice` and one
+`HandStyle`. The Crossover's picture is unchanged — same lattice, same single backing colour,
+same suite green. The Epix draws its own hands out of the dot field, on by default, and keeps
+them lit through always-on because there they are the only thing saying the time.
+
+    screen  COLS  RADIUS  HUB  dots   devices
+    390       38     190   21  1112   instinctcrossoveramoled, epix2pro42mm
+    416       40     203   22  1272   epix2, epix2pro47mm
+    454       42     210   23  1380   epix2pro51mm
+
+129/129 on all five devices, simctl 44/44, five strict builds, and all eight package
+variants.
+
+## What was measured rather than assumed
+
+- **Cross-module `const` still folds.** The seam's whole premise. Strict typecheck loses the
+  *type* across it, so every constant carries `as Number` on both sides; the value folds
+  fine, and the Crossover measuring 1112 dots through the seam is the proof.
+- **Luminance is scale-invariant.** Dot density is `1/PITCH²` and each dot lights `2·DOT−1`,
+  so the all-lit fraction is 8.8% at 390 and 9.0% at 454. No theme needed re-measuring.
+- **Drawn hands cost 0.05-0.16 points**, worst theme 6.16% of the 10% cap, because they
+  recolour lit dots rather than adding lit area. Solid polygons would have cost 5.03% at 390.
+- **The per-dot hand test does not fit.** Eight float multiplies on 1544 dots tripped the
+  watchdog and the face would not load; inlining it did not save it. The per-ring angular
+  gate did.
+- **The window has to open by `Angle.MAX_TURN_ERROR`.** The cached position is a polynomial
+  approximation and the bar test is exact, so an exactly-sized window clips the hand by
+  0.00027 of a turn. Found by the agreement test on its first run, not by eye.
+
+## The post-merge frame A/B
+
+Measured on the same machine and simulator profile, alternating current `main` and the
+integrated branch in isolated instances:
+
+    row                         current main           integrated
+    defaults                    18ms avg / 22 worst    19ms avg / 23 worst
+    hand backing                22ms avg / 27 worst    20ms avg / 23 worst
+    hands + seconds + temp      watchdog trip           6ms avg / 20 worst
+    memory                      61k of 123k             64-66k of 123k
+
+The integrated busy row skipped 0% of frames and remained alive. Reading the clock once per
+frame and replacing temporary ring-window arrays with scalar bounds also fixes that
+current-main worst-case crash. On Epix, the expensive combination is separated by design:
+drawn hands show the time, while touch-and-hold hides them and reveals the upright date.
+
+## Left on the table
+
+- **The 454 lattice is one step short of native.** `COLS 44` — 1512 dots, a 12px rim
+  matching the Crossover's own 10px — trips the watchdog with the hands on. Bisected: 1388
+  runs, 1444 does not. 1380 ships, at a 22px rim. The lever is `PITCH`, which drags `DOT`,
+  `DotGrid.ARMS`, `Drift`'s offsets and the Python mirror with it — a phase, not an edit.
+- **Dark hands were chosen on the mockups, not on hardware.** Rendered at six times of day,
+  a bright hand is more of what is already there and genuinely hard to find among ~1400 lit
+  crosses; cut out of the field it is the only dark shape on a lit disc and reads at a
+  glance. It holds awake, in always-on and held back, and costs less light in all three
+  (4.12% against 4.50% awake). White is still a setting away. Widening the hands from 30px
+  to 44px was measured too — 4.55% white-and-grey — and was not taken, because dark solved
+  the legibility problem without touching the geometry.
+- **Nothing has run on a real Epix.** Everything here is the simulator, including the
+  watchdog trips — which the simulator enforces from the device profile's own count, so they
+  should be real, but the frame budget deserves a check on the wrist.
+- **`simctl.settings` labels do not follow the per-device string override.** It reads the
+  base `resources/strings/strings.xml`, so an Epix build's `handBacking` prints the
+  Crossover's wording. Cosmetic, in a tool, and not worth reimplementing resource resolution
+  in Python for.
+- **The Epix face crop is a percent or two out.** Good enough to see the face by, not good
+  enough to measure; `MatrixTest` is the luminance authority anyway.
+- **A continuous-arc face is a separate experiment.** This release keeps the established
+  lattice and dot language; an arc renderer should be evaluated independently.
+
+# Previously: Rain, next 12h (complete)
+
+**Current:** done — Rain, next 12h shipped; the frame A/B and the on-watch check are below.
 
 Out-of-band feature work, not a phase of the performance roadmap that follows: that one is
 complete and this does not extend it.
@@ -148,6 +234,37 @@ hour's own hour-of-day, mod 12. Bucket by the entry's own local hour and it land
 hand will be. There is no rotation step on either side, and the plan's estimate of one was
 the largest thing this turned out not to need.
 
+## The frame A/B, and what it did and did not settle
+
+CLAUDE.md's rule is that adding per-dot work means re-measuring both rows, and this added
+some to the Crossover's hot loop. Measured same-session, same machine, merge base against
+this branch, one isolated simulator per leg and the legs alternated — two binaries with one
+PRG stem cannot share an instance, because `load()` decides a push has landed by that file's
+mtime and swapping them under one name never moves it.
+
+    row                    base                    branch
+    defaults, hands off    21ms / 27  80% skipped  20ms / 29  80% skipped
+    defaults, hands ON     80ms / 101 80% skipped  79ms / 102 80% skipped
+                          101ms / 159 76% skipped  96ms / 113 80% skipped
+    seconds + temp         (leg invalid)           24-27ms / 93-111  0% skipped
+    memory                 57k of 123k             59k of 123k
+
+**No regression on the row that changed most.** Hands ON is where the gate replaced the bar
+test, and it comes out level or slightly ahead on the worst frame. The +2k of memory is the
+two new per-*ring* arrays and HandStyle; nothing per-dot was added to the cache.
+
+Two caveats, both real:
+
+- **the machine drifted between samples.** A leg's two samples differ by up to 4x in the
+  hands-off row, which is load rather than code — exactly the trap CLAUDE.md warns about.
+  The paired samples within a row are what to read, not any figure against another day's.
+- **the seconds + temperature row never got a valid base leg.** The base binary was called
+  `base.prg`, and simctl derives the settings filename from the PRG *stem*, so it wrote
+  `BASE.SET` and the base leg quietly reported default rings for every row. Fixed by renaming
+  the binary, but the rerun ran into a slept display and was abandoned rather than reported
+  half-measured. The branch's own figure for that row, 24-27ms at 0% skipped, is the same
+  class as the 31ms / 97 worst on record.
+
 ## Left on the table
 
 - ~~**Nothing has been seen.**~~ Settled: the face has now been screenshotted awake with a
@@ -222,6 +339,37 @@ frame; at ≤1ms that is not worth the churn of changing.
 **Phase 2b is not taken.** Splitting the dot loop on `turned` duplicates the loop body, and
 the loop now runs on one ring in five frames out of six rather than on four rings every
 frame. The cost it addresses shrank by more than the change would save.
+
+## The frame A/B, and what it did and did not settle
+
+CLAUDE.md's rule is that adding per-dot work means re-measuring both rows, and this added
+some to the Crossover's hot loop. Measured same-session, same machine, merge base against
+this branch, one isolated simulator per leg and the legs alternated — two binaries with one
+PRG stem cannot share an instance, because `load()` decides a push has landed by that file's
+mtime and swapping them under one name never moves it.
+
+    row                    base                    branch
+    defaults, hands off    21ms / 27  80% skipped  20ms / 29  80% skipped
+    defaults, hands ON     80ms / 101 80% skipped  79ms / 102 80% skipped
+                          101ms / 159 76% skipped  96ms / 113 80% skipped
+    seconds + temp         (leg invalid)           24-27ms / 93-111  0% skipped
+    memory                 57k of 123k             59k of 123k
+
+**No regression on the row that changed most.** Hands ON is where the gate replaced the bar
+test, and it comes out level or slightly ahead on the worst frame. The +2k of memory is the
+two new per-*ring* arrays and HandStyle; nothing per-dot was added to the cache.
+
+Two caveats, both real:
+
+- **the machine drifted between samples.** A leg's two samples differ by up to 4x in the
+  hands-off row, which is load rather than code — exactly the trap CLAUDE.md warns about.
+  The paired samples within a row are what to read, not any figure against another day's.
+- **the seconds + temperature row never got a valid base leg.** The base binary was called
+  `base.prg`, and simctl derives the settings filename from the PRG *stem*, so it wrote
+  `BASE.SET` and the base leg quietly reported default rings for every row. Fixed by renaming
+  the binary, but the rerun ran into a slept display and was abandoned rather than reported
+  half-measured. The branch's own figure for that row, 24-27ms at 0% skipped, is the same
+  class as the 31ms / 97 worst on record.
 
 ## Left on the table
 
@@ -424,6 +572,37 @@ reported as 5200ms, then 1171ms, then 22688ms depending on when we stopped looki
 3. **`setPalette`**, only if the fill-edge quantisation is acceptable as a design change.
 4. **Not the mirror.**
 
+## The frame A/B, and what it did and did not settle
+
+CLAUDE.md's rule is that adding per-dot work means re-measuring both rows, and this added
+some to the Crossover's hot loop. Measured same-session, same machine, merge base against
+this branch, one isolated simulator per leg and the legs alternated — two binaries with one
+PRG stem cannot share an instance, because `load()` decides a push has landed by that file's
+mtime and swapping them under one name never moves it.
+
+    row                    base                    branch
+    defaults, hands off    21ms / 27  80% skipped  20ms / 29  80% skipped
+    defaults, hands ON     80ms / 101 80% skipped  79ms / 102 80% skipped
+                          101ms / 159 76% skipped  96ms / 113 80% skipped
+    seconds + temp         (leg invalid)           24-27ms / 93-111  0% skipped
+    memory                 57k of 123k             59k of 123k
+
+**No regression on the row that changed most.** Hands ON is where the gate replaced the bar
+test, and it comes out level or slightly ahead on the worst frame. The +2k of memory is the
+two new per-*ring* arrays and HandStyle; nothing per-dot was added to the cache.
+
+Two caveats, both real:
+
+- **the machine drifted between samples.** A leg's two samples differ by up to 4x in the
+  hands-off row, which is load rather than code — exactly the trap CLAUDE.md warns about.
+  The paired samples within a row are what to read, not any figure against another day's.
+- **the seconds + temperature row never got a valid base leg.** The base binary was called
+  `base.prg`, and simctl derives the settings filename from the PRG *stem*, so it wrote
+  `BASE.SET` and the base leg quietly reported default rings for every row. Fixed by renaming
+  the binary, but the rerun ran into a slept display and was abandoned rather than reported
+  half-measured. The branch's own figure for that row, 24-27ms at 0% skipped, is the same
+  class as the 31ms / 97 worst on record.
+
 ## Left on the table
 
 - **Nothing here is confirmed on the watch.** The spike build cannot be worn — three of
@@ -497,6 +676,37 @@ Five tests drive the real renderer into a real Dc. The delta count is asserted a
 `theDeltaCoversBothBuffersNotJustTheLastDraw` measured 45 dots where the previous draw alone
 would have given 23 — the failure it guards against looks right on screen and leaves every
 other frame a step behind.
+
+## The frame A/B, and what it did and did not settle
+
+CLAUDE.md's rule is that adding per-dot work means re-measuring both rows, and this added
+some to the Crossover's hot loop. Measured same-session, same machine, merge base against
+this branch, one isolated simulator per leg and the legs alternated — two binaries with one
+PRG stem cannot share an instance, because `load()` decides a push has landed by that file's
+mtime and swapping them under one name never moves it.
+
+    row                    base                    branch
+    defaults, hands off    21ms / 27  80% skipped  20ms / 29  80% skipped
+    defaults, hands ON     80ms / 101 80% skipped  79ms / 102 80% skipped
+                          101ms / 159 76% skipped  96ms / 113 80% skipped
+    seconds + temp         (leg invalid)           24-27ms / 93-111  0% skipped
+    memory                 57k of 123k             59k of 123k
+
+**No regression on the row that changed most.** Hands ON is where the gate replaced the bar
+test, and it comes out level or slightly ahead on the worst frame. The +2k of memory is the
+two new per-*ring* arrays and HandStyle; nothing per-dot was added to the cache.
+
+Two caveats, both real:
+
+- **the machine drifted between samples.** A leg's two samples differ by up to 4x in the
+  hands-off row, which is load rather than code — exactly the trap CLAUDE.md warns about.
+  The paired samples within a row are what to read, not any figure against another day's.
+- **the seconds + temperature row never got a valid base leg.** The base binary was called
+  `base.prg`, and simctl derives the settings filename from the PRG *stem*, so it wrote
+  `BASE.SET` and the base leg quietly reported default rings for every row. Fixed by renaming
+  the binary, but the rerun ran into a slept display and was abandoned rather than reported
+  half-measured. The branch's own figure for that row, 24-27ms at 0% skipped, is the same
+  class as the 31ms / 97 worst on record.
 
 ## Left on the table
 

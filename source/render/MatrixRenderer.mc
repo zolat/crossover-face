@@ -271,12 +271,13 @@ module MatrixRenderer {
         var dimColour = Palette.dimOf;
         var bandEdge = DotGrid.bandEdge;
 
-        // Unpack the hand axes once. With the backing on, covers() is the only
+        // Unpack the hand axes once. With the hands on, handAt() is the only
         // call left in the dot loop; reading its four floats out of an array
         // per dot as well would put most of that cost straight back.
         var hasBacking = (backing != null);
         var axes = hasBacking ? HandBacking.axes()
-                              : ([0.0, 0.0, 0.0, 0.0] as Array<Float>);
+                              : ([0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+                                 as Array<Float>);
         var hourX = axes[0];
         var hourY = axes[1];
         var minuteX = axes[2];
@@ -284,6 +285,31 @@ module MatrixRenderer {
         // Written as an explicit null test so the type narrows; hasBacking is
         // the same condition, kept for the dot loop.
         var backingColour = (backing != null) ? backing : 0;
+        // What each hand paints, indexed by the slot handAt() returns. Resolved
+        // once a frame, not once a dot — the loop is left with an array lookup
+        // where it used to have a colour, which is the same work.
+        //
+        // A table rather than a branch is what lets the two hand styles differ
+        // for free: the Crossover points both slots at its one backing colour,
+        // and a drawn face gives the hour and minute their own, with neither
+        // paying for the other's shape.
+        var handColour = HandStyle.coloursFor(backingColour);
+        // The hand footprint, hoisted. handAt() keeps the readable definition
+        // of the test below; these are the numbers its body reads, lifted out
+        // so the inlined copy costs no lookups. They are consts, so this is
+        // documentation as much as it is hoisting.
+        var halfWidth = HandBacking.HALF_WIDTH;
+        var behind = -HandBacking.COUNTERWEIGHT;
+        var hourReach = HandBacking.HOUR_REACH;
+        var minuteReach = HandBacking.MINUTE_REACH;
+        var NO_HAND = HandBacking.NONE;
+        // Where the hands point, in turns, from the same clock read that made
+        // their axes. A second HandBacking call here used to allocate and read
+        // the clock again on every drawn frame.
+        var hourTurn = axes[4];
+        var minuteTurn = axes[5];
+        var ringInner = DotGrid.ringInner;
+        var handHalf = DotGrid.handHalf;
         // The backing folded into one comparable value, so a ring can tell
         // "the hands were backed white last draw" from "they were not backed
         // at all" with one integer. -1 is off; a colour is any real value.
@@ -360,6 +386,48 @@ module MatrixRenderer {
                 weak = strong;
                 strong = overColour[ring];
             }
+            // The hands, narrowed to this ring. A hand that cannot reach the
+            // ring's inner edge never touches it — the hour hand falls short of
+            // ring 0 at every screen size — and one that can gets an angular
+            // window sized for this ring's own innermost dots. The bar test in
+            // the loop then runs on what is inside the window, which is a few
+            // percent of it. See DotGrid.handHalf.
+            var inner = hasBacking ? ringInner[ring] : 0;
+            var hourHere = hasBacking && HandBacking.HOUR_REACH >= inner;
+            var minuteHere = hasBacking && HandBacking.MINUTE_REACH >= inner;
+            // StatMap.windowAround() inlined twice. These windows are made for
+            // every ring of every drawn frame; keeping them as scalars avoids
+            // up to eight temporary arrays and calls before the hot loop.
+            var windowHalf = handHalf[ring];
+            var hourFrom = 2.0;
+            var hourTo = 2.0;
+            if (hourHere) {
+                if (windowHalf >= 0.5) {
+                    hourFrom = 0.0;
+                    hourTo = 1.0;
+                } else {
+                    hourFrom = hourTurn - windowHalf;
+                    hourTo = hourTurn + windowHalf;
+                    if (hourFrom < 0.0) { hourFrom += 1.0; }
+                    if (hourTo >= 1.0) { hourTo -= 1.0; }
+                }
+            }
+            var hourWraps = (hourFrom > hourTo);
+            var minuteFrom = 2.0;
+            var minuteTo = 2.0;
+            if (minuteHere) {
+                if (windowHalf >= 0.5) {
+                    minuteFrom = 0.0;
+                    minuteTo = 1.0;
+                } else {
+                    minuteFrom = minuteTurn - windowHalf;
+                    minuteTo = minuteTurn + windowHalf;
+                    if (minuteFrom < 0.0) { minuteFrom += 1.0; }
+                    if (minuteTo >= 1.0) { minuteTo -= 1.0; }
+                }
+            }
+            var minuteWraps = (minuteFrom > minuteTo);
+
             var isRamp = (rings[ring] == Source.SOURCE_TEMPERATURE);
             var isBlocks = Source.usesBlocks(rings[ring]);
             var last = ringStart[ring + 1];
@@ -497,9 +565,48 @@ module MatrixRenderer {
                     var dx = xs[i];
                     var dy = ys[i];
                     var colour;
-                    if (hasBacking && HandBacking.covers(dx, dy, hourX, hourY,
-                                                         minuteX, minuteY)) {
-                        colour = backingColour;
+                    var position = positionOf[i];
+                    // HandBacking.handAt()'s body, gated and inlined. The window
+                    // test is the cheap half: a hand covers a narrow wedge of any
+                    // ring, so almost every dot is decided by two float comparisons
+                    // — litBetween's body again — and the eight multiplies below
+                    // run on the few percent left. A plain call here tripped the
+                    // watchdog outright at 1544 dots, and so did inlining it
+                    // ungated. HandBacking keeps the readable definition and
+                    // theGatedHandTestAgreesWithHandBacking pins the two together.
+                    //
+                    // Minute first, so it wins where the hands cross.
+                    var hand = NO_HAND;
+                    if (minuteHere) {
+                        var near = minuteWraps
+                            ? ((position >= minuteFrom) || (position <= minuteTo))
+                            : ((position >= minuteFrom) && (position <= minuteTo));
+                        if (near) {
+                            var along = dx * minuteX + dy * minuteY;
+                            if (along <= minuteReach && along >= behind) {
+                                var across = (dx * -minuteY) + (dy * minuteX);
+                                if (across >= -halfWidth && across <= halfWidth) {
+                                    hand = 2;                       //! HandBacking.MINUTE
+                                }
+                            }
+                        }
+                    }
+                    if (hand == NO_HAND && hourHere) {
+                        var near = hourWraps
+                            ? ((position >= hourFrom) || (position <= hourTo))
+                            : ((position >= hourFrom) && (position <= hourTo));
+                        if (near) {
+                            var along = dx * hourX + dy * hourY;
+                            if (along <= hourReach && along >= behind) {
+                                var across = (dx * -hourY) + (dy * hourX);
+                                if (across >= -halfWidth && across <= halfWidth) {
+                                    hand = 1;                       //! HandBacking.HOUR
+                                }
+                            }
+                        }
+                    }
+                    if (hand != NO_HAND) {
+                        colour = handColour[hand];
                     } else {
                         // HourBands.litAt()'s body, inlined — the same trade
                         // litBetween gets, and the same obligation: HourBands
@@ -541,8 +648,16 @@ module MatrixRenderer {
                         glyphAt++;
                         glyphNext = (glyphAt < glyphEnd) ? glyphIndex[glyphAt]
                                                          : -1;
-                        dc.drawLine(x - gx, y - gy, x + gx, y + gy);
-                        struck++;
+                        // A hand owns the glyph dot's shape as well as its
+                        // colour. Consume the cursor either way, but keep the
+                        // whole upright cross where a hand passes through.
+                        if (hand != NO_HAND) {
+                            dc.drawLine(x - ax, y - ay, x + ax, y + ay);
+                            dc.drawLine(x - bx, y - by, x + bx, y + by);
+                        } else {
+                            dc.drawLine(x - gx, y - gy, x + gx, y + gy);
+                            struck++;
+                        }
                     } else {
                         dc.drawLine(x - ax, y - ay, x + ax, y + ay);
                         dc.drawLine(x - bx, y - by, x + bx, y + by);
@@ -595,9 +710,47 @@ module MatrixRenderer {
                 // the field print, which clears the screen and rules out a
                 // delta — so letting one through the test above only costs it
                 // a redundant repaint, never a wrong one.
-                if (hasBacking && HandBacking.covers(dx, dy, hourX, hourY,
-                                                     minuteX, minuteY)) {
-                    colour = backingColour;
+                // HandBacking.handAt()'s body, gated and inlined. The window
+                // test is the cheap half: a hand covers a narrow wedge of any
+                // ring, so almost every dot is decided by two float comparisons
+                // — litBetween's body again — and the eight multiplies below
+                // run on the few percent left. A plain call here tripped the
+                // watchdog outright at 1544 dots, and so did inlining it
+                // ungated. HandBacking keeps the readable definition and
+                // theGatedHandTestAgreesWithHandBacking pins the two together.
+                //
+                // Minute first, so it wins where the hands cross.
+                var hand = NO_HAND;
+                if (minuteHere) {
+                    var near = minuteWraps
+                        ? ((position >= minuteFrom) || (position <= minuteTo))
+                        : ((position >= minuteFrom) && (position <= minuteTo));
+                    if (near) {
+                        var along = dx * minuteX + dy * minuteY;
+                        if (along <= minuteReach && along >= behind) {
+                            var across = (dx * -minuteY) + (dy * minuteX);
+                            if (across >= -halfWidth && across <= halfWidth) {
+                                hand = 2;                       //! HandBacking.MINUTE
+                            }
+                        }
+                    }
+                }
+                if (hand == NO_HAND && hourHere) {
+                    var near = hourWraps
+                        ? ((position >= hourFrom) || (position <= hourTo))
+                        : ((position >= hourFrom) && (position <= hourTo));
+                    if (near) {
+                        var along = dx * hourX + dy * hourY;
+                        if (along <= hourReach && along >= behind) {
+                            var across = (dx * -hourY) + (dy * hourX);
+                            if (across >= -halfWidth && across <= halfWidth) {
+                                hand = 1;                       //! HandBacking.HOUR
+                            }
+                        }
+                    }
+                }
+                if (hand != NO_HAND) {
+                    colour = handColour[hand];
                 } else if (lit) {
                     colour = isRamp
                         ? ramp[(position * rampTop).toNumber()]
@@ -640,8 +793,15 @@ module MatrixRenderer {
                     // dot this branch is owed.
                     glyphAt++;
                     glyphNext = (glyphAt < glyphEnd) ? glyphIndex[glyphAt] : -1;
-                    dc.drawLine(x - gx, y - gy, x + gx, y + gy);
-                    struck++;
+                    // Hands outrank the watermark's shape as well as its
+                    // colour. Consume the cursor so later cells stay aligned.
+                    if (hand != NO_HAND) {
+                        dc.drawLine(x - ax, y - ay, x + ax, y + ay);
+                        dc.drawLine(x - bx, y - by, x + bx, y + by);
+                    } else {
+                        dc.drawLine(x - gx, y - gy, x + gx, y + gy);
+                        struck++;
+                    }
                 } else {
                     dc.drawLine(x - ax, y - ay, x + ax, y + ay);
                     dc.drawLine(x - bx, y - by, x + bx, y + by);
@@ -675,9 +835,10 @@ module MatrixRenderer {
             }
             var dx = xs[at];
             var dy = ys[at];
-            // The hands still win: a marked dot under one stays backed.
-            if (hasBacking && HandBacking.covers(dx, dy, hourX, hourY,
-                                                 minuteX, minuteY)) {
+            // The hands still win: a marked dot under one keeps the hand.
+            if (hasBacking && HandBacking.handAt(dx, dy, hourX, hourY,
+                                                 minuteX, minuteY)
+                    != HandBacking.NONE) {
                 continue;
             }
             dc.setColor(markerColour[ring], Graphics.COLOR_TRANSPARENT);

@@ -17,8 +17,18 @@ module Angle {
     //! Guards against dividing by zero on the axes.
     const TINY = 0.000001;
 
+    //! How far a position from this module may sit from the true angle.
+    //!
+    //! Named rather than left in prose because something now depends on it.
+    //! A cached position is an approximation while the geometry it is compared
+    //! against is exact, so any window placed on a true angle has to be opened
+    //! by this much or it will clip dots that genuinely fall inside — see
+    //! DotGrid.handWindows, where a window short by a quarter of this was
+    //! enough to cut a hand along its length.
+    const MAX_TURN_ERROR = 0.0008;
+
     //! atan(z) for 0 <= z <= 1, expressed in turns rather than radians.
-    //! Max error about 0.005 radians, or 0.0008 of a turn.
+    //! Max error about 0.005 radians, or MAX_TURN_ERROR of a turn.
     function atanTurn(z as Float) as Float {
         return (z * (0.9724 - 0.1919 * z * z)) / FULL_TURN;
     }

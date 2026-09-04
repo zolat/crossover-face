@@ -26,7 +26,7 @@ be quit before this runs.
 Usage:
     python3 tools/mtp_push.py --info                 # device and storages
     python3 tools/mtp_push.py --ls /GARMIN/Apps      # list a folder
-    python3 tools/mtp_push.py bin/CrossoverFace.prg  # push, then verify
+    python3 tools/mtp_push.py bin/<device>/CrossoverFace.prg   # push, then verify
 """
 
 from __future__ import annotations

@@ -69,8 +69,12 @@ module DateGlyph {
     //! grid's own centre — and in the lower half, which is where a date window
     //! belongs on a dial and the only place a block this size fits without the
     //! hand pivot punching a hole in it.
-    const ORIGIN_COL = 12;
-    const ORIGIN_ROW = 23;
+    //! Derived from the selected lattice rather than pinned to the original
+    //! 38x38 one: every supported grid is even, so this keeps the glyph
+    //! horizontally centred and its top edge 45px below the pivot at every
+    //! screen size.
+    const ORIGIN_COL = (DotGrid.COLS - COLS) / 2;
+    const ORIGIN_ROW = (DotGrid.ROWS / 2) + 4;
 
     //! 3x5 digits, row-major, bit 14 top-left. Fifteen bits each.
     //!

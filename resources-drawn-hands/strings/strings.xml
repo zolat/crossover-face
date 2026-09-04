@@ -1,0 +1,17 @@
+<strings>
+    <!-- Overrides for the watches that have no hands of their own.
+
+         Only the strings whose meaning actually changes are here; the
+         rest come from resources/strings.xml. On the Crossover this setting
+         decides whether to light the dots *behind* two brass hands. Here there
+         are no brass hands, and the same setting decides whether the face
+         draws them at all - so "Behind hands" would be describing a watch the
+         reader is not holding. -->
+    <string id="BackingTitle">Hands</string>
+    <string id="BackingPrompt">Draws the hour and minute hands; touch and hold to hide them temporarily</string>
+    <string id="BackingOff">Off</string>
+    <string id="BackingWhite">White and grey</string>
+    <string id="BackingDark">Dark</string>
+    <string id="RotationPrompt">Whether each cross follows its ring; the date appears while hands are hidden</string>
+    <string id="RotationUprightDate">Upright + date on peek</string>
+</strings>
