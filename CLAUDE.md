@@ -19,7 +19,7 @@ covers the working knowledge that spans files and is easy to break.
 ```sh
 make build      # debug .prg for the simulator
 make sim        # build, start the simulator if needed, sideload, stream println
-make test       # build with -t, run the 129-test suite (takes the simulator lock)
+make test       # build with -t, run the 145-test suite (takes the simulator lock)
 make test-lock  # self-test tools/sim_lock.sh
 make test-simctl # tests for tools/simctl (no simulator, no build needed)
 make package    # signed .iq for the store
@@ -523,7 +523,8 @@ but the rebuild it schedules must still land in `onLayout`, never `onStart`.
 
 ### Block sources do not report spans
 
-Rain and UV forecasts plus Body Battery history fill the shape the face calls **blocks**.
+Rain, UV and temperature forecasts plus Body Battery history fill the shape the face calls
+**blocks**.
 The ring's 360° is twelve 30° hour slots, a 22.5° block **centred in each** leaving a
 countable gutter that straddles the hour mark, and how much of each block is filled is the
 reading. Forecasts proceed clockwise; Body Battery's current hour is live and its eleven
@@ -706,9 +707,20 @@ profiles carry no `analogHands`.
 
 Stored values are **list indices**, so `resources/properties.xml`, `resources/settings/settings.xml`,
 `resources/strings/strings.xml`, the enums in `StatMap`/`Source`, and the label arrays in
-`source/settings/SettingsMenu.mc` all have to agree. Eight properties today: `theme`,
-`handBacking`, `alwaysOnFill`, `dotRotation`, `ring1`–`ring4`. `dotRotation` carries three
-values, not two — the third is the date watermark below.
+`source/settings/SettingsMenu.mc` all have to agree. Ten properties today: `theme`,
+`handBacking`, `alwaysOnFill`, `dotRotation`, `ring1`–`ring4`, `tempAheadLow`,
+`tempAheadHigh`. `dotRotation` carries three values, not two — the third is the date
+watermark below.
+
+**The two temperature-ahead ends are the exception: they store degrees Celsius, not an
+index.** −20 to 50, empty block at `tempAheadLow`, full at `tempAheadHigh`.
+`StatMap.loadTempAheadScale()` swaps an inverted pair and widens an equal one, because the
+phone accepts each end alone; `HourlyWeatherData` divides by the gap and relies on it.
+The levels are bucketed against the scale when sampled, so `Config.reload()` calls
+`HourlyWeatherData.forget()` — drop that and a scale change takes a minute to appear. The
+on-watch entry is two rows *after* the four rings in `RingMenu`, so ring rows keep their
+indices; each opens a 71-row `ChoiceMenu` focused on the value in use, measured at ~12.7KB
+of heap while open (`theTemperaturePickerOpensOnTheValueInUse` logs it).
 
 A `ChoiceMenu` is given how many values it offers as well as its labels. Adding a label
 without moving that count leaves the new row unreachable with no other symptom, which is
@@ -721,7 +733,8 @@ this rule by five for nothing, and a setting would stop meaning the same thing a
 **A new source is appended after `SOURCE_OFF`, not before it.** That looks wrong and is the
 only safe place: the stored value is an index, so inserting below Off renumbers Off and
 everything under it on every watch already carrying a setting. `SOURCE_RAIN_HOURS = 9`,
-`SOURCE_UV_HOURS = 10` and `SOURCE_BODY_BATTERY_HOURS = 11` sit above `SOURCE_OFF = 8` for
+`SOURCE_UV_HOURS = 10`, `SOURCE_BODY_BATTERY_HOURS = 11` and `SOURCE_TEMP_HOURS = 12` sit
+above `SOURCE_OFF = 8` for
 that reason, while `Source.OFFERED` — which decides picker *order* — groups each with its
 related source. `sourceTablesCoverEveryKind` used to assert
 `SOURCE_OFF == COUNT - 1`; that was always a claim about `OFFERED`'s order and only happened
@@ -856,7 +869,7 @@ The watermark stays on in always-on and in held-back always-on, deliberately: it
 date, and it can only take light off the mode measured against the burn-in budget.
 
 It is a third value of `dotRotation` rather than a property of its own, which keeps the
-settings at eight — but note that the choice was made while the marking was still a
+ring and display settings at eight — but note that the choice was made while the marking was still a
 rotation, and a struck dot does not actually need the upright field. A separate on/off
 property would additionally allow "follow the rings + date"; `tools/mockup.py`'s
 `13b-date-true-size.png` renders that combination.

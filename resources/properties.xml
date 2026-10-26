@@ -16,7 +16,7 @@
          0 steps, 1 retired, 2 battery, 3 body battery,
          4 temperature range, 5 rain chance, 6 intensity minutes,
          7 seconds, 8 off, 9 rain next 12h, 10 UV next 12h,
-         11 Body Battery last 12h. Seconds reports nothing in always-on.
+         11 Body Battery last 12h, 12 temperature next 12h. Seconds reports nothing in always-on.
          Block sources are offered on
          ring1 and ring2 only — the inner two rings have too few dots per hour
          to carry them, and StatMap.load() reads them as off anywhere else.
@@ -26,4 +26,10 @@
     <property id="ring2" type="number">1</property>
     <property id="ring3" type="number">2</property>
     <property id="ring4" type="number">3</property>
+    <!-- The temperature-ahead ring's scale, in whole degrees Celsius: an hour
+         at or below tempAheadLow is an empty block, at or above tempAheadHigh
+         a full one. Values, not list indices. -20 to 50; StatMap.load() swaps
+         an inverted pair and widens an equal one. -->
+    <property id="tempAheadLow" type="number">0</property>
+    <property id="tempAheadHigh" type="number">45</property>
 </properties>

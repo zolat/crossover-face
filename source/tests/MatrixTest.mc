@@ -551,7 +551,9 @@ module MatrixTest {
             "UV next 12h must stay 10");
         Test.assertEqualMessage(Source.SOURCE_BODY_BATTERY_HOURS, 11,
             "Body Battery last 12h must stay 11");
-        Test.assertEqualMessage(Source.COUNT, 12,
+        Test.assertEqualMessage(Source.SOURCE_TEMP_HOURS, 12,
+            "temperature next 12h must stay 12");
+        Test.assertEqualMessage(Source.COUNT, 13,
             "COUNT counts slots, not offers — the tables are indexed by it");
 
         // The retired slot is never offered.
@@ -4633,6 +4635,208 @@ module MatrixTest {
         return true;
     }
 
+    //! Temperature ahead fills linearly between the wearer's two ends, and
+    //! clamps outside them rather than wrapping or going unknown.
+    (:test)
+    function tempAheadFillsBetweenTheWearersTwoEnds(logger as Logger)
+            as Boolean {
+        Test.assertEqualMessage(HourlyWeatherData.tempLevelFor(0.0, 0, 45), 0,
+            "the low end must be an empty block");
+        Test.assertEqualMessage(HourlyWeatherData.tempLevelFor(-8.0, 0, 45), 0,
+            "below the low end must clamp to empty, not wrap");
+        Test.assertEqualMessage(HourlyWeatherData.tempLevelFor(45.0, 0, 45),
+            HourBands.LEVELS, "the high end must fill the block");
+        Test.assertEqualMessage(HourlyWeatherData.tempLevelFor(48.0, 0, 45),
+            HourBands.LEVELS, "past the high end must clamp to full");
+        Test.assertEqualMessage(HourlyWeatherData.tempLevelFor(22.5, 0, 45),
+            HourBands.LEVELS / 2, "the midpoint must sit halfway up");
+        // Three degrees a rung at 0-45, so a reading must reach a full rung.
+        Test.assertEqualMessage(HourlyWeatherData.tempLevelFor(2.9, 0, 45), 0,
+            "under one rung above the low end must still read empty");
+        Test.assertEqualMessage(HourlyWeatherData.tempLevelFor(3.0, 0, 45), 1,
+            "one rung above the low end must light the first level");
+        // A scale that does not start at zero, so an offset bug cannot hide.
+        Test.assertEqualMessage(HourlyWeatherData.tempLevelFor(20.0, 10, 30),
+            HourBands.LEVELS / 2, "20C on a 10-30 scale must sit halfway");
+        Test.assertEqualMessage(HourlyWeatherData.tempLevelFor(-5.0, -10, 5),
+            HourBands.LEVELS / 3, "a sub-zero scale must fill the same way");
+
+        var previous = -1;
+        for (var c = -5; c <= 50; c++) {
+            var level = HourlyWeatherData.tempLevelFor(c.toFloat(), 0, 45);
+            Test.assertMessage(level >= previous,
+                "the fill must never fall as the temperature rises (" + c +
+                "C)");
+            previous = level;
+        }
+        logger.debug("0-45C: 3C a rung, clamped both ends");
+        return true;
+    }
+
+    //! Whatever the phone stores, the scale is usable: in range, low below
+    //! high, and never zero wide.
+    (:test)
+    function tempAheadScaleIsAlwaysUsable(logger as Logger) as Boolean {
+        Properties.setValue(StatMap.PROPERTY_TEMP_AHEAD_LOW, 99);
+        Properties.setValue(StatMap.PROPERTY_TEMP_AHEAD_HIGH, -99);
+        Config.reload();
+        Test.assertEqualMessage(StatMap.tempAheadLow,
+            StatMap.TEMP_AHEAD_LOW_DEFAULT, "an out-of-range low end must " +
+            "fall back to its default");
+        Test.assertEqualMessage(StatMap.tempAheadHigh,
+            StatMap.TEMP_AHEAD_HIGH_DEFAULT, "an out-of-range high end must " +
+            "fall back to its default");
+
+        Properties.setValue(StatMap.PROPERTY_TEMP_AHEAD_LOW, 35);
+        Properties.setValue(StatMap.PROPERTY_TEMP_AHEAD_HIGH, 5);
+        Config.reload();
+        Test.assertEqualMessage(StatMap.tempAheadLow, 5,
+            "an inverted pair must be read the right way round");
+        Test.assertEqualMessage(StatMap.tempAheadHigh, 35,
+            "an inverted pair must be read the right way round");
+
+        Properties.setValue(StatMap.PROPERTY_TEMP_AHEAD_LOW, 20);
+        Properties.setValue(StatMap.PROPERTY_TEMP_AHEAD_HIGH, 20);
+        Config.reload();
+        Test.assertEqualMessage(StatMap.tempAheadHigh - StatMap.tempAheadLow,
+            1, "equal ends must be widened, never divided by zero");
+        Test.assertEqualMessage(StatMap.tempAheadLow, 20,
+            "widening an equal pair must keep the low end");
+
+        Properties.setValue(StatMap.PROPERTY_TEMP_AHEAD_LOW,
+                            StatMap.TEMP_AHEAD_MAX_C);
+        Properties.setValue(StatMap.PROPERTY_TEMP_AHEAD_HIGH,
+                            StatMap.TEMP_AHEAD_MAX_C);
+        Config.reload();
+        Test.assertEqualMessage(StatMap.tempAheadHigh, StatMap.TEMP_AHEAD_MAX_C,
+            "widening at the top must not leave the allowed range");
+        Test.assertEqualMessage(StatMap.tempAheadLow,
+            StatMap.TEMP_AHEAD_MAX_C - 1, "widening at the top must move the " +
+            "low end down instead");
+
+        resetTempAheadScale();
+        Test.assertEqualMessage(StatMap.tempAheadLow, 0, "default low is 0C");
+        Test.assertEqualMessage(StatMap.tempAheadHigh, 45, "default high is 45C");
+        return true;
+    }
+
+    //! A row's id, or "missing" — assertEqual takes no null.
+    function idOf(menu as WatchUi.Menu2, row as Number) as Object {
+        var item = menu.getItem(row);
+        var id = (item == null) ? null : item.getId();
+        return (id == null) ? "missing" : id;
+    }
+
+    function resetTempAheadScale() as Void {
+        Properties.setValue(StatMap.PROPERTY_TEMP_AHEAD_LOW,
+                            StatMap.TEMP_AHEAD_LOW_DEFAULT);
+        Properties.setValue(StatMap.PROPERTY_TEMP_AHEAD_HIGH,
+                            StatMap.TEMP_AHEAD_HIGH_DEFAULT);
+        Config.reload();
+    }
+
+    //! The levels are bucketed against the scale when sampled, so a settings
+    //! change must drop the sample or the ring keeps the old fill a minute.
+    (:test)
+    function aSettingsReloadRebucketsTheHourlySample(logger as Logger)
+            as Boolean {
+        var out = [0, 0, 0] as Array<Number>;
+        HourlyWeatherData.fillTemp(out, 0);
+        Test.assertMessage(HourlyWeatherData.sampled,
+            "filling the temperature ring must take a sample");
+        Config.reload();
+        Test.assertMessage(!HourlyWeatherData.sampled,
+            "a settings reload must drop the hourly sample");
+        return true;
+    }
+
+    //! Temperature ahead keeps its own known bits, like UV beside rain.
+    (:test)
+    function tempAheadKeepsItsOwnKnownBits(logger as Logger) as Boolean {
+        HourlyWeatherData.clear();
+        HourBands.raise(HourlyWeatherData.rainLevels, 3, 9);
+        HourlyWeatherData.rainKnown = 1 << 3;
+        HourBands.raise(HourlyWeatherData.tempLevels, 7, 12);
+        HourlyWeatherData.tempKnown = 1 << 7;
+        var lo = HourlyWeatherData.tempLevels[0];
+        var hi = HourlyWeatherData.tempLevels[1];
+        Test.assertEqualMessage(
+            HourBands.levelAt(lo, hi, HourlyWeatherData.tempKnown, 3),
+            HourBands.UNKNOWN, "known rain must not make temperature known");
+        Test.assertEqualMessage(
+            HourBands.levelAt(lo, hi, HourlyWeatherData.tempKnown, 7), 12,
+            "the temperature level must read back where it was put");
+        HourlyWeatherData.forget();
+        HourlyWeatherData.clear();
+        return true;
+    }
+
+    //! The on-watch picker for one end of the scale: every whole degree,
+    //! coldest first, opening on the one in use.
+    (:test)
+    function theTemperaturePickerOpensOnTheValueInUse(logger as Logger)
+            as Boolean {
+        var before = System.getSystemStats().freeMemory;
+        var menu = temperatureMenu(Rez.Strings.TempAheadHighTitle,
+            StatMap.PROPERTY_TEMP_AHEAD_HIGH, 45);
+        var after = System.getSystemStats().freeMemory;
+        var count = StatMap.TEMP_AHEAD_MAX_C - StatMap.TEMP_AHEAD_MIN_C + 1;
+
+        Test.assertMessage(menu.getItem(count - 1) != null &&
+                           menu.getItem(count) == null,
+            "the picker must hold exactly " + count + " rows");
+        Test.assertEqualMessage(idOf(menu, 0),
+            StatMap.TEMP_AHEAD_MIN_C, "the first row must be the coldest");
+        Test.assertEqualMessage(idOf(menu, count - 1),
+            StatMap.TEMP_AHEAD_MAX_C, "the last row must be the hottest");
+        Test.assertEqualMessage(menu.focus(), 45 - StatMap.TEMP_AHEAD_MIN_C,
+            "the picker must open on the value in use");
+        Test.assertMessage(subLabelOf(menu, menu.focus()).length() > 0,
+            "the value in use must be marked");
+        Test.assertEqualMessage(subLabelOf(menu, 0), "",
+            "a value not in use must not be marked");
+        Test.assertEqualMessage(menu.property(),
+            StatMap.PROPERTY_TEMP_AHEAD_HIGH, "the picker must write its own " +
+            "property");
+
+        var cost = before - after;
+        logger.debug(count + "-row temperature picker costs " + cost +
+                     " bytes of heap");
+        // A generous ceiling: the point is to catch a picker that grows to a
+        // real share of the 123k the face is granted, not to pin the figure.
+        Test.assertMessage(cost < 16384,
+            "the temperature picker costs " + cost + " bytes; a factory-backed " +
+            "WatchUi.Picker would be cheaper");
+        return true;
+    }
+
+    //! RingMenu refreshes the two scale rows by index after the rings, and
+    //! a wrong index returns null rather than throwing.
+    (:test)
+    function ringMenuRefreshesTheTempAheadRows(logger as Logger) as Boolean {
+        resetTempAheadScale();
+        var menu = new RingMenu();
+        Test.assertEqualMessage(idOf(menu, TEMP_LOW_ROW),
+            :tempAheadLow, "the low row must follow the rings");
+        Test.assertEqualMessage(idOf(menu, TEMP_HIGH_ROW),
+            :tempAheadHigh, "the high row must follow the low row");
+        Test.assertEqualMessage(subLabelOf(menu, TEMP_HIGH_ROW),
+            celsiusLabel(45), "the high row must show the scale's top");
+
+        // Stored inverted, as the phone allows: the menu shows it normalised.
+        Properties.setValue(StatMap.PROPERTY_TEMP_AHEAD_LOW, 38);
+        Properties.setValue(StatMap.PROPERTY_TEMP_AHEAD_HIGH, 12);
+        Config.reload();
+        menu.onShow();
+        Test.assertEqualMessage(subLabelOf(menu, TEMP_LOW_ROW),
+            celsiusLabel(12), "the low row must show the normalised low end");
+        Test.assertEqualMessage(subLabelOf(menu, TEMP_HIGH_ROW),
+            celsiusLabel(38), "the high row must show the normalised high end");
+
+        resetTempAheadScale();
+        return true;
+    }
+
     //! Rain and UV are two views of one cached Weather.getHourlyForecast().
     (:test)
     function hourlyWeatherSourcesShareOneMinuteSample(logger as Logger)
@@ -5621,7 +5825,8 @@ module MatrixTest {
             as Boolean {
         var blockSources = [Source.SOURCE_RAIN_HOURS,
                             Source.SOURCE_UV_HOURS,
-                            Source.SOURCE_BODY_BATTERY_HOURS] as Array<Number>;
+                            Source.SOURCE_BODY_BATTERY_HOURS,
+                            Source.SOURCE_TEMP_HOURS] as Array<Number>;
         for (var ring = 0; ring < StatMap.RINGS; ring++) {
             var offered = Source.offeredFor(ring);
             var labels = offeredLabelsFor(ring);
@@ -5674,7 +5879,8 @@ module MatrixTest {
 
         var blockSources = [Source.SOURCE_RAIN_HOURS,
                             Source.SOURCE_UV_HOURS,
-                            Source.SOURCE_BODY_BATTERY_HOURS] as Array<Number>;
+                            Source.SOURCE_BODY_BATTERY_HOURS,
+                            Source.SOURCE_TEMP_HOURS] as Array<Number>;
         for (var s = 0; s < blockSources.size(); s++) {
             var source = blockSources[s];
             for (var ring = 0; ring < StatMap.RINGS; ring++) {

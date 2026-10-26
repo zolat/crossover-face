@@ -420,12 +420,15 @@ The face has four rings, and **each one is independently assigned to a source**:
 | Chance of rain | level | `Weather.precipitationChance` |
 | Rain, next 12h | **blocks**, clockwise | hourly `Weather.precipitationChance` |
 | UV, next 12h | **blocks**, clockwise | hourly `Weather.uvIndex`, 0–10 |
+| Temp, next 12h | **blocks**, clockwise | hourly `Weather` temperature, empty → full between two °C ends you set (default 0–45) |
 | Intensity minutes | **goal** — level, then a second lap | `ActivityMonitor` weekly active minutes ÷ your weekly goal |
 | Seconds | level, **awake only** | `System.getClockTime()`, filling through each minute |
 | Off | — | nothing |
 
-The three twelve-hour sources report **blocks**: twelve separated clock-hour slots whose
-fill grows from the ring's inner edge outward. Rain and UV run clockwise into the future.
+The four twelve-hour sources report **blocks**: twelve separated clock-hour slots whose
+fill grows from the ring's inner edge outward. Rain, UV and temperature run clockwise into
+the future; temperature fills linearly from *Temp ahead: empty at* to *full at*, both set
+under Ring data on the watch or in Garmin Connect.
 Body Battery puts its newest value in the current hour and completed-hour averages in the
 eleven positions behind it, so reading backwards from the hand runs counter-clockwise. A
 known zero uses the ordinary unfilled tier; an hour with no sample is dimmer and cannot be
@@ -616,7 +619,7 @@ source/
   CrossoverView.mc    picks a renderer based on power mode — no drawing
   data/WatchData.mc   device state, formatted. Pure queries, no drawing
   data/BodyBatteryData.mc  current value and counter-clockwise 12h history
-  data/HourlyWeatherData.mc  one hourly forecast sample for rain and UV
+  data/HourlyWeatherData.mc  one hourly forecast sample for rain, UV and temperature
   matrix/DotGrid.mc   lattice geometry: pitch, circle clip, hub
   matrix/StatMap.mc   dot -> ring mapping and span test; the settings
   matrix/Drift.mc     burn-in mitigation cycle

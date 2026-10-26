@@ -68,6 +68,18 @@ module StatMap {
     const PROPERTY_ALWAYS_ON_FILL = "alwaysOnFill";
     const PROPERTY_ROTATION = "dotRotation";
 
+    //! The temperature-ahead ring's scale, in whole degrees Celsius.
+    //!
+    //! **Values, not list indices** — the one pair of settings that stores the
+    //! thing itself, because a temperature has no enum to renumber. The bounds
+    //! are what both pickers offer and what settings.xml enforces phone-side.
+    const PROPERTY_TEMP_AHEAD_LOW = "tempAheadLow";
+    const PROPERTY_TEMP_AHEAD_HIGH = "tempAheadHigh";
+    const TEMP_AHEAD_MIN_C = -20;
+    const TEMP_AHEAD_MAX_C = 50;
+    const TEMP_AHEAD_LOW_DEFAULT = 0;
+    const TEMP_AHEAD_HIGH_DEFAULT = 45;
+
     //! Four rings, each independently assigned to a Source.
     const RINGS = 4;
     const PROPERTY_RINGS = ["ring1", "ring2", "ring3", "ring4"] as Array<String>;
@@ -78,6 +90,9 @@ module StatMap {
     var backing as Number = BACKING_OFF;
     var alwaysOnFill as Number = ALWAYS_ON_FILL_SHOWN;
     var rotation as Number = ROTATION_RADIAL;
+    //! Always high > low after load(); HourlyWeatherData divides by the gap.
+    var tempAheadLow as Number = TEMP_AHEAD_LOW_DEFAULT;
+    var tempAheadHigh as Number = TEMP_AHEAD_HIGH_DEFAULT;
 
     //! Which source each ring shows. Index 0 is the outermost ring.
     var rings as Array<Number> = [
@@ -99,6 +114,7 @@ module StatMap {
                                   ALWAYS_ON_FILL_SHOWN, ALWAYS_ON_FILL_HIDDEN);
         rotation = readNumber(PROPERTY_ROTATION, ROTATION_RADIAL,
                               ROTATION_RADIAL, ROTATION_UPRIGHT_DATE);
+        loadTempAheadScale();
 
         var defaults = [Source.SOURCE_STEPS, Source.SOURCE_INTENSITY_MINUTES,
                         Source.SOURCE_BATTERY, Source.SOURCE_BODY_BATTERY]
@@ -125,6 +141,35 @@ module StatMap {
             loaded[i] = stored;
         }
         rings = loaded;
+    }
+
+    //! Read the two ends and make them a usable scale whatever was stored.
+    //!
+    //! The phone accepts each end on its own, so nothing stops a wearer setting
+    //! the low end above the high one. That is read as the same range written
+    //! backwards and swapped; two equal ends are widened by a degree. Either
+    //! way the fill always runs cold-empty to hot-full and never divides by
+    //! zero, and the menu shows these normalised values, so it agrees with
+    //! what is drawn.
+    function loadTempAheadScale() as Void {
+        var low = readNumber(PROPERTY_TEMP_AHEAD_LOW, TEMP_AHEAD_LOW_DEFAULT,
+                             TEMP_AHEAD_MIN_C, TEMP_AHEAD_MAX_C);
+        var high = readNumber(PROPERTY_TEMP_AHEAD_HIGH, TEMP_AHEAD_HIGH_DEFAULT,
+                              TEMP_AHEAD_MIN_C, TEMP_AHEAD_MAX_C);
+        if (low > high) {
+            var swap = low;
+            low = high;
+            high = swap;
+        }
+        if (low == high) {
+            if (high == TEMP_AHEAD_MAX_C) {
+                low = high - 1;
+            } else {
+                high = low + 1;
+            }
+        }
+        tempAheadLow = low;
+        tempAheadHigh = high;
     }
 
     function readNumber(key as String, fallback as Number,

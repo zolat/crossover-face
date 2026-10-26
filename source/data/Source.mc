@@ -54,10 +54,16 @@ module Source {
         SOURCE_UV_HOURS = 10,
         //! Current Body Battery and the preceding eleven hours, read backwards
         //! from the hour hand. Completed hours are averages; current is live.
-        SOURCE_BODY_BATTERY_HOURS = 11
+        SOURCE_BODY_BATTERY_HOURS = 11,
+        //! The next twelve hours of temperature, filled linearly between two
+        //! temperatures the wearer sets (StatMap.tempAheadLow / tempAheadHigh):
+        //! an hour at or below the low end is an empty block, at or above the
+        //! high end a full one. A fixed scale cannot suit both Adelaide and
+        //! Oslo, so the range is a setting rather than a constant.
+        SOURCE_TEMP_HOURS = 12
     }
 
-    const COUNT = 12;
+    const COUNT = 13;
 
     //! The sources a ring may actually be assigned to, in picker order.
     //!
@@ -71,6 +77,7 @@ module Source {
         SOURCE_BODY_BATTERY,
         SOURCE_BODY_BATTERY_HOURS,
         SOURCE_TEMPERATURE,
+        SOURCE_TEMP_HOURS,
         SOURCE_RAIN,
         SOURCE_RAIN_HOURS,
         SOURCE_UV_HOURS,
@@ -95,7 +102,8 @@ module Source {
         0x444444,   // off
         0x0088CC,   // rain, next 12h
         0xFFCC00,   // UV, next 12h
-        0x3388FF    // Body Battery, last 12h
+        0x3388FF,   // Body Battery, last 12h
+        0xFFAA00    // temperature, next 12h
     ] as Array<Number>;
 
     function hue(source as Number) as Number {
@@ -148,6 +156,7 @@ module Source {
             case SOURCE_RAIN_HOURS:
             case SOURCE_UV_HOURS:
             case SOURCE_BODY_BATTERY_HOURS:
+            case SOURCE_TEMP_HOURS:
                 // Twelve disjoint blocks with a radial axis is not something
                 // two floats can say, and widening the span so it could would
                 // make every consumer of one branch on shape. So this source
@@ -311,7 +320,8 @@ module Source {
     function usesBlocks(source as Number) as Boolean {
         return source == SOURCE_RAIN_HOURS ||
                source == SOURCE_UV_HOURS ||
-               source == SOURCE_BODY_BATTERY_HOURS;
+               source == SOURCE_BODY_BATTERY_HOURS ||
+               source == SOURCE_TEMP_HOURS;
     }
 
     //! May this source be assigned to this ring? Index 0 is the outermost.
@@ -358,6 +368,9 @@ module Source {
                 return;
             case SOURCE_BODY_BATTERY_HOURS:
                 BodyBatteryData.fillHistory(out, at);
+                return;
+            case SOURCE_TEMP_HOURS:
+                HourlyWeatherData.fillTemp(out, at);
                 return;
             default:
                 out[at] = 0;

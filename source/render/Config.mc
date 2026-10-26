@@ -12,6 +12,10 @@ module Config {
     function reload() as Void {
         StatMap.load();
         Palette.build();
+        // The hourly levels are bucketed against the temperature-ahead scale
+        // when sampled, so a changed scale has to drop the sample or the ring
+        // would keep the old fill for up to a minute.
+        HourlyWeatherData.forget();
         // Theme, source, rotation and backing changes can alter pixels without
         // changing the sampled data values. The buffered frame must therefore
         // be treated as stale whenever configuration is reloaded.

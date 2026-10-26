@@ -90,13 +90,15 @@ SOURCES = [
     ("Rain, next 12h", (0x00, 0x88, 0xCC)),
     ("UV, next 12h", (0xFF, 0xCC, 0x00)),
     ("Body Battery, last 12h", (0x33, 0x88, 0xFF)),
+    ("Temp, next 12h", (0xFF, 0xAA, 0x00)),
 ]
 SOURCE_TEMPERATURE = 4
 SOURCE_RAIN_HOURS = 9
 SOURCE_UV_HOURS = 10
 SOURCE_BODY_BATTERY_HOURS = 11
+SOURCE_TEMP_HOURS = 12
 BLOCK_SOURCES = (SOURCE_RAIN_HOURS, SOURCE_UV_HOURS,
-                 SOURCE_BODY_BATTERY_HOURS)
+                 SOURCE_BODY_BATTERY_HOURS, SOURCE_TEMP_HOURS)
 
 # Shipping ring colours, outermost first. These mirror Palette.THEMES exactly;
 # keeping them separate from CANDIDATE_THEMES is what prevents a palette being
@@ -318,6 +320,14 @@ def band_edge(ring: int, tier: int) -> float:
     inner = RADIUS - (ring + 1) * thickness
     edge = inner + thickness if tier == HOUR_BANDS else inner + tier * step
     return edge * edge
+
+
+def temp_level_for(celsius, low, high):
+    """A Celsius reading on the wearer's scale. Mirrors
+    HourlyWeatherData.tempLevelFor: low is empty, high is full, clamped."""
+    if celsius is None:
+        return None
+    return level_for((celsius - low) * 100.0 / (high - low))
 
 
 def level_for(percent):
@@ -930,6 +940,33 @@ def main(outdir: str = "build/mockups", device: str = DEFAULT_DEVICE) -> int:
     sheet(panels, "At 09:30: UV runs clockwise into the next 12h; "
                   "Body Battery runs counter-clockwise through the last 12h"
           ).save(path)
+    written.append(path)
+
+    # 7e. Temperature ahead, on the wearer's own scale. The same Adelaide
+    #     summer day on the default 0-45C, then a mild day on that scale and
+    #     on a tighter 5-25C one: why the two ends are a setting.
+    summer = (24, 28, 32, 36, 39, 41, 42, 40, 35, 30, 27, 25)
+    mild = (11, 13, 15, 17, 18, 19, 19, 18, 16, 14, 12, 11)
+
+    def temp_blocks(readings, low, high):
+        blocks = [None] * HOURS
+        for offset, reading in enumerate(readings):
+            blocks[(anchor + offset) % HOURS] = temp_level_for(reading, low,
+                                                               high)
+        return blocks
+
+    panels = []
+    for label, readings, low, high in (("SUMMER 0-45C", summer, 0, 45),
+                                       ("MILD 0-45C", mild, 0, 45),
+                                       ("MILD 5-25C", mild, 5, 25)):
+        face = render(values, assign=(SOURCE_TEMP_HOURS, 6, 2, 3),
+                      hourly={0: temp_blocks(readings, low, high)},
+                      at_time=when)
+        panels.append((f"{label}   lum {measure(face) * 100:.2f}%",
+                       composite(face, at_time=when)))
+    path = os.path.join(outdir, "07e-temp-next-12h.png")
+    sheet(panels, "At 09:30: temperature ahead, empty at the low end and "
+                  "full at the high end the wearer sets").save(path)
     written.append(path)
 
     # 8. Past the goal — steps on ring 1, read as a second lap. Mirrors

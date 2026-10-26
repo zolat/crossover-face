@@ -34,6 +34,7 @@
             <listEntry value="3">@Strings.SourceBodyBattery</listEntry>
             <listEntry value="11">@Strings.SourceBodyBatteryHours</listEntry>
             <listEntry value="4">@Strings.SourceTemperature</listEntry>
+            <listEntry value="12">@Strings.SourceTempHours</listEntry>
             <listEntry value="5">@Strings.SourceRain</listEntry>
             <listEntry value="9">@Strings.SourceRainHours</listEntry>
             <listEntry value="10">@Strings.SourceUvHours</listEntry>
@@ -49,6 +50,7 @@
             <listEntry value="3">@Strings.SourceBodyBattery</listEntry>
             <listEntry value="11">@Strings.SourceBodyBatteryHours</listEntry>
             <listEntry value="4">@Strings.SourceTemperature</listEntry>
+            <listEntry value="12">@Strings.SourceTempHours</listEntry>
             <listEntry value="5">@Strings.SourceRain</listEntry>
             <listEntry value="9">@Strings.SourceRainHours</listEntry>
             <listEntry value="10">@Strings.SourceUvHours</listEntry>
@@ -80,5 +82,11 @@
             <listEntry value="7">@Strings.SourceSeconds</listEntry>
             <listEntry value="8">@Strings.SourceOff</listEntry>
         </settingConfig>
+    </setting>
+    <setting propertyKey="@Properties.tempAheadLow" title="@Strings.TempAheadLowTitle" prompt="@Strings.TempAheadLowPrompt">
+        <settingConfig type="numeric" min="-20" max="50" errorMessage="@Strings.TempAheadRangeError" />
+    </setting>
+    <setting propertyKey="@Properties.tempAheadHigh" title="@Strings.TempAheadHighTitle" prompt="@Strings.TempAheadHighPrompt">
+        <settingConfig type="numeric" min="-20" max="50" errorMessage="@Strings.TempAheadRangeError" />
     </setting>
 </settings>

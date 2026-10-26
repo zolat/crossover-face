@@ -27,7 +27,8 @@ const SOURCE_LABELS = [
     Rez.Strings.SourceOff,
     Rez.Strings.SourceRainHours,
     Rez.Strings.SourceUvHours,
-    Rez.Strings.SourceBodyBatteryHours
+    Rez.Strings.SourceBodyBatteryHours,
+    Rez.Strings.SourceTempHours
 ] as Array<ResourceId>;
 
 //! On-device settings, reached from the watch's own Watch Face menu.
@@ -156,8 +157,17 @@ class SettingsMenuDelegate extends WatchUi.Menu2InputDelegate {
     }
 }
 
+//! Row indices of RingMenu's two scale rows. Module consts rather than class
+//! ones so the tests can name them. RingMenuDelegate tells them from a ring by
+//! id, not by position.
+const TEMP_LOW_ROW = StatMap.RINGS;
+const TEMP_HIGH_ROW = StatMap.RINGS + 1;
+
 //! Lists the four rings, outermost first, each showing what it is currently
-//! assigned to.
+//! assigned to, then the two ends of the temperature-ahead scale.
+//!
+//! The scale rows sit *after* the rings so the rings keep their indices,
+//! which double as their item ids and as the index onShow() refreshes.
 class RingMenu extends WatchUi.Menu2 {
 
     function initialize() {
@@ -169,6 +179,10 @@ class RingMenu extends WatchUi.Menu2 {
             addItem(new WatchUi.MenuItem(
                 titles[i], SOURCE_LABELS[StatMap.rings[i]], i, null));
         }
+        addItem(new WatchUi.MenuItem(Rez.Strings.TempAheadLowTitle,
+            celsiusLabel(StatMap.tempAheadLow), :tempAheadLow, null));
+        addItem(new WatchUi.MenuItem(Rez.Strings.TempAheadHighTitle,
+            celsiusLabel(StatMap.tempAheadHigh), :tempAheadHigh, null));
     }
 
     //! See SettingsMenu.onShow() — same staleness, same fix.
@@ -179,6 +193,16 @@ class RingMenu extends WatchUi.Menu2 {
             if (item != null) {
                 item.setSubLabel(SOURCE_LABELS[StatMap.rings[i]]);
             }
+        }
+        // The normalised values, so an inverted pair entered on the phone
+        // reads back the way round it is drawn.
+        var low = getItem(TEMP_LOW_ROW);
+        if (low != null) {
+            low.setSubLabel(celsiusLabel(StatMap.tempAheadLow));
+        }
+        var high = getItem(TEMP_HIGH_ROW);
+        if (high != null) {
+            high.setSubLabel(celsiusLabel(StatMap.tempAheadHigh));
         }
     }
 }
@@ -192,7 +216,15 @@ class RingMenuDelegate extends WatchUi.Menu2InputDelegate {
 
     function onSelect(item as WatchUi.MenuItem) as Void {
         var ring = item.getId();
-        if (ring != null) {
+        // The scale rows carry Symbol ids. Tested before the ring branch,
+        // whose cast to Number would let a Symbol through to an array index.
+        if (ring == :tempAheadLow) {
+            pushTemperature(Rez.Strings.TempAheadLowTitle,
+                StatMap.PROPERTY_TEMP_AHEAD_LOW, StatMap.tempAheadLow);
+        } else if (ring == :tempAheadHigh) {
+            pushTemperature(Rez.Strings.TempAheadHighTitle,
+                StatMap.PROPERTY_TEMP_AHEAD_HIGH, StatMap.tempAheadHigh);
+        } else if (ring instanceof Number) {
             var index = ring as Number;
             WatchUi.pushView(
                 new ChoiceMenu(Rez.Strings.RingsTitle,
@@ -204,9 +236,36 @@ class RingMenuDelegate extends WatchUi.Menu2InputDelegate {
         }
     }
 
+    private function pushTemperature(title as ResourceId, property as String,
+                                     current as Number) as Void {
+        WatchUi.pushView(temperatureMenu(title, property, current),
+                         new ChoiceMenuDelegate(), WatchUi.SLIDE_LEFT);
+    }
+
     function onBack() as Void {
         WatchUi.popView(WatchUi.SLIDE_RIGHT);
     }
+}
+
+//! A whole degree as the menus show it.
+function celsiusLabel(celsius as Number) as String {
+    return celsius.format("%d") + "°C";
+}
+
+//! A picker for one end of the temperature-ahead scale: every whole degree the
+//! setting allows, coldest first, opening on the value in use so a nudge of a
+//! degree or two is a couple of presses rather than a scroll from -20.
+function temperatureMenu(title as ResourceId, property as String,
+                         current as Number) as ChoiceMenu {
+    var count = StatMap.TEMP_AHEAD_MAX_C - StatMap.TEMP_AHEAD_MIN_C + 1;
+    var labels = new [count] as Array<String>;
+    var values = new [count] as Array<Number>;
+    for (var i = 0; i < count; i++) {
+        var celsius = StatMap.TEMP_AHEAD_MIN_C + i;
+        values[i] = celsius;
+        labels[i] = celsiusLabel(celsius);
+    }
+    return new ChoiceMenu(title, property, labels, values, current);
 }
 
 //! Values 0..count-1, for contiguous settings whose every value is offered.
@@ -242,24 +301,38 @@ function offeredLabelsFor(ring as Number) as Array<ResourceId> {
 //! a picker that skips a value can no longer use its own indices, or every
 //! source after the gap would be stored as its neighbour. So the values travel
 //! beside the labels, and the position is nothing but a position.
+//!
+//! It opens focused on the value in use. That costs nothing on a three-row
+//! list and is what makes the 71-row temperature list usable.
 class ChoiceMenu extends WatchUi.Menu2 {
 
     private var _property as String;
+    private var _focus as Number = 0;
 
     function initialize(title as ResourceId, property as String,
-                        labels as Array<ResourceId>, values as Array<Number>,
-                        current as Number) {
+                        labels as Array<ResourceId> or Array<String>,
+                        values as Array<Number>, current as Number) {
         Menu2.initialize({:title => title});
         _property = property;
         for (var i = 0; i < labels.size(); i++) {
             var value = values[i];
-            var subLabel = (value == current) ? Rez.Strings.InUse : null;
+            var subLabel = null;
+            if (value == current) {
+                subLabel = Rez.Strings.InUse;
+                _focus = i;
+            }
             addItem(new WatchUi.MenuItem(labels[i], subLabel, value, null));
         }
+        setFocus(_focus);
     }
 
     function property() as String {
         return _property;
+    }
+
+    //! The row it opened on. Menu2 has no getter for its own focus.
+    function focus() as Number {
+        return _focus;
     }
 }
 

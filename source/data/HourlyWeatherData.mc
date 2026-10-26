@@ -5,8 +5,8 @@ import Toybox.Weather;
 
 //! Hourly weather fields packed into the shared twelve-block ring shape.
 //!
-//! One Weather.getHourlyForecast() supplies every hourly weather source. Rain
-//! and UV therefore cannot disagree because two calls happened to straddle a
+//! One Weather.getHourlyForecast() supplies every hourly weather source. Rain,
+//! UV and temperature therefore cannot disagree because two calls happened to straddle a
 //! sync, and assigning both outer rings still costs one watch query a minute.
 //! Each field keeps its own known bits: an entry can know rain and omit UV, or
 //! the other way round, without either one inventing an answer for the other.
@@ -30,6 +30,8 @@ module HourlyWeatherData {
     var rainKnown as Number = 0;
     var uvLevels as Array<Number> = [0, 0] as Array<Number>;
     var uvKnown as Number = 0;
+    var tempLevels as Array<Number> = [0, 0] as Array<Number>;
+    var tempKnown as Number = 0;
 
     //! Refresh once a minute, and immediately when the local hour changes.
     function refresh() as Void {
@@ -54,6 +56,11 @@ module HourlyWeatherData {
         // Start of the current local hour expressed as a UTC epoch. Subtracting
         // local minute and second also works in half- and quarter-hour zones.
         var anchorEpoch = Time.now().value() - (clock.min * 60 + clock.sec);
+        // The wearer's scale, read once per sample rather than per entry.
+        // Config.reload() forgets the sample, so a changed scale re-buckets on
+        // the next frame instead of a minute later.
+        var tempLow = StatMap.tempAheadLow;
+        var tempHigh = StatMap.tempAheadHigh;
         for (var i = 0; i < forecast.size(); i++) {
             var entry = forecast[i];
             var when = entry.forecastTime;
@@ -80,6 +87,13 @@ module HourlyWeatherData {
                     uvKnown = uvKnown | (1 << block);
                 }
             }
+
+            var celsius = entry.temperature;
+            if (celsius != null) {
+                HourBands.raise(tempLevels, block,
+                    tempLevelFor(celsius.toFloat(), tempLow, tempHigh));
+                tempKnown = tempKnown | (1 << block);
+            }
         }
     }
 
@@ -90,6 +104,9 @@ module HourlyWeatherData {
         uvLevels[0] = 0;
         uvLevels[1] = 0;
         uvKnown = 0;
+        tempLevels[0] = 0;
+        tempLevels[1] = 0;
+        tempKnown = 0;
     }
 
     //! Copy rain from the shared sample into one ring's block channel.
@@ -102,6 +119,12 @@ module HourlyWeatherData {
     function fillUv(out as Array<Number>, at as Number) as Void {
         refresh();
         copy(out, at, uvLevels, uvKnown);
+    }
+
+    //! Copy temperature from the shared sample into one ring's block channel.
+    function fillTemp(out as Array<Number>, at as Number) as Void {
+        refresh();
+        copy(out, at, tempLevels, tempKnown);
     }
 
     function copy(out as Array<Number>, at as Number,
@@ -128,6 +151,19 @@ module HourlyWeatherData {
 
     function uvLevelFor(index as Float) as Number {
         return HourBands.levelFromFraction(index / UV_MAX);
+    }
+
+    //! A Celsius reading on the wearer's own scale: `low` is an empty block,
+    //! `high` a full one, linear between. Outside the range it clamps, through
+    //! levelFromFraction: a cold hour is a known *empty* block, not an unknown
+    //! one, and a hot hour past the top is simply full.
+    //!
+    //! Pure, with the scale passed in, so the curve can be tested without
+    //! touching a property. StatMap.load() guarantees high > low.
+    function tempLevelFor(celsius as Float, low as Number,
+                          high as Number) as Number {
+        return HourBands.levelFromFraction(
+            (celsius - low) / (high - low).toFloat());
     }
 
     function forget() as Void {

@@ -1,7 +1,15 @@
 # Roadmap
 
 **Current:** Epix 2 family support is integrated with UV ahead and Body Battery history,
-including drawn dot hands and a touch-and-hold data peek.
+including drawn dot hands and a touch-and-hold data peek. Temperature ahead has joined the
+block sources since.
+
+## Out-of-band features
+
+- [x] Temp, next 12h — a block ring filled between two wearer-set °C ends (default 0–45),
+  entered on the watch under Ring data or in Garmin Connect.
+
+## Epix 2 family
 
 Out-of-band device work, not a phase of the performance roadmap that follows.
 
