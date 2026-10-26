@@ -543,7 +543,7 @@ module MatrixRenderer {
                         continue;
                     }
                     var full = HourBands.fullBandsFor(level);
-                    var window = HourBands.partialHalfFor(level);
+                    var window = HourBands.partialHalfOn(level, ring);
                     blockFull[b] = (full == 0) ? 0 : bandEdge[edgeBase + full - 1];
                     // A level landing exactly on a band edge has no partial
                     // band, and that is also what keeps the lookup in range:

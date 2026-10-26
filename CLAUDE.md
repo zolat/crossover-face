@@ -565,13 +565,17 @@ Consequences worth knowing before touching it:
 - **Level `LEVELS` is exactly the old top tier**, so the widened scale can draw nothing that
   was not already drawable and **no luminance bound needed re-measuring**.
   `eachSubBandLightsItsShareOfTheRing` asserts that equality rather than assuming it.
-- **There is no minimum window, and that was measured.** The obvious worry is that a level-1
-  window — a fifth of one band — falls between two dots and the bottom of the scale draws
-  nothing. On the offered rings it does not: the worst block at level 1 holds two dots on ring
-  0 and one on ring 1, and every level is monotonic in every block.
-  `everyNonZeroLevelLightsAtLeastOneDot` and `aLevelIsMonotonicInDotsLit` are what keep that
-  true; if either fails, a floor sized off `DotGrid.markerHalf` — which solves the same problem
-  for the temperature mark — is the fix, not a coarser scale.
+- **The outer two rings have no minimum window, and ring 2 has one — both measured.** The
+  worry is that a level-1 window, a fifth of one band, falls between two dots and the bottom
+  of the scale draws nothing. On rings 0 and 1 it does not: the worst block at level 1 holds
+  two dots and one, and every level is monotonic in every block. On ring 2 it did — eight
+  (block, level) pairs blank on 416 and 454, one on 390 — so `HourBands.WINDOW_FLOOR` gives
+  ring 2 alone a floor of 0.12 of a wedge, applied through `partialHalfOn(level, ring)`. That
+  lights every pair on all three screens while leaving levels 1 and 2 exactly as distinct as
+  they were (equal in 4 of 12 blocks either way); 0.15 merges them in all twelve. It only
+  raises levels 1, 6 and 11, and it is computed once per block per frame, not per dot.
+  `everyNonZeroLevelLightsAtLeastOneDot` and `aLevelIsMonotonicInDotsLit` hold all three
+  offered rings to it. `tools/mockup.py` mirrors the floor.
 - **A block ring costs about 2.7ms more per drawn frame** than the whole-band fill did (87ms
   against 85ms on ring 0's 436 dots, worst case, A/B'd out of one binary). The span loop is
   byte-for-byte unchanged, so no other ring moved.
@@ -610,15 +614,22 @@ dots per block against three-way's 8.3/9.0/11.0. `DotGrid.bandEdges()` therefore
 **integer** thickness `ringBounds()` uses, never `markerWidths()`'s 42.25 — the float one puts
 ring 1's top edge inside ring 1's own outermost dots.
 
-They are offered on the **outer two rings only** (`Source.BLOCKS_TOP_RING`), enforced in three
-places that must agree: `StatMap.load()` maps them to Off elsewhere, the on-device picker
-walks `Source.offeredFor(ring)`, and `settings.xml` lists them in the `ring1`/`ring2` blocks alone.
-The justification is a claim about the lattice and is asserted as one —
-`onlyTheOuterTwoRingsResolveTwelveHoursInThreeBands` measures the worst (block, sub-band) at
-8 and 6 dots on rings 0 and 1, against 4 and 2 on rings 2 and 3. The level scale sharpens that
-only on the innermost ring, where sixteen (block, level) pairs light no dot at all; **ring 2
-draws every rung**, so its exclusion still rests on the dot count and on nothing else — worth
-knowing before anyone relaxes the cut.
+They are offered on the **outer three rings** (`Source.BLOCKS_TOP_RING = 2`), enforced in three
+places that must agree: `StatMap.load()` maps them to Off on the innermost, the on-device
+picker walks `Source.offeredFor(ring)`, and `settings.xml` lists them in the `ring1`–`ring3`
+blocks. The justification is a claim about the lattice and is asserted as one —
+`blockRingsResolveTwelveHoursInThreeBands` measures the worst (block, sub-band) at 8–9, 6–7,
+3–4 and 1–2 dots on rings 0–3 across the screens, against `MIN_BAND_DOTS = 3`. Ring 2 is
+coarse — a reading there is three or four dots a sub-band — and was let in as the wearer's
+trade rather than kept out on a threshold, once its window floor (above) made every rung
+visible. The innermost ring stays out: eight (block, level) pairs light nothing there, which
+no floor fixes without merging rungs.
+
+**Three block rings sit close to the 454 watchdog with drawn hands.** On `epix2pro51mm`, hands
+on, rain/UV/temperature on rings 0–2, one load tripped *Watchdog Tripped Error* in
+`MatrixRenderer.drawAt`; every later run on a fresh simulator held, and the third block ring
+measured about +5% on a drawn frame against two. The Crossover (physical hands) never
+tripped. Treat that combination as the one to re-check whenever per-dot work grows.
 
 ### Past the goal, a lapped dot changes shape rather than colour
 

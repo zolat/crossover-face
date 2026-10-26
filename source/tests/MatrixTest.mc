@@ -4745,12 +4745,13 @@ module MatrixTest {
     // ------------------------------------------------------------------
 
     //! The worst (block, sub-band) a ring may hold and still be offered a
-    //! block source. Measured on this lattice at a 22.5-degree block: rings 0
-    //! and 1 floor at 8 and 6 dots, rings 2 and 3 at 4 and 2. Six is what
-    //! separates them, and onlyTheOuterTwoRingsResolveTwelveHoursInThreeBands
-    //! is what holds Source.BLOCKS_TOP_RING to that measurement rather than to
-    //! taste.
-    const MIN_BAND_DOTS = 6;
+    //! block source. Measured at a 22.5-degree block: rings 0 to 3 floor at
+    //! 8-9, 6, 3-4 and 2 dots across the three screens. Three is what separates
+    //! the three offered rings from the innermost, and
+    //! blockRingsResolveTwelveHoursInThreeBands is what holds
+    //! Source.BLOCKS_TOP_RING to that measurement rather than to taste. It was
+    //! six while only the outer two rings were offered.
+    const MIN_BAND_DOTS = 3;
 
     //! Twelve levels packed the way a block source packs them:
     //! [levels low, levels high, known]. A level of HourBands.UNKNOWN leaves
@@ -4823,7 +4824,7 @@ module MatrixTest {
                     continue;
                 }
                 var bands = HourBands.fullBandsFor(level);
-                var window = HourBands.partialHalfFor(level);
+                var window = HourBands.partialHalfOn(level, ring);
                 full[b] = (bands == 0) ? 0 : DotGrid.bandEdge[base + bands - 1];
                 part[b] = (window > 0.0) ? DotGrid.bandEdge[base + bands] : 0;
                 lo[b] = HourBands.BLOCK_CENTRE - window;
@@ -5788,7 +5789,7 @@ module MatrixTest {
         return true;
     }
 
-    //! Why the forecast is offered on the outer two rings only.
+    //! Why the forecast is offered on the outer three rings only.
     //!
     //! The restriction is a claim about the lattice, so it is asserted against
     //! the lattice rather than left in a comment: every block of every
@@ -5796,7 +5797,7 @@ module MatrixTest {
     //! rings below the cut do not. If the lattice ever changes, this says
     //! whether Source.BLOCKS_TOP_RING still means what it claims to.
     (:test)
-    function onlyTheOuterTwoRingsResolveTwelveHoursInThreeBands(
+    function blockRingsResolveTwelveHoursInThreeBands(
             logger as Logger) as Boolean {
         for (var ring = 0; ring < StatMap.RINGS; ring++) {
             var worst = -1;
@@ -5842,9 +5843,8 @@ module MatrixTest {
                 // ring where it bites hardest: on the innermost ring sixteen
                 // (block, level) pairs light no dot at all, so the scale would
                 // not merely be cramped down there, part of it would be
-                // invisible. Ring 2 draws every rung — its exclusion still
-                // rests on the sub-band measurement above and on nothing else,
-                // which is worth knowing before anyone relaxes the cut.
+                // invisible. Ring 2 draws every rung, which is why it could be
+                // let in once its four-dot sub-band was accepted.
                 var blind = 0;
                 for (var level = 1; level <= HourBands.LEVELS; level++) {
                     var perBlock = tablesAt(ring, level).litPerBlock(ring);
@@ -6224,10 +6224,10 @@ module MatrixTest {
         return true;
     }
 
-    //! The picker offers every block source on the outer two rings only, and
-    //! its labels and values stay in step.
+    //! The picker offers every block source on the outer three rings only,
+    //! and its labels and values stay in step.
     (:test)
-    function blockSourcesAreOnlyOfferedOnTheOuterTwoRings(logger as Logger)
+    function blockSourcesAreOnlyOfferedOnTheOuterThreeRings(logger as Logger)
             as Boolean {
         var blockSources = [Source.SOURCE_RAIN_HOURS,
                             Source.SOURCE_UV_HOURS,

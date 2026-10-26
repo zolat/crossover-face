@@ -260,6 +260,28 @@ module HourBands {
         return (FILL / 2.0) * partialFractionFor(level);
     }
 
+    //! The narrowest partial window each ring draws, in wedge units. Zero —
+    //! no floor — on the outer two, for the reasons above.
+    //!
+    //! **Ring 2 is where the floor finally earned its place.** Once block
+    //! sources were offered there, its level-1 window (0.075 of a wedge) fell
+    //! between dots in eight (block, level) pairs on the 416 and 454 lattices
+    //! and in one on the 390, so a light-drizzle hour drew exactly what a dry
+    //! one does. 0.12 lights a dot in every block at every level on all three
+    //! screens and leaves levels 1 and 2 as distinct as they already were (the
+    //! same in 4 of 12 blocks, unfloored or floored); 0.15 merges them in all
+    //! twelve. It only ever raises the windows of levels 1, 6 and 11, whose
+    //! partial band is a fifth of a band. Flat, for the reason DotGrid.ARMS is.
+    const WINDOW_FLOOR = [0.0, 0.0, 0.12, 0.0] as Array<Float>;
+
+    //! partialHalfFor() on a particular ring: floored, but still zero where
+    //! the level has no partial band, so a level on a band edge stays exact.
+    function partialHalfOn(level as Number, ring as Number) as Float {
+        var window = partialHalfFor(level);
+        var floor = WINDOW_FLOOR[ring];
+        return (window > 0.0 && window < floor) ? floor : window;
+    }
+
     //! Which hour block a position falls in.
     //!
     //! Positions run 0.0 up to but not including 1.0, so this cannot exceed

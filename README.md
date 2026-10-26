@@ -432,8 +432,8 @@ under Ring data on the watch or in Garmin Connect.
 Body Battery puts its newest value in the current hour and completed-hour averages in the
 eleven positions behind it, so reading backwards from the hand runs counter-clockwise. A
 known zero uses the ordinary unfilled tier; an hour with no sample is dimmer and cannot be
-mistaken for an actual zero. Block sources are available on the outer two rings only, where
-the lattice has enough dots to resolve them.
+mistaken for an actual zero. Block sources are available on the outer three rings, where
+the lattice has enough dots to resolve them; ring 3 is the coarsest of the three.
 
 Every other source reports a **span** — a start and an end, both 0.0–1.0 — rather than a
 single level. Levels are just spans that start at zero. That one shape is why temperature,
