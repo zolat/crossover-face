@@ -19,7 +19,7 @@ covers the working knowledge that spans files and is easy to break.
 ```sh
 make build      # debug .prg for the simulator
 make sim        # build, start the simulator if needed, sideload, stream println
-make test       # build with -t, run the 145-test suite (takes the simulator lock)
+make test       # build with -t, run the 150-test suite (takes the simulator lock)
 make test-lock  # self-test tools/sim_lock.sh
 make test-simctl # tests for tools/simctl (no simulator, no build needed)
 make package    # signed .iq for the store
@@ -161,11 +161,12 @@ transient peek. A peek removes drawn hands without changing `handBacking`, and `
 restores them so always-on never loses the time. Physical-hand builds return false and leave
 the gesture to the system.
 
-The date watermark is also a peek detail on drawn-hand watches. Hands + date + a busy ring
+The date is also a peek detail on drawn-hand watches. Hands + date + a busy ring
 crossed the 416/454 watchdog after the two branches merged; each feature alone was safe.
 `showsDate()` therefore defers the date while Epix hands are visible and reveals it when a
-peek or Hands: Off makes the field unobstructed. Crossover keeps the date normally because
-its hardware hands cost the renderer nothing.
+peek or Hands: Off makes the field unobstructed — a peek draws the outline in, as a wake
+does. Crossover keeps the date normally because its hardware hands cost the renderer
+nothing.
 
 ### Per-device resources go in one shared folder, not four
 
@@ -707,10 +708,11 @@ profiles carry no `analogHands`.
 
 Stored values are **list indices**, so `resources/properties.xml`, `resources/settings/settings.xml`,
 `resources/strings/strings.xml`, the enums in `StatMap`/`Source`, and the label arrays in
-`source/settings/SettingsMenu.mc` all have to agree. Ten properties today: `theme`,
-`handBacking`, `alwaysOnFill`, `dotRotation`, `ring1`–`ring4`, `tempAheadLow`,
-`tempAheadHigh`. `dotRotation` carries three values, not two — the third is the date
-watermark below.
+`source/settings/SettingsMenu.mc` all have to agree. Eleven properties today: `theme`,
+`handBacking`, `alwaysOnFill`, `dotRotation`, `showDate`, `ring1`–`ring4`, `tempAheadLow`,
+`tempAheadHigh`. `dotRotation` stores three values and offers two: the third, Upright +
+date, is **retired** — `StatMap.load()` reads it as Upright, and `showDate`'s default of On
+keeps that wearer's date. Never give 2 a new meaning.
 
 **The two temperature-ahead ends are the exception: they store degrees Celsius, not an
 index.** −20 to 50, empty block at `tempAheadLow`, full at `tempAheadHigh`.
@@ -817,62 +819,86 @@ cached either way and toggling the setting needs no rebuild. Do not move this in
 there is making the ring mapping conditional again. `rotationDoesNotReachTheCache` is the
 guard. Every orientation lights nine pixels, so neither setting moves the luminance.
 
-### The date is written into the grain, not on top of it
+### The date is the dots, joined
 
-`ROTATION_UPRIGHT_DATE` writes the day of the month into the field by drawing a few dozen
-dots **struck**: one of the cross's two strokes and not the other, five lit pixels instead
-of nine, in the same cell and the same colour the ring was already using. `DateGlyph` owns
-the window, the font and the list of dots; nothing else learns what a digit is.
+`showDate` (on by default) draws the day of the month as a faint **outline joining the
+numeral's own dots**, centre to centre, at `DateGlyph.LINE_PERCENT` (65) of the colour of
+the dot each line leaves from. The dots themselves are ordinary crosses. `DateGlyph` owns
+the window, the font, the list of dots, the outline and its reveal order; nothing else
+learns what a digit is.
 
-**It cannot cost luminance, and that is arithmetic rather than a measurement.** A struck dot
-lights a strict subset of the pixels it lit before, so a frame's total can only fall — which
-is why this is the one addition to the face that needed no budget re-measured.
-`strikingADotOnlyRemovesLight` asserts the premise, since the claim dies the moment a strike
-becomes anything but one stroke of a cross the field already draws.
+**Awake only.** Always-on draws no date, and waking draws it in: `CrossoverView` steps the
+outline in over ~0.8s on a high-power timer (`REVEAL_STEPS` ticks of `REVEAL_TICK_MS`),
+growing round each loop of the numeral from its top-left dot. Show and an Epix peek start
+the same reveal. A watch face gets timers only while awake, which is the only time there
+is an outline to draw.
 
-Four things are load-bearing and none is obvious:
+Everything here was settled on the wrist, after the mockups had been wrong once. Don't
+re-litigate any of it from a render:
 
-- **Rotation was the idea and it does not read.** Turning a dot 45 degrees is free too —
-  measured, the luminance does not move in any digit — but at a five-pixel dot a `+` and a
-  `×` are too close to tell apart, and a numeral made of them is a sheen. This is the same
-  law that made the temperature mark a solid block: on a field of thin crosses, only a
-  change of *density* reads. Don't re-litigate it without rendering it; `tools/mockup.py`
-  does both and ROADMAP has the table.
-- **The font is double-size because a one-dot stroke is not a stroke.** `SCALE = 2`, so a
-  3x5 digit is 6x10 lattice cells and its strokes are 20px wide. The window is 14x10 cells
-  at `(ORIGIN_COL, ORIGIN_ROW) = (12, 23)` — horizontally centred, lower half, the only
-  placement of that size clearing the hand pivot. All 140 cells hold a dot, and
-  `everyWatermarkCellHoldsADot` fails if a nudge costs the numeral a hole.
-- **The struck dots are a *sorted list of indices*, walked with a cursor.** That is one
-  integer comparison per dot against a call and a division, and it is the same trade
-  `StatMap.litBetween()` gets. Two things keep it honest: the lattice scan that builds the
-  list runs in index order, so it comes out sorted with no sort and no reverse map; and the
-  cursor is re-seeded per ring from `firstFor`, because a ring the gate left clean is never
-  walked. **The cursor advances inside the draw branch that consumed it**, which is what
-  leaves an ordinary dot with a single `else if` — and that only works because the delta
-  redraw is told never to skip a struck dot (`i != glyphNext` in its condition). Move the
-  advance back to the top of the loop and you pay a test and a local on all ~1100 dots.
-- **The day is in the *field* print, so midnight clears the screen.** A dot struck yesterday
-  and not today has four pixels that a repaint cannot remove: the repaint draws the cross's
-  other stroke, which is exactly those four. The slot holds 0.0 whenever the watermark is
-  off, so a face without it never re-prints on a date change — and reading the clock is
-  confined to the mode that uses it. `DateGlyph.today()` keys on the epoch second divided by
-  a day, so `Gregorian.info` is called once a day rather than on every frame including the
-  skipped ones.
+- **The struck watermark did not read.** It drew one stroke of each numeral dot instead of
+  two, 5 lit pixels against 9. The mockups said it read; on the watch it was invisible,
+  because the window crosses rings whose colours and tiers already change under it, and a
+  45% density step is lost in that. Rotating the numeral's dots was tried before that and
+  was a sheen even in the mockups.
+- **The line runs through the dot centres, never along cell edges.** An outline five
+  pixels off every dot fights the grid. One through the centres *is* the grid, and on the
+  Follow-the-rings field it still reads, though its joins float between the diagonal
+  crosses rather than meeting arm tips.
+- **65%, chosen on the watch from 50, 65 and 80 shown a minute apart.** 100 was too
+  obvious; 40 vanished outright, because the AMOLED crushes dark levels a monitor shows.
+- **A line fills only the gap between two arms** (`GAP_FROM`, `GAP_LENGTH`), drawn with
+  `fillRectangle` because its extent is unambiguous where `drawLine`'s end pixel is not.
+  At 65% a line painted over an arm repaints it dimmer, and the numeral's dots fade where
+  they meet the outline. `theOutlineFillsOnlyTheGapsBetweenArms` holds it.
+
+Five things are load-bearing and none is obvious:
+
+- **Always-on draws no outline because a line does not escape itself under the drift.**
+  `Drift` moves the field one `DOT` per phase, which takes a cross clean off its own pixels;
+  a ten-pixel line shifted five pixels along itself overlaps. Measured: 1,872 outline pixels
+  lit through two of the four phases, against one for every dot pixel. It also looks better
+  — the field rests plain and waking connects the dots.
+- **What clears the outline at sleep is the field print, not a line anyone wrote.** The
+  outline lives in the persistent frame buffer until something clears it. The day is in
+  the field print only while the frame carries the date, so falling asleep drops the slot
+  to 0, the print moves, and the always-on frame is drawn from black.
+  `fallingAsleepClearsTheOutline` asserts both halves; let that transition through as a
+  partial redraw and the outline stays lit through always-on at twice any dot's duty.
+- **The trace never runs in `onUpdate`.** `DateGlyph.trace()` is cheap on its own and
+  still tripped the watchdog in the simulator when it ran inside the same callback as the
+  full redraw a new day always is. `startReveal()` calls `ensureTraced()` from the wake,
+  show and peek callbacks, each with its own budget. The honest cost: **a date that rolls
+  over while the face is awake draws its dots but no outline until the next wake.**
+- **The renderer records each numeral dot's colour as it draws it** (`DateGlyph.colours`),
+  and the outline is inked in those colours after the renderer, into the same buffer. That
+  colour is everything the dot loop decided — tier, ramp, block level, hand — which nothing
+  outside the loop could cheaply say again. The cursor that finds the numeral's dots is a
+  *sorted list of indices* re-seeded per ring from `firstFor`, and **it advances inside the
+  branch that records**, which only works because the delta redraw never skips a numeral
+  dot (`i != glyphNext` in its condition). `aDeltaNeverSkipsANumeralDot` is the guard.
+  Upright, that is the comparison the struck watermark already cost every dot; on the turned
+  field it is new — ROADMAP has the A/B.
+- **The day is in the *field* print, so midnight clears the screen**, which is the only
+  thing that removes yesterday's outline from the gaps a repaint never touches.
+  `DateGlyph.today()` keys on the epoch second divided by a day, so `Gregorian.info` is
+  called once a day rather than on every frame including the skipped ones.
+
+At `SCALE = 2` every stroke of the font is two dots wide, so every numeral dot is on the
+edge: the outline is one or more closed loops passing through each numeral dot exactly once,
+as many segments as dots. `theOutlineIsClosedThroughEveryNumeralDot` asserts that for all 31
+days, and `theDateMatchesTheMockup` pins the counts to `tools/mockup.py`, which traces the
+same edges with the same rule. The window is 14x10 cells at `(ORIGIN_COL, ORIGIN_ROW) = (12,
+23)` — horizontally centred, lower half, the only placement of that size clearing the hand
+pivot; `everyWatermarkCellHoldsADot` fails if a nudge costs the numeral a hole.
 
 `DotGrid.generation` exists for this and nothing else. `build()` reuses its arrays when the
 lattice has not changed size, which is every rebuild there is, so nothing about the arrays
 says they have been rewritten — and a cache of *indices* into them cannot notice. The
 counter is what `DateGlyph` reads; `aRebuiltLatticeRefreshesTheWatermark` holds it there.
 
-The watermark stays on in always-on and in held-back always-on, deliberately: it is the
-date, and it can only take light off the mode measured against the burn-in budget.
-
-It is a third value of `dotRotation` rather than a property of its own, which keeps the
-ring and display settings at eight — but note that the choice was made while the marking was still a
-rotation, and a struck dot does not actually need the upright field. A separate on/off
-property would additionally allow "follow the rings + date"; `tools/mockup.py`'s
-`13b-date-true-size.png` renders that combination.
+The light it costs is awake-only, so it is not measured against the always-on budget:
+about +0.15 points on the default field, on both rotations.
 
 ### The 10% luminance budget
 

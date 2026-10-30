@@ -8,6 +8,8 @@ block sources since.
 
 - [x] Temp, next 12h — a block ring filled between two wearer-set °C ends (default 0–45),
   entered on the watch under Ring data or in Garmin Connect.
+- [x] Date — its own setting, on by default: the numeral's dots joined by a faint outline,
+  drawn in on every wake and absent in always-on. Replaces the struck watermark.
 
 ## Epix 2 family
 
@@ -109,6 +111,32 @@ complete and this does not extend it.
 Plans: `~/.claude/plans/i-want-to-plan-starry-graham.md`,
 `~/.claude/plans/encapsulated-finding-owl.md`,
 `~/.claude/plans/could-we-subtely-wite-curried-forest.md`
+
+## The date outline, and what the wrist settled
+
+The struck watermark below shipped and was **invisible on the wrist**: the mockups said it
+read, and on the watch a 5-against-9-pixel density step was lost in a window whose rings
+change colour and tier under it. The lab that replaced it (`date-dot-lab` branch,
+`tools/date_lab.py`, `fill_lab.py`, `contour_lab.py`, `reveal_lab.py`) tried, in order:
+
+| idea | verdict |
+|---|---|
+| aligned dashes, long dashes, pinpricks, dimming, nudges, threads | read in mockups; subtle ones still faint |
+| solid fill in the ring colour | reads instantly; +4.8 points, over budget in always-on |
+| outline along cell edges | fights the grid |
+| **outline through the dot centres, crosses kept** | **chosen** |
+| line at 100% / 40% / 50 · 65 · 80 a minute apart on the watch | too obvious / vanished / **65** |
+| pinprick reveal on BACK | BACK reaches the face through no callback at all — counters never moved |
+
+Settled on the watch, not the monitor: always-on shows no date (a line overlaps itself under
+the drift: 1,872 pixels at 2-of-4 duty against 1-of-4 for every dot), every wake draws the
+outline in, and the lines fill only the gaps between arms so the crosses stay whole. The
+date became its own setting so it can ride either rotation; on the turned field its joins
+float between diagonal crosses, which the wearer accepted over forcing the field upright.
+
+The trace tripped the watchdog in the simulator when it ran inside onUpdate on top of a new
+day's full redraw, so it runs from the wake, show and peek callbacks instead. The frame A/B
+for the one comparison per dot the turned field now pays follows below once measured.
 
 ## The date watermark, and what the mockups settled
 

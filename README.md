@@ -562,10 +562,15 @@ touches the cache, and `rotationDoesNotReachTheCache` pins that. Upright is if a
 cheaper frame, because the orientation lookup hoists out of the dot loop. Every orientation
 lights the same nine pixels, so the luminance is identical: the mockup measures both at 4.82%.
 
-`Upright + date` writes the day into the field with one-stroke dots. On Epix, the date appears
-while the drawn hands are hidden—either with Hands set to Off or during a touch-and-hold peek.
-The time view keeps the hands and defers the date so the largest merged render remains inside
-its watchdog.
+### Date
+
+On by default, on either rotation. The day of the month is drawn by joining the numeral's own
+dots with faint lines, and only while the watch is awake: always-on shows the plain field, and
+each wake draws the outline in. On Epix, the date appears while the drawn hands are
+hidden—either with Hands set to Off or during a touch-and-hold peek, which draws it in the same
+way. The time view keeps the hands and defers the date so the largest merged render remains
+inside its watchdog. Watches that had `Upright + date` selected read it as `Upright` with the
+date on.
 
 ### Hands
 
