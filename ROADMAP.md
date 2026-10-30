@@ -135,8 +135,33 @@ date became its own setting so it can ride either rotation; on the turned field 
 float between diagonal crosses, which the wearer accepted over forcing the field upright.
 
 The trace tripped the watchdog in the simulator when it ran inside onUpdate on top of a new
-day's full redraw, so it runs from the wake, show and peek callbacks instead. The frame A/B
-for the one comparison per dot the turned field now pays follows below once measured.
+day's full redraw, so it runs from the wake, show and peek callbacks instead.
+
+**The frame A/B**, Crossover, Follow the rings, medians over ~70 frames with the first three
+dropped. Each leg was its own binary with its settings baked into `properties.xml`, on its
+own fresh simulator instance, run back to back. Running averages were useless here: every
+leg's first frame fills the frame buffer at 1–5s in the simulator, and on the defaults row it
+is nearly the only drawn frame there is.
+
+    row (frame kind)            main         branch, date off   branch, date on
+    defaults (skipped)          15ms / 23    15ms / 23          13ms / 21
+    seconds + temp (drawn)      47ms / 61    43ms / 56          55ms / 83
+    454 Epix, hands off, busy                                   28ms / 32, no trip
+
+    first cut, inking every segment on every drawn frame:       186ms / 227
+
+The new comparison per dot on the turned field does not show. The date's own cost on a
+drawn frame was the outline: ~90 native `fillRectangle` calls at ~0.4ms each in this
+simulator, 37ms a frame, re-inked whether anything under it had moved or not. Only a clear
+touches the gaps the outline lives in, so each segment now remembers the colour it stands in
+and only a changed dot's segments, or a clear, re-ink it — 0–2ms a frame, and
+`theOutlineReinksOnlyWhatChanged` holds it. What is left, ~10ms median and a heavier tail, is
+the periodic clear that re-inks everything.
+
+Two harness facts the run cost, worth keeping: a fresh simulator instance takes its settings
+from `properties.xml` on the first push, so a settings write before it is lost; and a second
+push of an identical `.prg` into an instance never registers as landed, so a sweep needs one
+instance per leg.
 
 ## The date watermark, and what the mockups settled
 
