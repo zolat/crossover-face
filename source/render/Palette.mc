@@ -143,10 +143,10 @@ module Palette {
     //! Tinted per ring rather than toward one fixed hue, so the mark still
     //! belongs to its band if temperature is assigned to a different ring.
     //!
-    //! There is no always-on tier because there is no always-on mark: this is
-    //! the most luminous thing the face can draw, and always-on is the mode
-    //! measured against the burn-in budget. CrossoverView holds the mark back
-    //! there the same way it holds back the hand backing.
+    //! There is no always-on tier, though the mark draws in always-on: LIFT is
+    //! 1.0, so the band it sits on is the same in both modes and so is the
+    //! mark. Only the held-back mode drops it — see
+    //! CrossoverView.fillMarksFor().
     //! Why tint further rather than dim: the obvious way to take brightness
     //! out of the mark is to scale it down, and that does not work here. The
     //! waterline dot on an over-goal ring lands on the over tier and has to
@@ -236,8 +236,11 @@ module Palette {
     //! ring, not per slot: the renderer swaps it into the ring's filled slot
     //! for the frame, so the dot loop still reads exactly two colours.
     //!
-    //! Awake only, like markerOf and for the same reason, so there is no
-    //! always-on tier to keep in step.
+    //! Awake only — over-ness is awake-only at its source, so no always-on
+    //! frame reads this table and there is no second tier to keep in step.
+    //! markerOf, by contrast, draws in both modes from one table, the way
+    //! dimOf does: LIFT is 1.0, so the band under the mark is identical in
+    //! both and a mark that differed would shift on a wrist raise.
     var overOf as Array<Number> = [] as Array<Number>;
 
     //! The unknown-hour tier on each ring. One entry per ring, not per slot —

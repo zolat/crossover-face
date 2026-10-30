@@ -2691,11 +2691,19 @@ module MatrixTest {
         return out;
     }
 
-    //! Always-on never marks. White is the most luminous thing the face can
-    //! draw and always-on is the mode measured against the burn-in budget, so
-    //! the mark is awake-only the way the hand backing already is.
+    //! The mark is held back with the fills and by nothing else.
+    //!
+    //! It used to be awake only, the way the hand backing still is on the
+    //! Crossover. Driven through CrossoverView.fillMarksFor() rather than
+    //! argued about, because the way this regresses is somebody putting the
+    //! power mode back into it — and that would look like nothing going wrong
+    //! at all: the face would just stop marking whenever the wrist was down.
+    //!
+    //! Waterlines rather than a temperature, so the test needs no weather: a
+    //! ring past its goal marks the end of its lap, read off its span.
     (:test)
-    function alwaysOnCarriesNoMark(logger as Logger) as Boolean {
+    function theMarkIsHeldBackWithTheFillsAndNothingElse(logger as Logger)
+            as Boolean {
         var none = StatMap.noMarkers();
         Test.assertEqualMessage(none.size(), StatMap.RINGS,
             "every ring needs an entry, or the renderer reads past the end");
@@ -2715,6 +2723,61 @@ module MatrixTest {
             Test.assertEqualMessage(Source.marker(kind), Source.NO_MARKER,
                 "source " + kind + " marks a position it should not");
         }
+
+        var view = new CrossoverView();
+        var spans = everySpan(0.0, 0.34);
+        var overs = [true, true, true, true] as Array<Boolean>;
+        var shown = new [StatMap.RINGS] as Array<Float>;
+        var withheld = new [StatMap.RINGS] as Array<Float>;
+        view.fillMarksFor(false, shown, spans, overs);
+        view.fillMarksFor(true, withheld, spans, overs);
+        for (var i = 0; i < StatMap.RINGS; i++) {
+            Test.assertEqualMessage(shown[i], 0.34,
+                "ring " + i + " must mark whenever the fills are drawn, " +
+                "whichever power mode is drawing them");
+            Test.assertEqualMessage(withheld[i], Source.NO_MARKER,
+                "ring " + i + " marks something with the fills held back");
+        }
+        return true;
+    }
+
+    //! The mark draws in always-on, so it is priced there.
+    //!
+    //! Always-on is the mode Garmin enforces the budget in, and the mark is
+    //! the one thing on the field that lights DOT squared pixels rather than
+    //! 2 * DOT - 1. The worst frame that can hold one: every ring full, every
+    //! ring marked — four rings on temperature is a setting anyone can choose
+    //! — with the brightest mark of the theme replacing the dimmest band.
+    (:test)
+    function theAlwaysOnMarkFitsTheBudget(logger as Logger) as Boolean {
+        var full = everySpan(0.0, 1.0);
+        var area = Math.PI * DotGrid.RADIUS * DotGrid.RADIUS;
+        for (var themeIndex = 0;
+             themeIndex < StatMap.THEME_IDS.size(); themeIndex++) {
+            var theme = StatMap.THEME_IDS[themeIndex];
+            Properties.setValue(StatMap.PROPERTY_THEME, theme);
+            Config.reload();
+
+            var dimmest = 1.0;
+            var brightestMark = 0.0;
+            for (var ring = 0; ring < StatMap.RINGS; ring++) {
+                var band = relativeLuminance(Palette.alwaysOn[ring * 2 + 1]);
+                if (band < dimmest) { dimmest = band; }
+                var mark = relativeLuminance(Palette.markerOf[ring]);
+                if (mark > brightestMark) { brightestMark = mark; }
+            }
+            var step = ((brightestMark * DotGrid.DOT * DotGrid.DOT) -
+                        (dimmest * LIT_PIXELS_PER_DOT)) *
+                       StatMap.RINGS / area;
+            var worst = frameLuminance(full, Palette.alwaysOn);
+            logger.debug("theme " + theme + " always-on " + worst +
+                         " plus at most " + step + " of marks");
+            Test.assertMessage(worst + step < BUDGET,
+                "theme " + theme + " exceeds the burn-in budget once its " +
+                "rings are marked");
+        }
+        Properties.setValue(StatMap.PROPERTY_THEME, StatMap.THEME_TERRAIN);
+        Config.reload();
         return true;
     }
 

@@ -603,7 +603,7 @@ def render(spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
     draw = ImageDraw.Draw(img)
     # Which dot each ring marks, worked out once rather than per dot.
     mark_dots = {}
-    if marks is not None and not always_on:
+    if marks is not None and not held_back:
         for r in range(RINGS):
             at = marked_dot(r, marks[r])
             if at is not None:
@@ -628,9 +628,10 @@ def render(spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
                 colour = hands[hand]
             else:
                 ring, position = ring_map(dx, dy)
-                # Awake only, and it outranks the fill: the mark has to be
-                # legible whether or not now falls inside today's range.
-                if not always_on and mark_dots.get(ring) == (dx, dy):
+                # Held back with the fills and in no other mode, and it
+                # outranks the fill: the mark has to be legible whether or not
+                # now falls inside today's range.
+                if mark_dots.get(ring) == (dx, dy):
                     colour = marker_colour(ring)
                     marked_here = True
                 else:
@@ -908,8 +909,13 @@ def main(outdir: str = "build/mockups", device: str = DEFAULT_DEVICE) -> int:
     NO_MARK = -1.0
     weather_marks = [17 / 60, NO_MARK, NO_MARK, NO_MARK]   # 17C right now
     face = render(weather_spans, assign=weather_assign, marks=weather_marks)
+    # The mark draws asleep too; only the held-back mode drops it.
+    asleep = render(weather_spans, assign=weather_assign, marks=weather_marks,
+                    always_on=True)
     path = os.path.join(outdir, "07-weather-assignment.png")
-    sheet([(f"WEATHER   lum {measure(face) * 100:.2f}%", composite(face))],
+    sheet([(f"WEATHER   lum {measure(face) * 100:.2f}%", composite(face)),
+           (f"ALWAYS-ON   lum {measure(asleep) * 100:.2f}%",
+            composite(asleep))],
           "Ring 1 = temperature 11-22C on a 0-60 scale, "
           "white mark = 17C now").save(path)
     written.append(path)

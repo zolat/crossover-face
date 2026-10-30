@@ -475,7 +475,7 @@ Three edges are deliberate:
   third, because carrying on round would report "only just started" at the moment of doing
   twice the goal — the ring would run backwards as the day went on. A lap that reached its end
   carries no dot: its waterline is the ring's own edge, so there is nothing left to point at.
-- **It is awake only**, like the mark and the hand backing. Asleep a beaten goal reads as a
+- **It is awake only**, like the hand backing. Asleep a beaten goal reads as a
   plain full ring, which is true — it just stops saying by how much. Always-on is the mode
   measured against the burn-in budget, and every ring over goal costs 6.9% of screen luminance
   against 6.0% for every ring merely full.
@@ -515,9 +515,17 @@ conditions the low and high come from. The mark outranks the fill, so it stays l
 now sits *outside* today's range — an overnight low or a stale forecast puts it there
 routinely, and drawing it where it actually falls is the honest answer.
 
-It is **awake only**, for the same reason the hand backing is: white is the most luminous
-thing the face can draw, always-on is the mode measured against the burn-in budget, and it is
-not the mode anyone is reading closely. It returns on a wrist raise.
+It draws **in always-on too**, and goes only when the fills are held back. It used to be
+awake only, alongside the hand backing, on the reasoning that a solid dot is the most
+luminous thing per dot the face can draw. Priced rather than assumed, that does not hold: the
+mark is one dot per ring, so even four rings on temperature move the always-on field by well
+under a tenth of a point of screen against about four points of headroom, and the drift
+carries it round the lattice like every other lit dot. What it buys is the reading — without
+it a day of 11→22°C is the same picture at dawn and at noon, in the mode the face spends
+nearly all its time in. `theAlwaysOnMarkFitsTheBudget` measures that on every theme.
+
+The waterline dot on an over-goal ring is **still awake only**, and needs no rule of its own:
+over-ness is awake-only at its source, so always-on never reports a lap to mark.
 
 **It is one dot, not a row of them.** A row was tried first and does not work: drawn out of
 crosses it reads as a bumpy dotted band rather than a line, and the dots inside the mark's

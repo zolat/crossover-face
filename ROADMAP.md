@@ -12,6 +12,8 @@ block sources since.
   drawn in on every wake and absent in always-on. Replaces the struck watermark.
   - [x] Date outline — the line brightness as a setting: the 50 / 65 / 80% compared on the
     watch, 65 by default.
+- [x] Always-on temperature mark — the current-temperature dot now draws asleep too, held
+  back only with the fills.
 
 ## Epix 2 family
 

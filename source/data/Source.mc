@@ -225,9 +225,10 @@ module Source {
     //! "gone past it". No dot in the render loop learns any of this.
     //!
     //! Asleep it is an ordinary capped level. Over-ness is awake-only, for the
-    //! reason the mark and the hand backing are: it costs luminance for a
-    //! detail nobody is reading, in the mode measured against the burn-in
-    //! budget. A ring that met its goal still reads as full there, which is
+    //! reason the hand backing is: it costs luminance for a detail nobody is
+    //! reading, in the mode measured against the burn-in budget — a whole
+    //! ring's worth, where the temperature mark that does draw asleep costs a
+    //! single dot. A ring that met its goal still reads as full there, which is
     //! true — it just stops saying by how much.
     function goal(value as Float, awake as Boolean) as Array<Float> {
         if (!isOver(value, awake)) {

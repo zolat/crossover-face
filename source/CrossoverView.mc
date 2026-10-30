@@ -145,24 +145,18 @@ class CrossoverView extends WatchUi.WatchFace {
         } else {
             StatMap.fillOvers(overs, !lowPower);
         }
-        // Awake-only, for the same reason the hand backing is: the mark is a
-        // dozen white dots, which is the most expensive thing per dot the face
-        // can draw, in the mode that is measured against the burn-in budget and
-        // the mode nobody is reading closely. It comes back on a wrist raise.
+        // The power mode does not reach the mark; only holding the fills back
+        // does. See fillMarksFor().
         var markers = _markers;
-        if (lowPower) {
-            StatMap.fillNoMarkers(markers);
-        } else {
-            StatMap.fillMarkers(markers, spans, overs);
-        }
+        fillMarksFor(hideFills, markers, spans, overs);
         // The block channel is handed to both the print and the
         // renderer. The renderer must never read the clock for itself: an hour
         // rolling over between the two would leave the gate certain a ring had
         // not moved while the renderer drew a different picture, and the ring
         // would stay wrong until the periodic repair.
         //
-        // Held back like the spans rather than like the marks, because it is
-        // the ring's data rather than an annotation on it.
+        // Held back with the spans and the marks: all three are the ring's
+        // data, and that mode is the one that carries none.
         // Backing is awake-only where the hands are real: in always-on it would
         // cost luminance for a detail nobody is looking at, and the brass keeps
         // telling the time whether the dots behind it are lit or not.
@@ -402,6 +396,35 @@ class CrossoverView extends WatchUi.WatchFace {
 
     function isPeeking() as Boolean {
         return _peeking;
+    }
+
+    //! Which position each ring marks this frame, into `out`.
+    //!
+    //! **It takes no power mode, and that is the decision.** The mark used to
+    //! be awake only, alongside the hand backing, on the reasoning that a solid
+    //! dot is the most luminous thing per dot the face can draw. Priced, that
+    //! does not hold: it is one dot per ring, so even four rings on temperature
+    //! move the always-on field by well under a tenth of a point against about
+    //! four of headroom, and the drift carries it a whole DOT per phase like
+    //! every other lit dot. `theAlwaysOnMarkFitsTheBudget` measures it on every
+    //! theme. What it buys is the reading: without it a day of 11 to 22 is the
+    //! same picture at dawn and at noon, in the mode the face spends nearly all
+    //! of its time in.
+    //!
+    //! The waterline on an over-goal ring stays awake only with no word here:
+    //! over-ness is awake-only at its source, so always-on hands in overs that
+    //! are all false and the temperature is the only thing left to mark.
+    //!
+    //! Held back with the fills, because the mark is the ring's data and that
+    //! mode exists to carry none.
+    function fillMarksFor(hideFills as Boolean, out as Array<Float>,
+                          spans as Array<Array<Float> >,
+                          overs as Array<Boolean>) as Void {
+        if (hideFills) {
+            StatMap.fillNoMarkers(out);
+        } else {
+            StatMap.fillMarkers(out, spans, overs);
+        }
     }
 
     //! Whether this frame carries the date.
