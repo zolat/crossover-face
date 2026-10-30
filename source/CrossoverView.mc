@@ -465,6 +465,18 @@ class CrossoverView extends WatchUi.WatchFace {
         }
         DateGlyph.ensure(DateGlyph.today());
         DateGlyph.ensureTraced();
+        // **A watch face may only use a timer while it is awake**, and the
+        // watch calls onShow in low power too — returning from a glance or a
+        // notification after the screen has dimmed. Starting one there is not
+        // an exception the face can catch: the watch logged "Symbol 'start'
+        // not available to 'Watch Face'" and killed the face, three times in a
+        // morning. The simulator never shows a face in low power, so nothing
+        // short of the watch's own CIQ_LOG caught it. Asleep, the outline is
+        // traced and left for the wake to draw in; always-on draws none.
+        if (!canAnimate()) {
+            stopReveal();
+            return;
+        }
         _revealStep = 0;
         var timer = _revealTimer;
         if (timer == null) {
@@ -473,6 +485,12 @@ class CrossoverView extends WatchUi.WatchFace {
         }
         timer.stop();
         timer.start(method(:onRevealTick), REVEAL_TICK_MS, true);
+    }
+
+    //! Awake by both accounts: no sleep since the last wake, and a display in
+    //! high power. Either alone has been wrong on a lifecycle edge before.
+    function canAnimate() as Boolean {
+        return !_asleep && displayMode() == System.DISPLAY_MODE_HIGH_POWER;
     }
 
     //! Stop the reveal where it is and let the outline rest fully drawn.

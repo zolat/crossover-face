@@ -2074,6 +2074,28 @@ module MatrixTest {
         return true;
     }
 
+    //! A face shown while asleep never starts the reveal's timer.
+    //!
+    //! Watch faces get timers only in high power, and the watch does call
+    //! onShow in low power. Starting one there is fatal and uncatchable — it
+    //! crashed the face on the wrist three times in a morning, from onShow —
+    //! and the simulator never shows a face asleep, so this is the only guard
+    //! short of the watch's own log.
+    (:test)
+    function anAsleepFaceStartsNoTimer(logger as Logger) as Boolean {
+        var view = new CrossoverView();
+        var saved = StatMap.date;
+        StatMap.date = StatMap.DATE_ON;
+        view.onEnterSleep();
+        Test.assertMessage(!view.canAnimate(),
+            "a face that has gone to sleep must not count as awake");
+        view.onShow();
+        Test.assertEqualMessage(view.revealStep(), view.REVEAL_STEPS,
+            "onShow while asleep must leave the reveal at rest, not start it");
+        StatMap.date = saved;
+        return true;
+    }
+
     //! The two implementations of the date agree.
     //!
     //! tools/mockup.py mirrors DateGlyph by hand, the way it mirrors the

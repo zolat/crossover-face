@@ -171,6 +171,24 @@ class Kalam:
         return self._call("MakeDirectory", {
             "storageId": int(storage_id), "fullPath": full_path})
 
+    def download(self, storage_id: int, sources: list[str], destination: str):
+        """Copy files off the watch into a local folder.
+
+        The same contract as UploadFiles with the direction reversed: sources
+        are watch paths, destination is a local directory. Transcribed from
+        the DownloadFiles signature in OpenMTP's bindings; progress is ignored.
+        """
+        return self._call(
+            "DownloadFiles",
+            {
+                "storageId": int(storage_id),
+                "sources": sources,
+                "destination": destination,
+                "preprocessFiles": True,
+            },
+            extra=(lambda raw: None, lambda raw: None),
+        )
+
     def upload(self, storage_id: int, sources: list[str], destination: str,
                on_progress=None):
         def progress(raw):
@@ -276,6 +294,20 @@ def cmd_push(kalam: Kalam, source: str, dest: str, storage: int | None) -> int:
     return 0
 
 
+def cmd_pull(kalam: Kalam, source: str, dest: str, storage: int | None) -> int:
+    dest = os.path.abspath(dest)
+    os.makedirs(dest, exist_ok=True)
+    sid = pick_storage(kalam, storage)
+    kalam.download(sid, [source], dest)
+    landed = os.path.join(dest, os.path.basename(source))
+    if not os.path.exists(landed):
+        print(f"download reported success but {landed} is not there",
+              file=sys.stderr)
+        return 1
+    print(f"pulled {source} -> {landed} ({os.path.getsize(landed):,} bytes)")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Push a file to a Garmin watch over MTP.")
@@ -286,6 +318,10 @@ def main(argv: list[str] | None = None) -> int:
                         help="print device info and storages, then exit")
     parser.add_argument("--ls", metavar="PATH",
                         help="list a folder on the watch, then exit")
+    parser.add_argument("--pull", metavar="PATH",
+                        help="copy a file off the watch into --to, then exit")
+    parser.add_argument("--to", default=".",
+                        help="local folder for --pull (default: here)")
     parser.add_argument("--storage", type=int,
                         help="storage id (default: the first reported)")
     parser.add_argument("--timeout", type=float, default=180.0,
@@ -294,7 +330,7 @@ def main(argv: list[str] | None = None) -> int:
                         help="how callbacks are passed (see Kalam._as_arg)")
     args = parser.parse_args(argv)
 
-    if not (args.info or args.ls or args.file):
+    if not (args.info or args.ls or args.pull or args.file):
         parser.print_help()
         return 2
 
@@ -304,6 +340,8 @@ def main(argv: list[str] | None = None) -> int:
                 return cmd_info(kalam)
             if args.ls:
                 return cmd_ls(kalam, args.ls, args.storage)
+            if args.pull:
+                return cmd_pull(kalam, args.pull, args.to, args.storage)
             return cmd_push(kalam, args.file, args.dest, args.storage)
     except KalamError as err:
         print(f"\n{err}", file=sys.stderr)
