@@ -12,6 +12,6 @@
     <string id="BackingOff">Off</string>
     <string id="BackingWhite">White and grey</string>
     <string id="BackingDark">Dark</string>
-    <string id="RotationPrompt">Whether each cross follows its ring; the date appears while hands are hidden</string>
-    <string id="RotationUprightDate">Upright + date on peek</string>
+    <string id="DatePrompt">The day of the month, drawn in by joining the dots while the hands are hidden; touch and hold to hide them</string>
+    <string id="DateOn">On while hands are hidden</string>
 </strings>

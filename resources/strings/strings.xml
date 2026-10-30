@@ -18,10 +18,13 @@
     <string id="AlwaysOnFillShown">Shown</string>
     <string id="AlwaysOnFillHidden">Colour only</string>
     <string id="RotationTitle">Dot rotation</string>
-    <string id="RotationPrompt">Whether each cross turns to follow the ring it sits on, and whether the day is written into the field</string>
+    <string id="RotationPrompt">Whether each cross turns to follow the ring it sits on</string>
     <string id="RotationRadial">Follow the rings</string>
     <string id="RotationUpright">Upright</string>
-    <string id="RotationUprightDate">Upright + date</string>
+    <string id="DateTitle">Date</string>
+    <string id="DatePrompt">The day of the month, drawn in by joining the dots when the watch wakes; always-on shows the plain field</string>
+    <string id="DateOff">Off</string>
+    <string id="DateOn">On</string>
     <string id="BackingOff">Off</string>
     <string id="BackingWhite">White</string>
     <string id="BackingDark">Dark</string>

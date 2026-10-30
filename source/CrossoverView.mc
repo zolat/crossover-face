@@ -1,6 +1,7 @@
 import Toybox.Graphics;
 import Toybox.Lang;
 import Toybox.System;
+import Toybox.Timer;
 import Toybox.WatchUi;
 
 //! The watch face view. Its only job is choosing the palette for the current
@@ -13,6 +14,19 @@ class CrossoverView extends WatchUi.WatchFace {
     //! True while a drawn-hands watch is showing its unobstructed data field.
     //! Transient by design: sleep restores the time without touching settings.
     private var _peeking as Boolean = false;
+
+    //! The wake reveal: the date's outline grows in over REVEAL_STEPS ticks of
+    //! a high-power timer, about 0.8s. A watch face gets timers only while
+    //! awake, which is the only time the outline is drawn anyway. Resting at
+    //! REVEAL_STEPS means "fully drawn", so a frame no reveal led up to — a
+    //! settings change, say — shows the whole outline.
+    const REVEAL_STEPS = 12;
+    const REVEAL_TICK_MS = 70;
+    private var _revealStep as Number = REVEAL_STEPS;
+    //! The step last inked into the frame buffer, so a frame the gate skips
+    //! re-inks only when the reveal has actually moved on.
+    private var _inkedStep as Number = -1;
+    private var _revealTimer as Timer.Timer? = null;
 
     //! The complete face lives here rather than in whichever screen Dc Garmin
     //! supplies to a particular callback. Every visible onUpdate explicitly
@@ -86,6 +100,7 @@ class CrossoverView extends WatchUi.WatchFace {
     function onShow() as Void {
         _peeking = false;
         DotGrid.ensureBuilt();
+        startReveal();
     }
 
     function onUpdate(dc as Dc) as Void {
@@ -161,18 +176,20 @@ class CrossoverView extends WatchUi.WatchFace {
         var backing = (_peeking || (lowPower && !HandStyle.ALWAYS_ON))
             ? null : backingColour();
 
-        // The date watermark, brought up to date before anything reads it.
+        // The date, brought up to date before anything reads it.
         //
-        // Here rather than in fieldPrint(), because the glyph cache has to be
-        // current before either the gate or renderer reads it. It costs nothing
-        // in always-on that it does not cost awake: a struck dot lights fewer
-        // pixels than the dot it replaces, so the mode measured against the
-        // burn-in budget can only come out lower.
+        // Here rather than in fieldPrint(), because the numeral's cache has to
+        // be current before either the gate or renderer reads it. Awake only:
+        // see showsDate(). And the day is in the field print only while it is
+        // shown, which is what makes falling asleep clear the outline away —
+        // the slot drops to 0, the print moves, and the always-on frame is
+        // drawn from black. `fallingAsleepClearsTheOutline` holds that.
         //
-        // Off the mode, nothing is read at all: today() is arithmetic on the
-        // epoch second in the common case, but it is still two system calls
-        // that a face with the watermark off has no reason to pay.
-        var dating = showsDate(backing);
+        // Off, nothing is read at all: today() is arithmetic on the epoch
+        // second in the common case, but it is still two system calls that a
+        // frame without the date has no reason to pay.
+        var dating = showsDate(backing, lowPower);
+        DateGlyph.active = dating;
         var day = 0;
         if (dating) {
             day = DateGlyph.today();
@@ -187,6 +204,12 @@ class CrossoverView extends WatchUi.WatchFace {
         var field = fieldPrint(backing, day, _drift, clock.min, mode);
         var rings = ringPrint(spans, markers, overs, blocks);
         if (!FrameGate.plan(field, rings)) {
+            // The buffer already holds the outline as far as it was last
+            // inked; only a reveal that has moved on needs another pass.
+            var frameDc = _frameDc;
+            if (dating && frameDc != null && _inkedStep != _revealStep) {
+                inkOutline(frameDc);
+            }
             present(dc);
             Diagnostics.recordSkip(System.getTimer() - started);
             return;
@@ -216,6 +239,9 @@ class CrossoverView extends WatchUi.WatchFace {
         MatrixRenderer.drawAt(targetDc, spans, markers, overs, blocks, palette,
                               lowPower ? Palette.rampAlwaysOn : Palette.rampActive,
                               backing, FrameGate.dirty, FrameGate.clears, _drift);
+        if (dating) {
+            inkOutline(targetDc);
+        }
         if (persistent) {
             FrameGate.commit(field, rings);
             present(dc);
@@ -362,6 +388,11 @@ class CrossoverView extends WatchUi.WatchFace {
             return false;
         }
         _peeking = !_peeking;
+        if (_peeking) {
+            startReveal();
+        } else {
+            stopReveal();
+        }
         FrameGate.forget();
         WatchUi.requestUpdate();
         return true;
@@ -371,23 +402,90 @@ class CrossoverView extends WatchUi.WatchFace {
         return _peeking;
     }
 
-    //! The date and drawn hands cannot share the larger Epix hot path without
-    //! crossing its watchdog. The date is detail in the field, so hands win
-    //! while telling time and a peek (or Hands: Off) reveals it.
-    function showsDate(backing as Number?) as Boolean {
-        return StatMap.rotation == StatMap.ROTATION_UPRIGHT_DATE &&
+    //! Whether this frame carries the date.
+    //!
+    //! **Never in always-on.** A line, unlike a cross, does not escape itself
+    //! when the burn-in drift moves the field by one DOT, so an always-on
+    //! outline would hold some pixels lit through two of the four drift phases
+    //! against one for every dot pixel. It also looks better: the field rests
+    //! plain, and waking connects the dots.
+    //!
+    //! And the date and drawn hands cannot share the larger Epix hot path
+    //! without crossing its watchdog. The date is detail in the field, so hands
+    //! win while telling time and a peek (or Hands: Off) reveals it.
+    function showsDate(backing as Number?, lowPower as Boolean) as Boolean {
+        return StatMap.date == StatMap.DATE_ON && !lowPower &&
                (!HandStyle.DRAWN || backing == null);
+    }
+
+    //! Ink the outline into `target` as far as the reveal has got.
+    private function inkOutline(target as Dc) as Void {
+        DateGlyph.drawContour(target, _drift,
+                              _revealStep.toFloat() / REVEAL_STEPS);
+        _inkedStep = _revealStep;
+    }
+
+    //! Begin drawing the outline in from nothing.
+    //!
+    //! The day's dots and outline are worked out here, in a callback with its
+    //! own watchdog budget, so the frame that follows pays only for drawing:
+    //! traced inside onUpdate, on top of the full redraw a new day is, the
+    //! outline tripped the watchdog in the simulator.
+    private function startReveal() as Void {
+        // The awake decision, made before there is a frame to make it for.
+        if (!showsDate(_peeking ? null : backingColour(), false)) {
+            stopReveal();
+            return;
+        }
+        DateGlyph.ensure(DateGlyph.today());
+        DateGlyph.ensureTraced();
+        _revealStep = 0;
+        var timer = _revealTimer;
+        if (timer == null) {
+            timer = new Timer.Timer();
+            _revealTimer = timer;
+        }
+        timer.stop();
+        timer.start(method(:onRevealTick), REVEAL_TICK_MS, true);
+    }
+
+    //! Stop the reveal where it is and let the outline rest fully drawn.
+    private function stopReveal() as Void {
+        var timer = _revealTimer;
+        if (timer != null) {
+            timer.stop();
+        }
+        _revealStep = REVEAL_STEPS;
+    }
+
+    function onRevealTick() as Void {
+        _revealStep++;
+        if (_revealStep >= REVEAL_STEPS) {
+            stopReveal();
+        }
+        WatchUi.requestUpdate();
+    }
+
+    //! How far the reveal has got, 0 to REVEAL_STEPS. For the tests.
+    function revealStep() as Number {
+        return _revealStep;
+    }
+
+    function onHide() as Void {
+        stopReveal();
     }
 
     function onEnterSleep() as Void {
         _asleep = true;
         _peeking = false;
+        stopReveal();
         WatchUi.requestUpdate();
     }
 
     function onExitSleep() as Void {
         _asleep = false;
         holdHandsAtSystemTime();
+        startReveal();
         // High-power mode schedules its own immediate onUpdate. Requesting one
         // here creates an extra synchronous callback just as a button press may
         // be trying to leave the face; Garmin's Analog sample likewise only

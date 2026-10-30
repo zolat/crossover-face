@@ -87,13 +87,14 @@ module MatrixRenderer {
     //! is otherwise unassertable: the screen cannot be read back.
     var painted as Number = 0;
 
-    //! How many of those were drawn **struck** — one stroke rather than the
-    //! cross's two, which is how DateGlyph writes the day into the field.
+    //! How many of those were the date's own dots, whose colour the draw
+    //! recorded into `DateGlyph.colours` for the outline to be inked in.
     //!
     //! Here for the reason `painted` and `walked` are: the screen cannot be
-    //! read back, so the claim that exactly the watermark's dots are struck and
-    //! no others is otherwise unassertable.
-    var struck as Number = 0;
+    //! read back, so the claim that exactly the numeral's dots are recorded and
+    //! no others is otherwise unassertable — and a dot missed here is a stretch
+    //! of the outline that silently never draws.
+    var recorded as Number = 0;
 
     //! **The span each ring was last drawn with.**
     //!
@@ -313,23 +314,24 @@ module MatrixRenderer {
         var bx = arms[2];
         var by = arms[3];
 
-        // The date watermark, read the same way: which dots it strikes is a
-        // list this module walks with a cursor, so the dot loop is left with
-        // one integer comparison. The view brings DateGlyph up to date before
-        // calling in — the renderer must not read the clock for itself, for
-        // the reason the block channel must not either.
-        var dating = (StatMap.rotation == StatMap.ROTATION_UPRIGHT_DATE) &&
-                     DateGlyph.lit > 0;
+        // The date, read the same way: which dots the numeral covers is a list
+        // this module walks with a cursor, so the dot loop is left with one
+        // integer comparison. Those dots are drawn like any other; the loop
+        // only records the colour each one got, because the outline joining
+        // them is inked in that colour afterwards (DateGlyph.drawContour). The
+        // view decides whether this frame carries the date and brings DateGlyph
+        // up to date before calling in — the renderer must not read the clock
+        // for itself, for the reason the block channel must not either.
+        var dating = DateGlyph.active && DateGlyph.lit > 0;
         var glyphIndex = DateGlyph.index;
         var glyphFirst = DateGlyph.firstFor;
-        var gx = arms[DateGlyph.ARM];
-        var gy = arms[DateGlyph.ARM + 1];
+        var glyphColour = DateGlyph.colours;
 
         var half = DotGrid.DOT / 2;
         var lastColour = -1;
         erased = 0;
         painted = 0;
-        struck = 0;
+        recorded = 0;
         for (var ring = 0; ring < StatMap.RINGS; ring++) {
             walked[ring] = dirty[ring];
             if (!dirty[ring]) {
@@ -606,6 +608,14 @@ module MatrixRenderer {
                         dc.setColor(colour, Graphics.COLOR_TRANSPARENT);
                         lastColour = colour;
                     }
+                    // A numeral dot: the same record the span loop below makes.
+                    if (i == glyphNext) {
+                        glyphColour[glyphAt] = colour;
+                        glyphAt++;
+                        glyphNext = (glyphAt < glyphEnd) ? glyphIndex[glyphAt]
+                                                         : -1;
+                        recorded++;
+                    }
                     var x = centreX + dx;
                     var y = centreY + dy;
                     if (turned) {
@@ -614,26 +624,9 @@ module MatrixRenderer {
                         ay = arms[a + 1];
                         bx = arms[a + 2];
                         by = arms[a + 3];
-                        dc.drawLine(x - ax, y - ay, x + ax, y + ay);
-                        dc.drawLine(x - bx, y - by, x + bx, y + by);
-                    } else if (i == glyphNext) {
-                        glyphAt++;
-                        glyphNext = (glyphAt < glyphEnd) ? glyphIndex[glyphAt]
-                                                         : -1;
-                        // A hand owns the glyph dot's shape as well as its
-                        // colour. Consume the cursor either way, but keep the
-                        // whole upright cross where a hand passes through.
-                        if (hand != NO_HAND) {
-                            dc.drawLine(x - ax, y - ay, x + ax, y + ay);
-                            dc.drawLine(x - bx, y - by, x + bx, y + by);
-                        } else {
-                            dc.drawLine(x - gx, y - gy, x + gx, y + gy);
-                            struck++;
-                        }
-                    } else {
-                        dc.drawLine(x - ax, y - ay, x + ax, y + ay);
-                        dc.drawLine(x - bx, y - by, x + bx, y + by);
                     }
+                    dc.drawLine(x - ax, y - ay, x + ax, y + ay);
+                    dc.drawLine(x - bx, y - by, x + bx, y + by);
                     painted++;
                 }
                 continue;
@@ -656,13 +649,13 @@ module MatrixRenderer {
                         ? ((position >= fromA) || (position <= toA))
                         : ((position >= fromA) && (position <= toA));
                     // `i != glyphNext` is not about correctness of colour —
-                    // a struck dot's lit-ness reads the same as any other's.
+                    // a numeral dot's lit-ness reads the same as any other's.
                     // It keeps the cursor in step: the advance lives in the
-                    // draw below, where it costs the common dot one comparison
-                    // instead of two, and a dot the delta skipped would never
-                    // reach it. So a struck dot is never skipped. There are a
-                    // couple of dozen of them in a ring, against the twenty or
-                    // so a moved span repaints anyway.
+                    // draw below, and a dot the delta skipped would never
+                    // reach it, leaving the outline's recorded colours shifted
+                    // along the ring. So a numeral dot is never skipped. There
+                    // are a couple of dozen of them in a ring, against the
+                    // twenty or so a moved span repaints anyway.
                     if (lit == litA && i != forceA && i != glyphNext) {
                         continue;
                     }
@@ -733,6 +726,23 @@ module MatrixRenderer {
                     dc.setColor(colour, Graphics.COLOR_TRANSPARENT);
                     lastColour = colour;
                 }
+                // A numeral dot is drawn like any other; what it adds is a
+                // record of the colour it got, which the outline is inked in.
+                // A hand-covered one records the hand's colour, so the outline
+                // stays continuous wherever a hand happens to cross it.
+                //
+                // The cursor advances *here*, in the branch that consumed it,
+                // rather than at the top of the loop — the delta above is what
+                // makes that safe, since it never skips a dot this branch is
+                // owed. Upright, this is the one comparison the struck
+                // watermark already cost every dot; turned, it is new, and
+                // ROADMAP has the A/B that measured it.
+                if (i == glyphNext) {
+                    glyphColour[glyphAt] = colour;
+                    glyphAt++;
+                    glyphNext = (glyphAt < glyphEnd) ? glyphIndex[glyphAt] : -1;
+                    recorded++;
+                }
                 // A cross of two strokes through the dot's centre, turned to
                 // follow the circle it sits on unless the setting says upright.
                 // drawLine measured *faster* than the two fillRectangle calls
@@ -745,35 +755,9 @@ module MatrixRenderer {
                     ay = arms[a + 1];
                     bx = arms[a + 2];
                     by = arms[a + 3];
-                    dc.drawLine(x - ax, y - ay, x + ax, y + ay);
-                    dc.drawLine(x - bx, y - by, x + bx, y + by);
-                } else if (i == glyphNext) {
-                    // One stroke where the field draws two: five lit pixels
-                    // against nine, same cell, same colour. That density step
-                    // is the whole watermark — see DateGlyph.
-                    //
-                    // The cursor advances *here*, in the branch that consumed
-                    // it, rather than at the top of the loop. That is what
-                    // leaves the ordinary dot with a single comparison: an
-                    // `else if` it was going to reach anyway, instead of a test
-                    // and a local before the delta gets a chance to skip it.
-                    // The delta above is what makes it safe — it never skips a
-                    // dot this branch is owed.
-                    glyphAt++;
-                    glyphNext = (glyphAt < glyphEnd) ? glyphIndex[glyphAt] : -1;
-                    // Hands outrank the watermark's shape as well as its
-                    // colour. Consume the cursor so later cells stay aligned.
-                    if (hand != NO_HAND) {
-                        dc.drawLine(x - ax, y - ay, x + ax, y + ay);
-                        dc.drawLine(x - bx, y - by, x + bx, y + by);
-                    } else {
-                        dc.drawLine(x - gx, y - gy, x + gx, y + gy);
-                        struck++;
-                    }
-                } else {
-                    dc.drawLine(x - ax, y - ay, x + ax, y + ay);
-                    dc.drawLine(x - bx, y - by, x + bx, y + by);
                 }
+                dc.drawLine(x - ax, y - ay, x + ax, y + ay);
+                dc.drawLine(x - bx, y - by, x + bx, y + by);
                 painted++;
             }
         }

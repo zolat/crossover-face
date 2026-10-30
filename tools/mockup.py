@@ -457,21 +457,20 @@ def hand_at(dx: float, dy: float, axes) -> int:
     return NO_HAND
 
 
-# --- date watermark ----------------------------------------------------------
-# Mirrors source/matrix/DateGlyph.mc. A *struck* dot draws one of its two
-# strokes and not the other -- five lit pixels where the field draws nine, in
-# the same cell and the same colour. A numeral drawn in struck dots is a
-# watermark: the density step reads as a shape when you look for it and
-# disappears into the field when you are reading the rings.
+# --- the date ----------------------------------------------------------------
+# Mirrors source/matrix/DateGlyph.mc. The numeral's dots are drawn like every
+# other; a faint outline joins them, dot centre to dot centre, tracing the
+# numeral's edge at LINE_PERCENT of the colour of the dot each line leaves from.
+# Each line fills only the gap between two crosses, never their arms.
 #
-# It cannot cost luminance, because a struck dot lights a strict subset of the
-# pixels it lit before. Measured here: 4.82% without, 4.64% with.
+# Awake only: always-on carries no date, because a line does not escape itself
+# when the drift moves the field one DOT, and some of its pixels would sit lit
+# through two of the four drift phases. CrossoverView draws the outline in on
+# a wake; render() draws it complete.
 #
-# Rotation was the first idea and the mockups killed it: turning a dot 45
-# degrees is free too, and the measured luminance does not move at all -- but
-# at a five-pixel dot a `+` and an `x` are too close to tell apart, and the
-# numeral read as a faint sheen rather than a number. STRIKE_ROTATE renders
-# that version, and build/gate/true-size.png is the comparison it lost.
+# The struck watermark this replaced -- one stroke of each numeral dot instead
+# of two -- measured well here and was invisible on the wrist. 65% was chosen on
+# the watch between 50, 65 and 80; 100 was too obvious and 40 vanished.
 
 SCALE = 2                       # lattice cells per font pixel
 FONT_COLS, FONT_ROWS = 3, 5
@@ -498,9 +497,9 @@ DIGITS = [
     0b111101111001111,      # 9
 ]
 
-# Which ARMS entry the struck stroke comes from: the 45-degree cross's first
-# arm. Taken from the table rather than written out, so the dot size reaches it.
-GLYPH_ARM = 2
+LINE_PERCENT = 65
+GAP_FROM = DOT // 2 + 1                 # first pixel past an arm tip
+GAP_LENGTH = PITCH - 2 * GAP_FROM + 1   # to one short of the next arm
 
 
 def digit_lit(digit: int, col: int, row: int) -> bool:
@@ -509,7 +508,7 @@ def digit_lit(digit: int, col: int, row: int) -> bool:
 
 
 def glyph_cells(day: int, origin=None) -> set:
-    """The lattice cells today's date strikes, as (col, row) pairs."""
+    """The lattice cells today's numeral covers, as (col, row) pairs."""
     origin = glyph_origin() if origin is None else origin
     col0, row0 = origin
     out = set()
@@ -524,17 +523,59 @@ def glyph_cells(day: int, origin=None) -> set:
     return out
 
 
-def arm_for(dx: int, dy: int, col: int, row: int, rotate: bool,
-            glyph: set, hand: int = NO_HAND):
-    """Which strokes this dot draws.
+def contour_segments(day: int, origin=None) -> list:
+    """The numeral's outline: pairs of neighbouring cells, dot centre to centre.
 
-    A struck dot returns a two-value arm, which draw_dot renders as one line;
-    every other dot returns the usual four.
+    Mirrors DateGlyph.trace(). The numeral inset by half a pitch is the union
+    of the squares between the centres of every 2x2 block of its cells; a unit
+    edge between neighbouring centres is on the outline exactly when that shape
+    lies on one side of it and not the other.
     """
-    if hand == NO_HAND and glyph and (col, row) in glyph:
-        return ARMS[GLYPH_ARM][:2]
-    # Mirrors StatMap.Rotation: turned to follow the ring, or upright.
+    origin = glyph_origin() if origin is None else origin
+    col0, row0 = origin
+    cells = glyph_cells(day, origin)
+
+    def numeral(c, r):
+        return (col0 + c, row0 + r) in cells
+
+    def inside(c, r):
+        return (numeral(c, r) and numeral(c + 1, r) and
+                numeral(c, r + 1) and numeral(c + 1, r + 1))
+
+    out = []
+    for r in range(GLYPH_ROWS):
+        for c in range(GLYPH_COLS):
+            here = (col0 + c, row0 + r)
+            if c + 1 < GLYPH_COLS and inside(c, r - 1) != inside(c, r):
+                out.append((here, (col0 + c + 1, row0 + r)))
+            if r + 1 < GLYPH_ROWS and inside(c - 1, r) != inside(c, r):
+                out.append((here, (col0 + c, row0 + r + 1)))
+    return out
+
+
+def arm_for(dx: int, dy: int, rotate: bool):
+    """Which strokes this dot draws: turned to follow the ring, or upright."""
+    # Mirrors StatMap.Rotation.
     return ARMS[orientation_at(dx, dy)] if rotate else ARMS[0]
+
+
+def draw_outline(draw, day: int, colours: dict, drift) -> None:
+    """Ink the numeral's outline in the gaps between its crosses."""
+    centre = SIZE // 2
+    for a, b in contour_segments(day):
+        colour = colours.get(a)
+        if colour is None:
+            continue
+        colour = scale(colour, LINE_PERCENT / 100)
+        (ca, ra), (cb, rb) = a, b
+        x = centre + (2 * ca - (COLS - 1)) * (PITCH // 2) + drift[0]
+        y = centre + (2 * ra - (ROWS - 1)) * (PITCH // 2) + drift[1]
+        if ra == rb:
+            draw.line([x + GAP_FROM, y, x + GAP_FROM + GAP_LENGTH - 1, y],
+                      fill=colour)
+        else:
+            draw.line([x, y + GAP_FROM, x, y + GAP_FROM + GAP_LENGTH - 1],
+                      fill=colour)
 
 
 # --- rendering ---------------------------------------------------------------
@@ -549,11 +590,15 @@ def render(spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
            date: int | None = None) -> Image.Image:
     img = Image.new("RGB", (SIZE, SIZE), (0, 0, 0))
     # The watermark's cells, resolved once rather than per dot.
-    # Drawn hands own the ordinary time view. Their date appears when hands are
-    # off (the persistent choice or a temporary touch-and-hold peek), which is
-    # also what keeps the largest merged render inside its watchdog.
-    glyph = glyph_cells(date) if (date is not None and
-                                  (not DRAWN_HANDS or backing is None)) else set()
+    # Awake only, and drawn hands own the ordinary time view: their date
+    # appears when hands are off (the persistent choice or a temporary
+    # touch-and-hold peek), which is also what keeps the largest merged render
+    # inside its watchdog. Mirrors CrossoverView.showsDate().
+    dating = (date is not None and not always_on and
+              (not DRAWN_HANDS or backing is None))
+    glyph = glyph_cells(date) if dating else set()
+    # The colour each numeral dot is drawn in, which its outline is inked in.
+    glyph_colours = {}
     draw = ImageDraw.Draw(img)
     # Which dot each ring marks, worked out once rather than per dot.
     mark_dots = {}
@@ -596,9 +641,11 @@ def render(spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
                         colour = hourly_colour(
                             ring, position, dist_sq,
                             (hourly or {}).get(ring), always_on, held_back)
-                        arm = arm_for(dx, dy, col, row, rotate, glyph, hand)
+                        if (col, row) in glyph:
+                            glyph_colours[(col, row)] = colour
                         draw_dot(draw, x - half + drift[0],
-                                 y - half + drift[1], colour, arm)
+                                 y - half + drift[1], colour,
+                                 arm_for(dx, dy, rotate))
                         continue
                     start, end = spans[ring]
                     lit = start <= position <= end
@@ -637,8 +684,11 @@ def render(spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
                 draw.rectangle([left, top, left + DOT - 1, top + DOT - 1],
                                fill=colour)
                 continue
-            arm = arm_for(dx, dy, col, row, rotate, glyph, hand)
-            draw_dot(draw, left, top, colour, arm)
+            if (col, row) in glyph:
+                glyph_colours[(col, row)] = colour
+            draw_dot(draw, left, top, colour, arm_for(dx, dy, rotate))
+    if dating:
+        draw_outline(draw, date, glyph_colours, drift)
     return img
 
 
@@ -652,15 +702,10 @@ def orientation_at(dx: int, dy: int) -> int:
 
 
 def draw_dot(draw, left: int, top: int, colour, arm=ARMS[0]) -> None:
-    """One dot: two strokes through its centre, at the given orientation.
-
-    A two-value arm is a *struck* dot -- one stroke, five lit pixels. See the
-    date watermark above.
-    """
+    """One dot: two strokes through its centre, at the given orientation."""
     x, y = left + DOT // 2, top + DOT // 2
     draw.line([x - arm[0], y - arm[1], x + arm[0], y + arm[1]], fill=colour)
-    if len(arm) > 2:
-        draw.line([x - arm[2], y - arm[3], x + arm[2], y + arm[3]], fill=colour)
+    draw.line([x - arm[2], y - arm[3], x + arm[2], y + arm[3]], fill=colour)
 
 
 # --- device compositing ------------------------------------------------------
@@ -1039,31 +1084,33 @@ def main(outdir: str = "build/mockups", device: str = DEFAULT_DEVICE) -> int:
                   "temperature range").save(path)
     written.append(path)
 
-    # 12. The date watermark: the day of the month struck into the field.
-    #     Every figure on this sheet is *below* the plain face's, because a
-    #     struck dot lights five pixels where the field lights nine.
+    # 12. The date: the day of the month outlined through the dots, awake.
+    #     Always-on carries none, so its sheet is the plain field.
     panels = []
     plain = render(values, rotate=False)
-    panels.append((f"NO WATERMARK   lum {measure(plain) * 100:.2f}%",
+    panels.append((f"NO DATE   lum {measure(plain) * 100:.2f}%",
                    composite(plain)))
     for day in (5, 15, 28):
         face = render(values, rotate=False, date=day)
         panels.append((f"DAY {day:02d}   lum {measure(face) * 100:.2f}%",
                        composite(face)))
-    path = os.path.join(outdir, "13-date-watermark.png")
-    sheet(panels, "Date watermark - the day struck into the dot field, "
-                  "one stroke per dot instead of two").save(path)
+    path = os.path.join(outdir, "13-date.png")
+    sheet(panels, "Date - the dots joined into the day's numeral, "
+                  "awake only").save(path)
     written.append(path)
 
     # The same faces uncomposited and at 1:1, which is the honest look at it:
-    # the device art and its bezel shrink the dial by a third.
+    # the device art and its bezel shrink the dial by a third. Both rotations,
+    # since the date is its own setting and draws on either field.
     panels = [("UPRIGHT", render(values, rotate=False)),
               ("UPRIGHT + DATE", render(values, rotate=False, date=15)),
-              ("FOLLOW THE RINGS + DATE", render(values, date=15))]
+              ("RINGS + DATE", render(values, date=15)),
+              ("ALWAYS-ON",
+               render(values, rotate=False, date=15, always_on=True))]
     panels = [(f"{n}   lum {measure(f) * 100:.2f}%", f) for n, f in panels]
     path = os.path.join(outdir, "13b-date-true-size.png")
-    sheet(panels, "Date watermark at 1:1 - and on the radial field, which the "
-                  "setting does not offer").save(path)
+    sheet(panels, "Date at 1:1 - on both fields, and absent in always-on"
+          ).save(path)
     written.append(path)
 
     # 11. Burn-in drift: how long any one pixel stays lit over a full cycle.

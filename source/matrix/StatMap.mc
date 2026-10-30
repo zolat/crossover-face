@@ -31,15 +31,23 @@ module StatMap {
     //! same `+` and the field reads as a plain lattice with the rings drawn on
     //! it. Both light nine pixels a dot, so neither costs luminance.
     //!
-    //! The third is Upright with the day of the month written into it — see
-    //! DateGlyph. It is a *rotation* value because it is a choice about the
-    //! shape of the field's own dots and nothing else, and because the field it
-    //! is drawn on has to be the even one for a numeral to show in it at all.
-    //! Appended, never inserted: the stored value is an index.
+    //! The third value was "Upright + date", from when the date was a
+    //! marking of the dots themselves and needed the even field to show in.
+    //! The date is its own setting now (`PROPERTY_DATE`) and works on either
+    //! field, so the value is **retired, not reused**: load() reads a stored 2
+    //! as Upright — what that wearer was looking at — and the date setting's
+    //! default of On keeps their date. Never hand 2 to anything new.
     enum Rotation {
         ROTATION_RADIAL = 0,        //! Each cross follows its ring.
         ROTATION_UPRIGHT = 1,       //! Every cross stays upright.
-        ROTATION_UPRIGHT_DATE = 2   //! Upright, with today's date struck in.
+        ROTATION_RETIRED_DATE = 2   //! Was Upright + date; reads as Upright.
+    }
+
+    //! Whether the day of the month is drawn into the field. See DateGlyph.
+    //! On by default: a face without the date was the gap this closed.
+    enum DateDisplay {
+        DATE_OFF = 0,
+        DATE_ON = 1
     }
 
     //! Which set of colours the rings carry. The theme decides every colour
@@ -67,6 +75,7 @@ module StatMap {
     const PROPERTY_BACKING = "handBacking";
     const PROPERTY_ALWAYS_ON_FILL = "alwaysOnFill";
     const PROPERTY_ROTATION = "dotRotation";
+    const PROPERTY_DATE = "showDate";
 
     //! The temperature-ahead ring's scale, in whole degrees Celsius.
     //!
@@ -90,6 +99,7 @@ module StatMap {
     var backing as Number = BACKING_OFF;
     var alwaysOnFill as Number = ALWAYS_ON_FILL_SHOWN;
     var rotation as Number = ROTATION_RADIAL;
+    var date as Number = DATE_ON;
     //! Always high > low after load(); HourlyWeatherData divides by the gap.
     var tempAheadLow as Number = TEMP_AHEAD_LOW_DEFAULT;
     var tempAheadHigh as Number = TEMP_AHEAD_HIGH_DEFAULT;
@@ -113,7 +123,11 @@ module StatMap {
         alwaysOnFill = readNumber(PROPERTY_ALWAYS_ON_FILL, ALWAYS_ON_FILL_SHOWN,
                                   ALWAYS_ON_FILL_SHOWN, ALWAYS_ON_FILL_HIDDEN);
         rotation = readNumber(PROPERTY_ROTATION, ROTATION_RADIAL,
-                              ROTATION_RADIAL, ROTATION_UPRIGHT_DATE);
+                              ROTATION_RADIAL, ROTATION_RETIRED_DATE);
+        if (rotation == ROTATION_RETIRED_DATE) {
+            rotation = ROTATION_UPRIGHT;
+        }
+        date = readNumber(PROPERTY_DATE, DATE_ON, DATE_OFF, DATE_ON);
         loadTempAheadScale();
 
         var defaults = [Source.SOURCE_STEPS, Source.SOURCE_INTENSITY_MINUTES,

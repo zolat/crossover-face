@@ -54,6 +54,8 @@ class SettingsMenu extends WatchUi.Menu2 {
             alwaysOnFillLabel(), :alwaysOnFill, null));
         addItem(new WatchUi.MenuItem(
             Rez.Strings.RotationTitle, rotationLabel(), :rotation, null));
+        addItem(new WatchUi.MenuItem(
+            Rez.Strings.DateTitle, dateLabel(), :date, null));
         addItem(new WatchUi.MenuItem(Rez.Strings.RingsTitle, null, :rings, null));
         addItem(new WatchUi.MenuItem(
             Rez.Strings.DiagnosticsTitle, Diagnostics.summary(),
@@ -70,7 +72,8 @@ class SettingsMenu extends WatchUi.Menu2 {
         setSubLabelOf(2, backingLabel());
         setSubLabelOf(3, alwaysOnFillLabel());
         setSubLabelOf(4, rotationLabel());
-        setSubLabelOf(6, Diagnostics.summary());
+        setSubLabelOf(5, dateLabel());
+        setSubLabelOf(7, Diagnostics.summary());
     }
 
     private function setSubLabelOf(index as Number,
@@ -91,11 +94,18 @@ class SettingsMenu extends WatchUi.Menu2 {
         return labels[StatMap.alwaysOnFill];
     }
 
+    //! StatMap.load() reads the retired third value as Upright, so two labels
+    //! cover every value `rotation` can hold.
     private function rotationLabel() as ResourceId {
         var labels = [Rez.Strings.RotationRadial,
-                      Rez.Strings.RotationUpright,
-                      Rez.Strings.RotationUprightDate] as Array<ResourceId>;
+                      Rez.Strings.RotationUpright] as Array<ResourceId>;
         return labels[StatMap.rotation];
+    }
+
+    private function dateLabel() as ResourceId {
+        var labels = [Rez.Strings.DateOff,
+                      Rez.Strings.DateOn] as Array<ResourceId>;
+        return labels[StatMap.date];
     }
 
     private function backingLabel() as ResourceId {
@@ -137,9 +147,13 @@ class SettingsMenuDelegate extends WatchUi.Menu2InputDelegate {
             push(new ChoiceMenu(Rez.Strings.RotationTitle,
                 StatMap.PROPERTY_ROTATION,
                 [Rez.Strings.RotationRadial,
-                 Rez.Strings.RotationUpright,
-                 Rez.Strings.RotationUprightDate] as Array<ResourceId>,
-                sequential(3), StatMap.rotation));
+                 Rez.Strings.RotationUpright] as Array<ResourceId>,
+                sequential(2), StatMap.rotation));
+        } else if (id == :date) {
+            push(new ChoiceMenu(Rez.Strings.DateTitle, StatMap.PROPERTY_DATE,
+                [Rez.Strings.DateOff,
+                 Rez.Strings.DateOn] as Array<ResourceId>,
+                sequential(2), StatMap.date));
         } else if (id == :diagnostics) {
             // Nothing to open — re-reading it is the useful action, since the
             // figure moves while you are looking at it.

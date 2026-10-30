@@ -8,10 +8,13 @@
     <!-- 0 show the data in always-on, 1 colour only.
          Kept in sync with StatMap.AlwaysOnFill. -->
     <property id="alwaysOnFill" type="number">0</property>
-    <!-- 0 each cross follows its ring, 1 every cross upright, 2 upright with
-         today's date struck into the field (see DateGlyph).
-         Kept in sync with StatMap.Rotation. -->
+    <!-- 0 each cross follows its ring, 1 every cross upright. 2 is retired:
+         it was "upright + date" and reads as upright, the date having become
+         showDate below. Kept in sync with StatMap.Rotation. -->
     <property id="dotRotation" type="number">0</property>
+    <!-- 0 off, 1 on: the day of the month, outlined through the dots while
+         awake (see DateGlyph). Kept in sync with StatMap.DateDisplay. -->
+    <property id="showDate" type="number">1</property>
     <!-- Which Source each ring shows. See Source.Kind:
          0 steps, 1 retired, 2 battery, 3 body battery,
          4 temperature range, 5 rain chance, 6 intensity minutes,
