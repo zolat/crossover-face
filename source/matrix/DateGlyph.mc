@@ -9,7 +9,7 @@ import Toybox.Time.Gregorian;
 //! The numeral's own dots are drawn like every other: same cross, same colour,
 //! carrying whatever its ring was already saying. What makes it a number is a
 //! faint **outline joining them** — straight lines from dot centre to dot
-//! centre, tracing the numeral's edge, at `LINE_PERCENT` of the colour of the
+//! centre, tracing the numeral's edge, at `linePercent()` of the colour of the
 //! dot each line leaves from. It is the dots being connected, not a figure laid
 //! over them, so it reads as part of the lattice.
 //!
@@ -242,8 +242,16 @@ module DateGlyph {
     // --- the outline ------------------------------------------------------------
 
     //! The connecting lines' brightness, as a percentage of the colour of the
-    //! dot each leaves from. Chosen on the wrist; see the module comment.
-    const LINE_PERCENT = 65;
+    //! dot each leaves from: the three levels compared a minute apart on the
+    //! watch, indexed by `StatMap.dateOutline`. 65 was the pick and is the
+    //! default; 40 vanished on the AMOLED and 100 was too obvious, so neither
+    //! end is offered.
+    const LINE_PERCENTS = [50, 65, 80] as Array<Number>;
+
+    //! The level the wearer chose.
+    function linePercent() as Number {
+        return LINE_PERCENTS[StatMap.dateOutline];
+    }
 
     //! A line fills only the gap between two crosses, never their arms: a faint
     //! line painted over an arm would dim the dot it runs into. Arms reach
@@ -450,6 +458,7 @@ module DateGlyph {
         var cx = (dc.getWidth() / 2) + drift[0];
         var cy = (dc.getHeight() / 2) + drift[1];
         var limit = reach * maxDepth;
+        var percent = linePercent();
         var xs = DotGrid.xs;
         var ys = DotGrid.ys;
         var last = -2;
@@ -466,7 +475,7 @@ module DateGlyph {
             inked++;
             if (colour != last) {
                 last = colour;
-                dc.setColor(dimmed(colour), Graphics.COLOR_TRANSPARENT);
+                dc.setColor(dimmed(colour, percent), Graphics.COLOR_TRANSPARENT);
             }
             var i = index[a];
             var j = index[segB[s]];
@@ -485,11 +494,11 @@ module DateGlyph {
         }
     }
 
-    //! A colour at LINE_PERCENT, channel by channel.
-    function dimmed(colour as Number) as Number {
-        var r = ((colour >> 16) & 0xFF) * LINE_PERCENT / 100;
-        var g = ((colour >> 8) & 0xFF) * LINE_PERCENT / 100;
-        var b = (colour & 0xFF) * LINE_PERCENT / 100;
+    //! A colour at `percent`, channel by channel.
+    function dimmed(colour as Number, percent as Number) as Number {
+        var r = ((colour >> 16) & 0xFF) * percent / 100;
+        var g = ((colour >> 8) & 0xFF) * percent / 100;
+        var b = (colour & 0xFF) * percent / 100;
         return (r << 16) | (g << 8) | b;
     }
 

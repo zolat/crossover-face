@@ -572,6 +572,9 @@ way. The time view keeps the hands and defers the date so the largest merged ren
 inside its watchdog. Watches that had `Upright + date` selected read it as `Upright` with the
 date on.
 
+`Date outline` sets how bright the connecting lines are: 50%, 65% (the default) or 80% of the
+dots they join — the three levels the default was chosen between on the watch.
+
 ### Hands
 
 The stored choices stay `Off`, `White`, and `Dark` on every device. On the Crossover this

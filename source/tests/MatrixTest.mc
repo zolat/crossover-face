@@ -906,6 +906,43 @@ module MatrixTest {
         return true;
     }
 
+    //! Same contract for the outline level, whose default is the wrist's pick.
+    //!
+    //! Every stored value must land on its own level and nothing out of range
+    //! may index past LINE_PERCENTS — the renderer reads it on every frame
+    //! that inks a segment, so a bad index is a crash on the watch, not a
+    //! wrong colour.
+    (:test)
+    function dateOutlineSettingIsClamped(logger as Logger) as Boolean {
+        Properties.setValue(StatMap.PROPERTY_DATE_OUTLINE, 9);
+        Config.reload();
+        Test.assertEqualMessage(StatMap.dateOutline, StatMap.OUTLINE_65,
+            "an out-of-range value must fall back to 65%");
+        Test.assertEqualMessage(DateGlyph.linePercent(), 65,
+            "and the default must draw at 65%");
+
+        var levels = [StatMap.OUTLINE_50, StatMap.OUTLINE_65,
+                      StatMap.OUTLINE_80] as Array<Number>;
+        var percents = [50, 65, 80] as Array<Number>;
+        for (var i = 0; i < levels.size(); i++) {
+            Properties.setValue(StatMap.PROPERTY_DATE_OUTLINE, levels[i]);
+            Config.reload();
+            Test.assertEqualMessage(StatMap.dateOutline, levels[i],
+                "outline " + levels[i] + " must be honoured");
+            Test.assertEqualMessage(DateGlyph.linePercent(), percents[i],
+                "outline " + levels[i] + " must draw at " + percents[i] + "%");
+            var menu = new SettingsMenu();
+            menu.onShow();
+        }
+        Test.assertEqualMessage(DATE_OUTLINE_LABELS.size(),
+            DateGlyph.LINE_PERCENTS.size(),
+            "every level needs a label, or the picker cannot reach it");
+
+        Properties.setValue(StatMap.PROPERTY_DATE_OUTLINE, StatMap.OUTLINE_65);
+        Config.reload();
+        return true;
+    }
+
     //! Same contract for the theme setting.
     (:test)
     function themeSettingIsClamped(logger as Logger) as Boolean {
@@ -1405,7 +1442,7 @@ module MatrixTest {
 
     //! Every settings row that shows a value, by index. The rings row is not
     //! here: it opens a sub-menu and carries no value of its own.
-    const MENU_VALUE_ROWS = [0, 1, 2, 3, 4, 5, 7] as Array<Number>;
+    const MENU_VALUE_ROWS = [0, 1, 2, 3, 4, 5, 6, 8] as Array<Number>;
 
     // --- the date ----------------------------------------------------------
 
@@ -1839,7 +1876,7 @@ module MatrixTest {
 
     //! A connecting line fills the gap between two crosses and nothing else.
     //!
-    //! It is drawn at LINE_PERCENT of the colour of the dot it leaves from,
+    //! It is drawn at linePercent() of the colour of the dot it leaves from,
     //! after the dots. Let it reach an arm and it repaints that arm dimmer: the
     //! numeral's own dots fade where they meet the outline, which on the wrist
     //! read as the dots being wrong rather than the line being faint.
@@ -1855,11 +1892,14 @@ module MatrixTest {
             (DotGrid.PITCH - arm) + "px; it reaches " + lastPixel);
         Test.assertMessage(DateGlyph.GAP_LENGTH > 0,
             "and must still be a line");
-        Test.assertMessage(DateGlyph.LINE_PERCENT > 0 &&
-                           DateGlyph.LINE_PERCENT < 100,
-            "the outline is fainter than the dots it joins");
-        Test.assertEqualMessage(DateGlyph.dimmed(0xFFFFFF),
-            ((0xFF * DateGlyph.LINE_PERCENT / 100) * 0x010101),
+        for (var i = 0; i < DateGlyph.LINE_PERCENTS.size(); i++) {
+            var percent = DateGlyph.LINE_PERCENTS[i];
+            Test.assertMessage(percent > 0 && percent < 100,
+                "every outline level is fainter than the dots it joins; " +
+                percent + "% is not");
+        }
+        Test.assertEqualMessage(DateGlyph.dimmed(0xFFFFFF, 65),
+            ((0xFF * 65 / 100) * 0x010101),
             "dimming scales every channel alike");
         logger.debug("lines span " + DateGlyph.GAP_FROM + "-" + lastPixel +
                      "px of a " + DotGrid.PITCH + "px pitch");
@@ -2057,8 +2097,14 @@ module MatrixTest {
             "mockup.py: glyph_origin() must centre the date horizontally");
         Test.assertEqualMessage(DotGrid.offsetAt(DateGlyph.ORIGIN_ROW), 45,
             "mockup.py: glyph_origin() must keep its top 45px below the pivot");
-        Test.assertEqualMessage(DateGlyph.LINE_PERCENT, 65,
-            "mockup.py: LINE_PERCENT = 65");
+        Test.assertEqualMessage(DateGlyph.LINE_PERCENTS.size(), 3,
+            "mockup.py: LINE_PERCENTS has three levels");
+        Test.assertEqualMessage(DateGlyph.LINE_PERCENTS[0], 50,
+            "mockup.py: LINE_PERCENTS[0] = 50");
+        Test.assertEqualMessage(DateGlyph.LINE_PERCENTS[1], 65,
+            "mockup.py: LINE_PERCENTS[1] = 65, and LINE_PERCENT is it");
+        Test.assertEqualMessage(DateGlyph.LINE_PERCENTS[2], 80,
+            "mockup.py: LINE_PERCENTS[2] = 80");
         Test.assertEqualMessage(DateGlyph.GAP_FROM, 3, "mockup.py: GAP_FROM = 3");
         Test.assertEqualMessage(DateGlyph.GAP_LENGTH, 5,
             "mockup.py: GAP_LENGTH = 5");

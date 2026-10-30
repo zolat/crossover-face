@@ -12,6 +12,14 @@ const THEME_LABELS = [
     Rez.Strings.ThemePulse
 ] as Array<ResourceId>;
 
+//! Date outline levels, in StatMap.DateOutline order. Shared by the row's
+//! sub-label and its picker for the reason THEME_LABELS is.
+const DATE_OUTLINE_LABELS = [
+    Rez.Strings.DateOutline50,
+    Rez.Strings.DateOutline65,
+    Rez.Strings.DateOutline80
+] as Array<ResourceId>;
+
 //! Source names, in Source.Kind order — every value, including the retired
 //! one, so this stays indexable by the enum. What the picker *offers* is
 //! Source.OFFERED, which is a different and shorter list.
@@ -56,6 +64,8 @@ class SettingsMenu extends WatchUi.Menu2 {
             Rez.Strings.RotationTitle, rotationLabel(), :rotation, null));
         addItem(new WatchUi.MenuItem(
             Rez.Strings.DateTitle, dateLabel(), :date, null));
+        addItem(new WatchUi.MenuItem(Rez.Strings.DateOutlineTitle,
+            dateOutlineLabel(), :dateOutline, null));
         addItem(new WatchUi.MenuItem(Rez.Strings.RingsTitle, null, :rings, null));
         addItem(new WatchUi.MenuItem(
             Rez.Strings.DiagnosticsTitle, Diagnostics.summary(),
@@ -73,7 +83,8 @@ class SettingsMenu extends WatchUi.Menu2 {
         setSubLabelOf(3, alwaysOnFillLabel());
         setSubLabelOf(4, rotationLabel());
         setSubLabelOf(5, dateLabel());
-        setSubLabelOf(7, Diagnostics.summary());
+        setSubLabelOf(6, dateOutlineLabel());
+        setSubLabelOf(8, Diagnostics.summary());
     }
 
     private function setSubLabelOf(index as Number,
@@ -100,6 +111,10 @@ class SettingsMenu extends WatchUi.Menu2 {
         var labels = [Rez.Strings.RotationRadial,
                       Rez.Strings.RotationUpright] as Array<ResourceId>;
         return labels[StatMap.rotation];
+    }
+
+    private function dateOutlineLabel() as ResourceId {
+        return DATE_OUTLINE_LABELS[StatMap.dateOutline];
     }
 
     private function dateLabel() as ResourceId {
@@ -154,6 +169,10 @@ class SettingsMenuDelegate extends WatchUi.Menu2InputDelegate {
                 [Rez.Strings.DateOff,
                  Rez.Strings.DateOn] as Array<ResourceId>,
                 sequential(2), StatMap.date));
+        } else if (id == :dateOutline) {
+            push(new ChoiceMenu(Rez.Strings.DateOutlineTitle,
+                StatMap.PROPERTY_DATE_OUTLINE, DATE_OUTLINE_LABELS,
+                sequential(3), StatMap.dateOutline));
         } else if (id == :diagnostics) {
             // Nothing to open — re-reading it is the useful action, since the
             // figure moves while you are looking at it.

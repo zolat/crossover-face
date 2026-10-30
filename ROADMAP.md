@@ -10,6 +10,8 @@ block sources since.
   entered on the watch under Ring data or in Garmin Connect.
 - [x] Date — its own setting, on by default: the numeral's dots joined by a faint outline,
   drawn in on every wake and absent in always-on. Replaces the struck watermark.
+  - [x] Date outline — the line brightness as a setting: the 50 / 65 / 80% compared on the
+    watch, 65 by default.
 
 ## Epix 2 family
 

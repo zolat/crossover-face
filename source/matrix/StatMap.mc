@@ -50,6 +50,14 @@ module StatMap {
         DATE_ON = 1
     }
 
+    //! How bright the date's connecting lines are: an index into
+    //! DateGlyph.LINE_PERCENTS, the three levels chosen between on the wrist.
+    enum DateOutline {
+        OUTLINE_50 = 0,
+        OUTLINE_65 = 1,             //! The pick, and the default.
+        OUTLINE_80 = 2
+    }
+
     //! Which set of colours the rings carry. The theme decides every colour
     //! the face draws; see Palette.THEMES for what each one is and why.
     //!
@@ -76,6 +84,7 @@ module StatMap {
     const PROPERTY_ALWAYS_ON_FILL = "alwaysOnFill";
     const PROPERTY_ROTATION = "dotRotation";
     const PROPERTY_DATE = "showDate";
+    const PROPERTY_DATE_OUTLINE = "dateOutline";
 
     //! The temperature-ahead ring's scale, in whole degrees Celsius.
     //!
@@ -100,6 +109,7 @@ module StatMap {
     var alwaysOnFill as Number = ALWAYS_ON_FILL_SHOWN;
     var rotation as Number = ROTATION_RADIAL;
     var date as Number = DATE_ON;
+    var dateOutline as Number = OUTLINE_65;
     //! Always high > low after load(); HourlyWeatherData divides by the gap.
     var tempAheadLow as Number = TEMP_AHEAD_LOW_DEFAULT;
     var tempAheadHigh as Number = TEMP_AHEAD_HIGH_DEFAULT;
@@ -128,6 +138,8 @@ module StatMap {
             rotation = ROTATION_UPRIGHT;
         }
         date = readNumber(PROPERTY_DATE, DATE_ON, DATE_OFF, DATE_ON);
+        dateOutline = readNumber(PROPERTY_DATE_OUTLINE, OUTLINE_65,
+                                 OUTLINE_50, OUTLINE_80);
         loadTempAheadScale();
 
         var defaults = [Source.SOURCE_STEPS, Source.SOURCE_INTENSITY_MINUTES,

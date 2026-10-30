@@ -15,6 +15,9 @@
     <!-- 0 off, 1 on: the day of the month, outlined through the dots while
          awake (see DateGlyph). Kept in sync with StatMap.DateDisplay. -->
     <property id="showDate" type="number">1</property>
+    <!-- 0 50%, 1 65%, 2 80%: how bright the date's connecting lines are,
+         against the dots they join. Kept in sync with StatMap.DateOutline. -->
+    <property id="dateOutline" type="number">1</property>
     <!-- Which Source each ring shows. See Source.Kind:
          0 steps, 1 retired, 2 battery, 3 body battery,
          4 temperature range, 5 rain chance, 6 intensity minutes,

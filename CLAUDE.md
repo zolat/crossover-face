@@ -19,7 +19,7 @@ covers the working knowledge that spans files and is easy to break.
 ```sh
 make build      # debug .prg for the simulator
 make sim        # build, start the simulator if needed, sideload, stream println
-make test       # build with -t, run the 151-test suite (takes the simulator lock)
+make test       # build with -t, run the 152-test suite (takes the simulator lock)
 make test-lock  # self-test tools/sim_lock.sh
 make test-simctl # tests for tools/simctl (no simulator, no build needed)
 make package    # signed .iq for the store
@@ -708,9 +708,9 @@ profiles carry no `analogHands`.
 
 Stored values are **list indices**, so `resources/properties.xml`, `resources/settings/settings.xml`,
 `resources/strings/strings.xml`, the enums in `StatMap`/`Source`, and the label arrays in
-`source/settings/SettingsMenu.mc` all have to agree. Eleven properties today: `theme`,
-`handBacking`, `alwaysOnFill`, `dotRotation`, `showDate`, `ring1`–`ring4`, `tempAheadLow`,
-`tempAheadHigh`. `dotRotation` stores three values and offers two: the third, Upright +
+`source/settings/SettingsMenu.mc` all have to agree. Twelve properties today: `theme`,
+`handBacking`, `alwaysOnFill`, `dotRotation`, `showDate`, `dateOutline`, `ring1`–`ring4`,
+`tempAheadLow`, `tempAheadHigh`. `dotRotation` stores three values and offers two: the third, Upright +
 date, is **retired** — `StatMap.load()` reads it as Upright, and `showDate`'s default of On
 keeps that wearer's date. Never give 2 a new meaning.
 
@@ -822,8 +822,8 @@ guard. Every orientation lights nine pixels, so neither setting moves the lumina
 ### The date is the dots, joined
 
 `showDate` (on by default) draws the day of the month as a faint **outline joining the
-numeral's own dots**, centre to centre, at `DateGlyph.LINE_PERCENT` (65) of the colour of
-the dot each line leaves from. The dots themselves are ordinary crosses. `DateGlyph` owns
+numeral's own dots**, centre to centre, at `DateGlyph.linePercent()` of the colour of the
+dot each line leaves from — 50, 65 (default) or 80%, the `dateOutline` setting. The dots themselves are ordinary crosses. `DateGlyph` owns
 the window, the font, the list of dots, the outline and its reveal order; nothing else
 learns what a digit is.
 
@@ -845,8 +845,11 @@ re-litigate any of it from a render:
   pixels off every dot fights the grid. One through the centres *is* the grid, and on the
   Follow-the-rings field it still reads, though its joins float between the diagonal
   crosses rather than meeting arm tips.
-- **65%, chosen on the watch from 50, 65 and 80 shown a minute apart.** 100 was too
-  obvious; 40 vanished outright, because the AMOLED crushes dark levels a monitor shows.
+- **65%, chosen on the watch from 50, 65 and 80 shown a minute apart**, and those three are
+  what `dateOutline` offers. 100 was too obvious; 40 vanished outright, because the AMOLED
+  crushes dark levels a monitor shows — so neither end is a choice. A level change goes
+  through `Config.reload()`, whose forced clear is what re-inks every segment at the new
+  brightness; `segInked` remembers dot colours, not inked ones, and would not notice.
 - **A line fills only the gap between two arms** (`GAP_FROM`, `GAP_LENGTH`), drawn with
   `fillRectangle` because its extent is unambiguous where `drawLine`'s end pixel is not.
   At 65% a line painted over an arm repaints it dimmer, and the numeral's dots fade where

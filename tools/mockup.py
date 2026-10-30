@@ -497,7 +497,8 @@ DIGITS = [
     0b111101111001111,      # 9
 ]
 
-LINE_PERCENT = 65
+LINE_PERCENTS = [50, 65, 80]            # the dateOutline setting's levels
+LINE_PERCENT = LINE_PERCENTS[1]         # its default
 GAP_FROM = DOT // 2 + 1                 # first pixel past an arm tip
 GAP_LENGTH = PITCH - 2 * GAP_FROM + 1   # to one short of the next arm
 
