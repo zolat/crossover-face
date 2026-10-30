@@ -208,7 +208,7 @@ class CrossoverView extends WatchUi.WatchFace {
             // inked; only a reveal that has moved on needs another pass.
             var frameDc = _frameDc;
             if (dating && frameDc != null && _inkedStep != _revealStep) {
-                inkOutline(frameDc);
+                inkOutline(frameDc, false);
             }
             present(dc);
             Diagnostics.recordSkip(System.getTimer() - started);
@@ -239,8 +239,10 @@ class CrossoverView extends WatchUi.WatchFace {
         MatrixRenderer.drawAt(targetDc, spans, markers, overs, blocks, palette,
                               lowPower ? Palette.rampAlwaysOn : Palette.rampActive,
                               backing, FrameGate.dirty, FrameGate.clears, _drift);
+        // Cleared, or drawn straight to a screen surface that holds nothing
+        // of the last frame: either way no segment is standing.
         if (dating) {
-            inkOutline(targetDc);
+            inkOutline(targetDc, FrameGate.clears || !persistent);
         }
         if (persistent) {
             FrameGate.commit(field, rings);
@@ -418,10 +420,11 @@ class CrossoverView extends WatchUi.WatchFace {
                (!HandStyle.DRAWN || backing == null);
     }
 
-    //! Ink the outline into `target` as far as the reveal has got.
-    private function inkOutline(target as Dc) as Void {
+    //! Ink the outline into `target` as far as the reveal has got. `cleared`
+    //! when `target` was just blacked, so nothing of the outline is standing.
+    private function inkOutline(target as Dc, cleared as Boolean) as Void {
         DateGlyph.drawContour(target, _drift,
-                              _revealStep.toFloat() / REVEAL_STEPS);
+                              _revealStep.toFloat() / REVEAL_STEPS, cleared);
         _inkedStep = _revealStep;
     }
 

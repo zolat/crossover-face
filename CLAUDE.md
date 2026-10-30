@@ -19,7 +19,7 @@ covers the working knowledge that spans files and is easy to break.
 ```sh
 make build      # debug .prg for the simulator
 make sim        # build, start the simulator if needed, sideload, stream println
-make test       # build with -t, run the 150-test suite (takes the simulator lock)
+make test       # build with -t, run the 151-test suite (takes the simulator lock)
 make test-lock  # self-test tools/sim_lock.sh
 make test-simctl # tests for tools/simctl (no simulator, no build needed)
 make package    # signed .iq for the store

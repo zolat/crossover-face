@@ -1961,6 +1961,60 @@ module MatrixTest {
         return true;
     }
 
+    //! A drawn frame re-inks only what the buffer does not already hold.
+    //!
+    //! Inking every segment on every drawn frame measured 37ms a frame on the
+    //! seconds row — more than twice the renderer's whole delta, and enough to
+    //! take that row from 44ms to 186ms with the date on. Only a clear touches
+    //! the gaps the outline lives in, so a segment standing in its dot's
+    //! current colour is skipped. Three ways that goes wrong, all held here: a
+    //! cleared frame that skips (the outline vanishes), a dot that changed tier
+    //! and is not re-inked (a stale line), and the reveal's limit ignored.
+    (:test)
+    function theOutlineReinksOnlyWhatChanged(logger as Logger) as Boolean {
+        Config.reload();
+        DotGrid.ensureBuilt();
+        var dc = probeDc(logger);
+        if (dc == null) {
+            return true;
+        }
+        var drift = [0, 0] as Array<Number>;
+        DateGlyph.ensure(GLYPH_DAY);
+        DateGlyph.ensureTraced();
+        for (var k = 0; k < DateGlyph.lit; k++) {
+            DateGlyph.colours[k] = 0x336699;
+        }
+
+        DateGlyph.drawContour(dc, drift, 0.0, true);
+        Test.assertEqualMessage(DateGlyph.inked, 0,
+            "a reveal at its start must draw nothing");
+        DateGlyph.drawContour(dc, drift, 1.0, true);
+        Test.assertEqualMessage(DateGlyph.inked, DateGlyph.segments,
+            "a cleared frame must ink every segment");
+        DateGlyph.drawContour(dc, drift, 1.0, false);
+        Test.assertEqualMessage(DateGlyph.inked, 0,
+            "an unchanged frame must ink nothing");
+
+        // One dot changes tier: exactly the segments that leave from it.
+        var changed = DateGlyph.segA[0];
+        var leaving = 0;
+        for (var s = 0; s < DateGlyph.segments; s++) {
+            if (DateGlyph.segA[s] == changed) {
+                leaving++;
+            }
+        }
+        DateGlyph.colours[changed] = 0x996633;
+        DateGlyph.drawContour(dc, drift, 1.0, false);
+        Test.assertEqualMessage(DateGlyph.inked, leaving,
+            "a dot that changed colour must re-ink its own segments and no more");
+
+        DateGlyph.drawContour(dc, drift, 1.0, true);
+        Test.assertEqualMessage(DateGlyph.inked, DateGlyph.segments,
+            "and the next clear must ink everything again");
+        DateGlyph.forgetInk();
+        return true;
+    }
+
     //! A reveal rests fully drawn, so only a wake ever animates it.
     //!
     //! A frame no reveal led up to — a settings change, a return from another

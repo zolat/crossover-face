@@ -257,6 +257,17 @@ module DateGlyph {
     var segA as Array<Number> = [] as Array<Number>;
     var segB as Array<Number> = [] as Array<Number>;
     var segDepth as Array<Number> = [] as Array<Number>;
+
+    //! The colour each segment is standing in the buffer in, -1 where it is
+    //! not drawn. drawContour() repaints only the segments that differ, which
+    //! is what keeps a drawn frame from paying ~90 native calls: measured at
+    //! 37ms a frame on the seconds row when every segment was inked every time,
+    //! against 16ms for the renderer's whole delta.
+    var segInked as Array<Number> = [] as Array<Number>;
+
+    //! How many segments the last drawContour() actually drew. The screen
+    //! cannot be read back, so this is what holds the skip to its contract.
+    var inked as Number = 0;
     var segments as Number = 0;
     var maxDepth as Number = 0;
 
@@ -386,6 +397,7 @@ module DateGlyph {
             segA = new [2 * CELLS] as Array<Number>;
             segB = new [2 * CELLS] as Array<Number>;
             segDepth = new [2 * CELLS] as Array<Number>;
+            segInked = new [2 * CELLS] as Array<Number>;
         }
         var n = 0;
         for (var c = 0; c < CELLS; c++) {
@@ -404,20 +416,37 @@ module DateGlyph {
             }
         }
         segments = n;
+        forgetInk();
         tracedDay = day;
         tracedFor = shownFor;
+    }
+
+    //! Say that the buffer no longer holds any of the outline: it was cleared.
+    function forgetInk() as Void {
+        for (var s = 0; s < segInked.size(); s++) {
+            segInked[s] = -1;
+        }
     }
 
     //! Ink the outline as far as `reach` (0.0-1.0) of the way round each loop.
     //!
     //! Called after the renderer, into the same buffer, so the colours it reads
     //! are the ones just drawn. Each line fills the gap between two crosses and
-    //! nothing else, so redrawing it over itself is idempotent and a ring
-    //! repaint, which touches only the crosses, leaves it standing.
-    function drawContour(dc as Dc, drift as Array<Number>, reach as Float) as Void {
+    //! nothing else, and only a clear ever touches those gaps — a ring repaint
+    //! draws crosses, a mark's erase blacks one cell. So a segment already
+    //! standing in its dot's current colour is skipped, and `cleared` says the
+    //! buffer was just blacked and nothing is standing. **Pass true on every
+    //! frame the gate cleared**, or the outline vanishes until a dot under it
+    //! changes colour.
+    function drawContour(dc as Dc, drift as Array<Number>, reach as Float,
+                         cleared as Boolean) as Void {
         if (!traced()) {
             return;
         }
+        if (cleared) {
+            forgetInk();
+        }
+        inked = 0;
         var cx = (dc.getWidth() / 2) + drift[0];
         var cy = (dc.getHeight() / 2) + drift[1];
         var limit = reach * maxDepth;
@@ -430,9 +459,11 @@ module DateGlyph {
             }
             var a = segA[s];
             var colour = colours[a];
-            if (colour < 0) {
-                continue;                   //! not drawn yet; next frame
+            if (colour < 0 || colour == segInked[s]) {
+                continue;                   //! not drawn yet, or already standing
             }
+            segInked[s] = colour;
+            inked++;
             if (colour != last) {
                 last = colour;
                 dc.setColor(dimmed(colour), Graphics.COLOR_TRANSPARENT);
