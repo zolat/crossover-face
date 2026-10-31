@@ -154,13 +154,18 @@ module DotGrid {
     //! exactly that.
     var bandEdge as Array<Number> = [] as Array<Number>;
 
+    //! Squared outer edge of each ring below the first, as build() assigns
+    //! them — kept so nearDot() can ask which ring a cell is in the same way.
+    var ringEdge as Array<Number> = [] as Array<Number>;
+
     //! The mark each ring last landed on, and the position it was asked for.
     //!
     //! markedDot() walks a whole ring to answer, so a marked ring used to be
     //! walked twice per drawn frame — once to place the mark, once to draw. The
     //! mark itself moves with the current temperature, which is to say hourly,
     //! so almost every one of those walks re-derived the answer it gave a
-    //! second ago.
+    //! second ago. A miss now goes to nearDot(), which gives the walk's answer
+    //! from a few cells rather than the ring; the cache still spares it that.
     //!
     //! Keyed on the position asked for rather than timed: the mark is allowed
     //! to move the instant its reading does, and a position that has not
@@ -170,6 +175,31 @@ module DotGrid {
     const NO_MARK_KEY = -2.0;
     var markedFor as Array<Float> = [] as Array<Float>;
     var markedAt as Array<Number> = [] as Array<Number>;
+
+    //! The same cache for the sun dots: Source.SUN_VALUES slots per ring,
+    //! sunrise then sunset, flat. A slot of its own rather than a second key on
+    //! markedFor, because the temperature mark and the two sun times move
+    //! independently and a shared one-entry cache would thrash between them —
+    //! walking the ring three times per drawn frame to re-derive answers it had
+    //! a second ago.
+    var sunFor as Array<Float> = [] as Array<Float>;
+    var sunAt as Array<Number> = [] as Array<Number>;
+
+    //! Where across its ring each sun dot sits, as the squared radius the
+    //! search closes on. Sunrise takes the **outer** edge and sunset the
+    //! **inner**, with the temperature mark between them in the middle.
+    //!
+    //! Opposite edges, not one, because on a twelve-hour dial the two times
+    //! are routinely the same position: 06:05 and 18:10 are five minutes
+    //! apart round it. Two dots chasing one window would land on one dot. Kept
+    //! apart radially they cannot, and theSunDotsNeverShareADot holds that on
+    //! every ring of every lattice.
+    //!
+    //! Zero and anything past the rim are not radii any dot has, and that is
+    //! the point: closest to zero is simply the innermost dot in the window,
+    //! closest to four times the rim the outermost.
+    const SUN_OUTWARD = RADIUS_SQ * 4;
+    const SUN_INWARD = 0;
 
     //! Where each ring's dots begin, with a final entry holding the total.
     //! The dots are stored grouped by ring, so the renderer can walk one ring
@@ -400,11 +430,162 @@ module DotGrid {
             return markedAt[ring];
         }
         var at = (mark >= 0.0)
-            ? markedDot(ring, StatMap.windowAround(mark, markerHalf[ring]))
+            ? nearDot(ring, mark, markMiddle[ring],
+                      Math.sqrt(markMiddle[ring]).toFloat())
             : -1;
         markedFor[ring] = mark;
         markedAt[ring] = at;
         return at;
+    }
+
+    //! Which dot this ring's sunrise (slot 0) or sunset (slot 1) lands on,
+    //! remembered between frames like markedDotFor(). -1 when the position is
+    //! Source.NO_MARKER or no dot falls inside its window.
+    //!
+    //! The window is the temperature mark's own, so a sun dot is found exactly
+    //! where a mark at that position would be — only closer to an edge.
+    function sunDotFor(ring as Number, slot as Number, at as Float) as Number {
+        var key = ring * Source.SUN_VALUES + slot;
+        if (sunFor[key] == at) {
+            return sunAt[key];
+        }
+        var outer = (ring == 0) ? RADIUS.toFloat()
+                                : Math.sqrt(ringEdge[ring - 1]).toFloat();
+        var dot = (at >= 0.0)
+            ? nearDot(ring, at, (slot == 0) ? SUN_OUTWARD : SUN_INWARD,
+                      (slot == 0) ? outer : ringInner[ring].toFloat())
+            : -1;
+        sunFor[key] = at;
+        sunAt[key] = dot;
+        return dot;
+    }
+
+    //! How many lattice cells either side of a mark's anchor nearDot() looks.
+    //! Two is what every ring of every lattice needs to agree with the full
+    //! walk, and theQuickMarkSearchAgreesWithTheWalk is what says so.
+    const NEAR_REACH = 2;
+
+    //! markedDotNear() over the window round `at`, without walking the ring.
+    //!
+    //! **Why it exists: the walk did not fit.** Placing a dot walks every dot
+    //! of its ring, and a frame that has to place one — the first after a load,
+    //! or the first after the reading moves — pays that on top of a full
+    //! redraw. One walk for the temperature mark already sat at the 416
+    //! lattice's edge with the hands drawn; the sun dots' two more tripped the
+    //! watchdog there and the face would not load.
+    //!
+    //! The answer is never far from where it is being looked for: a window one
+    //! pitch of arc wide, closing on a given radius, lands within a cell or two
+    //! of the point at that radius on the window's centre line. So this
+    //! enumerates the (2 * NEAR_REACH + 1)² lattice cells round that point,
+    //! applies the walk's own tests to each — on the ring, inside the window,
+    //! closest to `scoreSq`, first in scan order on a tie — and binary-searches
+    //! the winner's index. The position it compares is computed with build()'s
+    //! own arithmetic, so the window test cannot round differently from the
+    //! cached one. markedDotNear() remains the definition.
+    function nearDot(ring as Number, at as Float, scoreSq as Number,
+                     anchor as Float) as Number {
+        var window = StatMap.windowAround(at, markerHalf[ring]);
+        var from = window[0];
+        var to = window[1];
+        var wraps = (from > to);
+        var angle = at * FULL_TURN;
+        var col = cellNear((anchor * Math.sin(angle)).toFloat());
+        var row = cellNear((-anchor * Math.cos(angle)).toFloat());
+        var lastRing = StatMap.RINGS - 1;
+        var bestX = 0;
+        var bestY = 0;
+        var bestOff = -1;
+        for (var r = row - NEAR_REACH; r <= row + NEAR_REACH; r++) {
+            if (r < 0 || r > LAST) {
+                continue;
+            }
+            var dy = offsetAt(r);
+            for (var c = col - NEAR_REACH; c <= col + NEAR_REACH; c++) {
+                if (c < 0 || c > LAST) {
+                    continue;
+                }
+                var dx = offsetAt(c);
+                var d = dx * dx + dy * dy;
+                if (d > RADIUS_SQ || d < HUB_SQ) {
+                    continue;
+                }
+                // build()'s ring test, so the two agree on every edge.
+                var k = 0;
+                while (k < lastRing && d < ringEdge[k]) {
+                    k++;
+                }
+                if (k != ring) {
+                    continue;
+                }
+                var off = (d - scoreSq).abs();
+                // Strictly less, in scan order: the walk's own tie-break.
+                if (bestOff >= 0 && off >= bestOff) {
+                    continue;
+                }
+                var p = turnAt(dx, dy);
+                var inside = wraps ? ((p >= from) || (p <= to))
+                                   : ((p >= from) && (p <= to));
+                if (inside) {
+                    bestX = dx;
+                    bestY = dy;
+                    bestOff = off;
+                }
+            }
+        }
+        return (bestOff < 0) ? -1 : indexOf(ring, bestX, bestY);
+    }
+
+    //! The column or row whose offset is nearest `offset`, clamped onto the
+    //! lattice. offsetAt() run backwards.
+    function cellNear(offset as Float) as Number {
+        var cell = Math.round((offset / STEP + LAST) / 2.0).toNumber();
+        if (cell < 0) { return 0; }
+        if (cell > LAST) { return LAST; }
+        return cell;
+    }
+
+    //! A dot's position along its ring, by exactly the arithmetic build()
+    //! caches it with — the same quadrant, the same floats, the same
+    //! polynomial — so a window test on it lands as one on positionOf would.
+    function turnAt(dx as Number, dy as Number) as Float {
+        var u = dx.abs();
+        var v = dy.abs();
+        var uFloat = u.toFloat();
+        var vFloat = v.toFloat();
+        var z;
+        var q;
+        if (u <= v) {
+            z = uFloat / vFloat;
+            q = (z * (0.9724 - 0.1919 * z * z)) / FULL_TURN;
+        } else {
+            z = vFloat / uFloat;
+            q = 0.25 - (z * (0.9724 - 0.1919 * z * z)) / FULL_TURN;
+        }
+        if (dy < 0) {
+            return (dx > 0) ? q : 1.0 - q;
+        }
+        return (dx > 0) ? 0.5 - q : 0.5 + q;
+    }
+
+    //! The index of the dot at this offset in its ring, by binary search: a
+    //! ring is stored in scan order, which is (row, then column) ascending.
+    function indexOf(ring as Number, dx as Number, dy as Number) as Number {
+        var lo = ringStart[ring];
+        var hi = ringStart[ring + 1] - 1;
+        while (lo <= hi) {
+            var mid = (lo + hi) / 2;
+            var y = ys[mid];
+            if (y == dy && xs[mid] == dx) {
+                return mid;
+            }
+            if (y < dy || (y == dy && xs[mid] < dx)) {
+                lo = mid + 1;
+            } else {
+                hi = mid - 1;
+            }
+        }
+        return -1;
     }
 
     //! Forget every cached mark. The dots themselves have moved, so an index
@@ -415,6 +596,13 @@ module DotGrid {
         for (var k = 0; k < ringCount; k++) {
             markedFor[k] = NO_MARK_KEY;
             markedAt[k] = -1;
+        }
+        var suns = ringCount * Source.SUN_VALUES;
+        sunFor = new [suns] as Array<Float>;
+        sunAt = new [suns] as Array<Number>;
+        for (var k = 0; k < suns; k++) {
+            sunFor[k] = NO_MARK_KEY;
+            sunAt[k] = -1;
         }
     }
 
@@ -433,10 +621,16 @@ module DotGrid {
     //! is left comparing an index, which is cheaper than the two float
     //! comparisons a window test costs.
     function markedDot(ring as Number, window as Array<Float>) as Number {
+        return markedDotNear(ring, window, markMiddle[ring]);
+    }
+
+    //! markedDot(), closing on any squared radius rather than the ring's
+    //! middle. The sun dots ask for its edges; see SUN_OUTWARD.
+    function markedDotNear(ring as Number, window as Array<Float>,
+                           middle as Number) as Number {
         var from = window[0];
         var to = window[1];
         var wraps = (from > to);
-        var middle = markMiddle[ring];
         var last = ringStart[ring + 1];
         var best = -1;
         var bestOff = 0;
@@ -511,6 +705,7 @@ module DotGrid {
         var ringCount = StatMap.RINGS;
         var lastRing = ringCount - 1;
         var bounds = ringBounds(ringCount);
+        ringEdge = bounds;
         markerHalf = markerWidths(ringCount);
         markMiddle = markMiddles(ringCount);
         bandEdge = bandEdges(ringCount);

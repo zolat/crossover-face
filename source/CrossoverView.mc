@@ -58,6 +58,8 @@ class CrossoverView extends WatchUi.WatchFace {
         new [StatMap.RINGS] as Array<Boolean>;
     private var _markers as Array<Float> =
         new [StatMap.RINGS] as Array<Float>;
+    private var _suns as Array<Float> =
+        new [StatMap.RINGS * Source.SUN_VALUES] as Array<Float>;
     private var _drift as Array<Number> = [0, 0] as Array<Number>;
 
     function initialize() {
@@ -149,6 +151,13 @@ class CrossoverView extends WatchUi.WatchFace {
         // does. See fillMarksFor().
         var markers = _markers;
         fillMarksFor(hideFills, markers, spans, overs);
+        // The sun dots follow the mark: both modes, held back with the fills.
+        var suns = _suns;
+        if (hideFills) {
+            StatMap.fillNoSuns(suns);
+        } else {
+            StatMap.fillSuns(suns);
+        }
         // The block channel is handed to both the print and the
         // renderer. The renderer must never read the clock for itself: an hour
         // rolling over between the two would leave the gate certain a ring had
@@ -196,7 +205,7 @@ class CrossoverView extends WatchUi.WatchFace {
         var clock = System.getClockTime();
         Drift.fillFor(clock.min, _drift);
         var field = fieldPrint(backing, day, _drift, clock.min, mode);
-        var rings = ringPrint(spans, markers, overs, blocks);
+        var rings = ringPrint(spans, markers, overs, blocks, suns);
         if (!FrameGate.plan(field, rings)) {
             // The buffer already holds the outline as far as it was last
             // inked; only a reveal that has moved on needs another pass.
@@ -230,7 +239,8 @@ class CrossoverView extends WatchUi.WatchFace {
         var palette = hideFills
             ? Palette.heldBack
             : (lowPower ? Palette.alwaysOn : Palette.active);
-        MatrixRenderer.drawAt(targetDc, spans, markers, overs, blocks, palette,
+        MatrixRenderer.drawAt(targetDc, spans, markers, suns, overs, blocks,
+                              palette,
                               lowPower ? Palette.rampAlwaysOn : Palette.rampActive,
                               backing, FrameGate.dirty, FrameGate.clears, _drift);
         // Cleared, or drawn straight to a screen surface that holds nothing
@@ -320,13 +330,19 @@ class CrossoverView extends WatchUi.WatchFace {
     //! that ring ever changes, and the forecast would only appear when the
     //! periodic repair happened to fire.
     //!
+    //! And the sun positions, for the mark's reason: they move while the
+    //! band and the mark sit still, and a print without them would freeze a
+    //! sun dot on yesterday's minute — or never draw it, if the first frame
+    //! came before the complications had an answer.
+    //!
     //! Not private, so the redraw tests can call it. What either print leaves
     //! out is invisible from anywhere else: the ring simply stops updating,
     //! which looks like nothing at all going wrong.
     function ringPrint(spans as Array<Array<Float> >,
                        markers as Array<Float>,
                        overs as Array<Boolean>,
-                       blocks as Array<Number>) as Array<Float> {
+                       blocks as Array<Number>,
+                       suns as Array<Float>) as Array<Float> {
         var out = _ringPrint;
         for (var i = 0; i < StatMap.RINGS; i++) {
             var at = i * FrameGate.PER_RING;
@@ -341,6 +357,8 @@ class CrossoverView extends WatchUi.WatchFace {
             out[at + 4] = blocks[packed].toFloat();
             out[at + 5] = blocks[packed + 1].toFloat();
             out[at + 6] = blocks[packed + 2].toFloat();
+            out[at + 7] = suns[i * Source.SUN_VALUES];
+            out[at + 8] = suns[i * Source.SUN_VALUES + 1];
         }
         return out;
     }

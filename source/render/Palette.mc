@@ -164,6 +164,18 @@ module Palette {
     const MARKER = 0xFFFFFF;
     const MARKER_TINT = 0.55;
 
+    //! The two sun dots on the temperature-and-sun ring: sunrise, then
+    //! sunset, in Source.SUN_VALUES order.
+    //!
+    //! Fixed rather than drawn from the theme. What they say is the same on
+    //! every theme, and a hue borrowed from a ring would mean "that ring" on a
+    //! face where colour already means that. Sunrise is a light yellow that no
+    //! theme's band uses; sunset is a mid blue, light enough to stand off the
+    //! black around it at the inner edge. Both drawn in both modes, like the
+    //! mark — two solid dots a ring, which theSunDotsFitTheAlwaysOnBudget
+    //! prices on every theme.
+    const SUN_COLOURS = [0xFFE680, 0x4D8CFF] as Array<Number>;
+
     //! How far an over-goal ring's second lap is tinted toward the mark.
     //!
     //! "Slightly stronger" cannot mean scaling the colour up: that is the whole

@@ -553,7 +553,9 @@ module MatrixTest {
             "Body Battery last 12h must stay 11");
         Test.assertEqualMessage(Source.SOURCE_TEMP_HOURS, 12,
             "temperature next 12h must stay 12");
-        Test.assertEqualMessage(Source.COUNT, 13,
+        Test.assertEqualMessage(Source.SOURCE_TEMP_SUN, 13,
+            "temperature range with sun must stay 13");
+        Test.assertEqualMessage(Source.COUNT, 14,
             "COUNT counts slots, not offers — the tables are indexed by it");
 
         // The retired slot is never offered.
@@ -2684,13 +2686,16 @@ module MatrixTest {
         var none = noOvers();
         // The view refills one buffer every frame, so a copy has to be taken
         // before asking for the next print — exactly as FrameGate does.
-        var before = copyOf(view.ringPrint(spans, at12, none, emptyBlocks()));
-        var after = copyOf(view.ringPrint(spans, at18, none, emptyBlocks()));
+        var before = copyOf(view.ringPrint(spans, at12, none, emptyBlocks(),
+                                        MatrixRenderer.NO_SUNS));
+        var after = copyOf(view.ringPrint(spans, at18, none, emptyBlocks(),
+                                        MatrixRenderer.NO_SUNS));
         logger.debug("the ring print is " + before.size() + " values");
         Test.assertMessage(!FrameGate.same(before, after),
             "a mark that moved must change the ring print");
         Test.assertMessage(
-            FrameGate.same(before, view.ringPrint(spans, at12, none, emptyBlocks())),
+            FrameGate.same(before, view.ringPrint(spans, at12, none, emptyBlocks(),
+                                                  MatrixRenderer.NO_SUNS)),
             "an unchanged mark must leave the ring print alone");
 
         // And it must move *that ring's* slice, not merely the frame: a mark
@@ -2737,9 +2742,9 @@ module MatrixTest {
         Test.assertMessage(Source.NO_MARKER < 0.0,
             "the empty marker must sit outside every position, or it draws");
 
-        // Nothing but temperature marks anything at all.
+        // Nothing but the temperature range marks anything at all.
         for (var kind = 0; kind < Source.COUNT; kind++) {
-            if (kind == Source.SOURCE_TEMPERATURE) {
+            if (Source.isTemperatureRange(kind)) {
                 continue;
             }
             Test.assertEqualMessage(Source.marker(kind), Source.NO_MARKER,
@@ -3161,14 +3166,17 @@ module MatrixTest {
             marks[i] = Source.NO_MARKER;
         }
 
-        var under = copyOf(view.ringPrint(spans, marks, noOvers(), emptyBlocks()));
-        var over = copyOf(view.ringPrint(spans, marks, allOvers(), emptyBlocks()));
+        var under = copyOf(view.ringPrint(spans, marks, noOvers(), emptyBlocks(),
+                                        MatrixRenderer.NO_SUNS));
+        var over = copyOf(view.ringPrint(spans, marks, allOvers(), emptyBlocks(),
+                                        MatrixRenderer.NO_SUNS));
         logger.debug("the ring print is " + under.size() + " values");
         Test.assertMessage(!FrameGate.same(under, over),
             "crossing the goal must change the ring print — the span alone " +
             "cannot tell a lap of 0.05 from a fill of 0.05");
         Test.assertMessage(
-            FrameGate.same(under, view.ringPrint(spans, marks, noOvers(), emptyBlocks())),
+            FrameGate.same(under, view.ringPrint(spans, marks, noOvers(), emptyBlocks(),
+                                                  MatrixRenderer.NO_SUNS)),
             "an unchanged flag must leave the ring print alone");
         return true;
     }
@@ -5296,9 +5304,9 @@ module MatrixTest {
         }
         // And the print carries a slot for each of them.
         Test.assertEqualMessage(FrameGate.PER_RING,
-            4 + StatMap.BLOCK_VALUES,
+            4 + StatMap.BLOCK_VALUES + Source.SUN_VALUES,
             "the ring print must carry every block word beside the span, " +
-            "the mark and the over flag");
+            "the mark, the over flag and the two sun times");
         logger.debug("levels " + packed[0] + "/" + packed[1] + ", known " +
                      packed[2]);
         return true;
@@ -5968,9 +5976,11 @@ module MatrixTest {
         var overs = noOvers();
 
         var dry = copyOf(view.ringPrint(spans, marks, overs,
-                                        blocksFor(0, everyBlockAt(0))));
+                                        blocksFor(0, everyBlockAt(0)),
+                                        MatrixRenderer.NO_SUNS));
         var wet = copyOf(view.ringPrint(spans, marks, overs,
-                                        blocksFor(0, everyBlockAt(2))));
+                                        blocksFor(0, everyBlockAt(2)),
+                                        MatrixRenderer.NO_SUNS));
         Test.assertMessage(!FrameGate.same(dry, wet),
             "the forecast changed and the ring print did not");
         Test.assertMessage(FrameGate.ringMoved(dry, wet, 0),
@@ -5984,7 +5994,8 @@ module MatrixTest {
         // An hour going from dry to unknown is also a change, and the one a
         // print of levels alone would miss: the levels word is 0 either way.
         var unknown = copyOf(view.ringPrint(spans, marks, overs,
-            blocksFor(0, everyBlockAt(HourBands.UNKNOWN))));
+            blocksFor(0, everyBlockAt(HourBands.UNKNOWN)),
+            MatrixRenderer.NO_SUNS));
         Test.assertMessage(FrameGate.ringMoved(dry, unknown, 0),
             "dry and unknown share a levels word, so the known word is the " +
             "only thing that can tell the gate they differ");
@@ -5995,7 +6006,8 @@ module MatrixTest {
         var lateLevels = everyBlockAt(0);
         lateLevels[HourBands.HOURS - 1] = HourBands.LEVELS;
         var late = copyOf(view.ringPrint(spans, marks, overs,
-                                         blocksFor(0, lateLevels)));
+                                         blocksFor(0, lateLevels),
+                                         MatrixRenderer.NO_SUNS));
         Test.assertMessage(FrameGate.ringMoved(dry, late, 0),
             "a change in the last block lives in the high levels word alone, " +
             "and the gate must still see it");
@@ -6298,6 +6310,382 @@ module MatrixTest {
             Test.assertEqualMessage(StatMap.rings[i], saved[i],
                 "the test must leave the rings as it found them");
         }
+        return true;
+    }
+
+    // ------------------------------------------------------------------
+    // Temperature range with sunrise and sunset
+    // ------------------------------------------------------------------
+
+    //! A sun time sits where the hour hand will point when it happens, on the
+    //! same twelve-hour dial the wearer reads the hands against.
+    (:test)
+    function aSunTimeSitsWhereTheHourHandWillPoint(logger as Logger) as Boolean {
+        var cases = [
+            [0, 0.0],                   // midnight is twelve
+            [6 * 3600, 0.5],            // six in the morning
+            [6 * 3600 + 1800, 0.5416667],
+            [12 * 3600, 0.0],           // noon is twelve again
+            [18 * 3600, 0.5],           // six in the evening shares six
+            [19 * 3600 + 2700, 0.6458333],
+            [86399, 0.9999769]
+        ] as Array<Array<Numeric> >;
+        for (var i = 0; i < cases.size(); i++) {
+            var got = SunData.dialOf(cases[i][0] as Number);
+            var want = cases[i][1] as Float;
+            Test.assertMessage((got - want).abs() < 0.00001,
+                cases[i][0] + "s landed at " + got + ", expected " + want);
+            Test.assertMessage(got >= 0.0 && got < 1.0,
+                "a position must sit on the ring, 0.0 up to below 1.0");
+        }
+        // No answer, and anything that is not a time of day, marks nothing.
+        Test.assertEqualMessage(SunData.dialOf(null), Source.NO_MARKER,
+            "no sunrise must mean no dot");
+        Test.assertEqualMessage(SunData.dialOf(-1), Source.NO_MARKER,
+            "a negative time of day is not one");
+        Test.assertEqualMessage(SunData.dialOf(86400), Source.NO_MARKER,
+            "a full day is past the end of one");
+        return true;
+    }
+
+    //! The variant is the temperature range — the same span, the same mark,
+    //! the same ramp — with the sun channel beside it. Nothing else carries a
+    //! sun time.
+    (:test)
+    function theSunVariantIsTheTemperatureRangePlusTheSun(logger as Logger)
+            as Boolean {
+        WeatherData.forget();
+        SunData.forget();
+        for (var mode = 0; mode < 2; mode++) {
+            var plain = Source.span(Source.SOURCE_TEMPERATURE, mode == 0);
+            var sun = Source.span(Source.SOURCE_TEMP_SUN, mode == 0);
+            Test.assertEqualMessage(sun[0], plain[0],
+                "the variant's band must start where the range's does");
+            Test.assertEqualMessage(sun[1], plain[1],
+                "the variant's band must end where the range's does");
+        }
+        Test.assertEqualMessage(Source.marker(Source.SOURCE_TEMP_SUN),
+            Source.marker(Source.SOURCE_TEMPERATURE),
+            "the variant must mark the current temperature too");
+
+        var out = [0.0, 0.0] as Array<Float>;
+        for (var kind = 0; kind < Source.COUNT; kind++) {
+            var range = (kind == Source.SOURCE_TEMPERATURE ||
+                         kind == Source.SOURCE_TEMP_SUN);
+            Test.assertEqualMessage(Source.isTemperatureRange(kind), range,
+                "source " + kind + " disagrees about drawing the ramp");
+            Source.fillSuns(kind, out, 0);
+            if (kind == Source.SOURCE_TEMP_SUN) {
+                for (var k = 0; k < Source.SUN_VALUES; k++) {
+                    Test.assertMessage(out[k] == Source.NO_MARKER ||
+                                       (out[k] >= 0.0 && out[k] < 1.0),
+                        "a sun time must be on the ring or absent");
+                }
+                logger.debug("simulator sunrise " + out[0] + ", sunset " +
+                             out[1]);
+            } else {
+                Test.assertEqualMessage(out[0], Source.NO_MARKER,
+                    "source " + kind + " carries a sunrise it should not");
+                Test.assertEqualMessage(out[1], Source.NO_MARKER,
+                    "source " + kind + " carries a sunset it should not");
+            }
+        }
+
+        // Held back with the fills, like the mark.
+        var suns = new [StatMap.RINGS * Source.SUN_VALUES] as Array<Float>;
+        StatMap.fillNoSuns(suns);
+        for (var i = 0; i < suns.size(); i++) {
+            Test.assertEqualMessage(suns[i], Source.NO_MARKER,
+                "held back, no ring may show a sun time");
+        }
+        Test.assertEqualMessage(MatrixRenderer.NO_SUNS.size(),
+            StatMap.RINGS * Source.SUN_VALUES,
+            "the renderer's empty sun channel must cover every ring");
+        for (var i = 0; i < MatrixRenderer.NO_SUNS.size(); i++) {
+            Test.assertEqualMessage(MatrixRenderer.NO_SUNS[i], Source.NO_MARKER,
+                "the empty sun channel must mark nothing");
+        }
+        return true;
+    }
+
+    //! Sunrise closes on the ring's outer edge and sunset on its inner one, so
+    //! the two never land on one dot — and on a twelve-hour dial they are
+    //! routinely at the same *position*, which is the case walked here: both
+    //! at every position at once.
+    (:test)
+    function theSunDotsNeverShareADot(logger as Logger) as Boolean {
+        Config.reload();
+        DotGrid.build();
+        var steps = 96;
+        var withMark = 0;
+        for (var ring = 0; ring < StatMap.RINGS; ring++) {
+            var first = DotGrid.ringStart[ring];
+            var last = DotGrid.ringStart[ring + 1];
+            for (var s = 0; s < steps; s++) {
+                var at = s.toFloat() / steps;
+                var rise = DotGrid.sunDotFor(ring, 0, at);
+                var set = DotGrid.sunDotFor(ring, 1, at);
+                var mark = DotGrid.markedDot(ring,
+                    StatMap.windowAround(at, DotGrid.markerHalf[ring]));
+                Test.assertMessage(rise >= first && rise < last &&
+                                   set >= first && set < last,
+                    "ring " + ring + " at " + at + " lost a sun dot");
+                Test.assertMessage(rise != set,
+                    "ring " + ring + " at " + at + " put sunrise and sunset " +
+                    "on one dot");
+                var riseSq = radiusSqOf(rise);
+                var setSq = radiusSqOf(set);
+                var markSq = radiusSqOf(mark);
+                Test.assertMessage(riseSq >= markSq && markSq >= setSq,
+                    "ring " + ring + " at " + at + " must read outward " +
+                    "sunset, mark, sunrise");
+                if (mark == rise || mark == set) {
+                    withMark++;
+                }
+            }
+        }
+        // Not a failure: the mark outranks a sun dot it lands on, and the
+        // renderer test below holds that. This says how often it can happen.
+        logger.debug("positions where the mark shares a sun dot: " + withMark +
+                     " of " + (steps * StatMap.RINGS));
+        return true;
+    }
+
+    //! nearDot() looks at a few cells round each mark rather than walking the
+    //! ring, and is only allowed to because it gives the walk's answer. Walked
+    //! here for all three things that use it — the temperature mark in the
+    //! middle of the ring and the two sun dots at its edges — on every ring,
+    //! at positions that do not line up with the lattice.
+    (:test)
+    function theQuickMarkSearchAgreesWithTheWalk(logger as Logger) as Boolean {
+        Config.reload();
+        DotGrid.build();
+        var steps = 180;
+        var checked = 0;
+        for (var ring = 0; ring < StatMap.RINGS; ring++) {
+            var outer = (ring == 0) ? DotGrid.RADIUS.toFloat()
+                : Math.sqrt(DotGrid.ringEdge[ring - 1]).toFloat();
+            var targets = [DotGrid.markMiddle[ring], DotGrid.SUN_OUTWARD,
+                           DotGrid.SUN_INWARD] as Array<Number>;
+            var anchors = [Math.sqrt(DotGrid.markMiddle[ring]).toFloat(), outer,
+                           DotGrid.ringInner[ring].toFloat()] as Array<Float>;
+            for (var s = 0; s < steps; s++) {
+                var at = (s + 0.37) / steps;
+                var window = StatMap.windowAround(at, DotGrid.markerHalf[ring]);
+                for (var t = 0; t < targets.size(); t++) {
+                    var walked = DotGrid.markedDotNear(ring, window, targets[t]);
+                    var quick = DotGrid.nearDot(ring, at, targets[t], anchors[t]);
+                    Test.assertEqualMessage(quick, walked,
+                        "ring " + ring + " at " + at + ", target " + t +
+                        ": the quick search found dot " + quick +
+                        " where the walk found " + walked);
+                    checked++;
+                }
+            }
+        }
+        logger.debug(checked + " placements agree");
+        return true;
+    }
+
+    function radiusSqOf(i as Number) as Number {
+        var dx = DotGrid.xs[i];
+        var dy = DotGrid.ys[i];
+        return dx * dx + dy * dy;
+    }
+
+    //! A sun time moving must move its own ring's print and nothing else's,
+    //! or the dot freezes until the next clear.
+    (:test)
+    function aSunTimeMovesItsRingsPrint(logger as Logger) as Boolean {
+        var view = new CrossoverView();
+        var spans = everySpan(0.0, 0.3);
+        var marks = noMarks();
+        var suns = copyOf(MatrixRenderer.NO_SUNS);
+        var before = copyOf(view.ringPrint(spans, marks, noOvers(),
+                                           emptyBlocks(), suns));
+        suns[1 * Source.SUN_VALUES] = 0.52;
+        var risen = copyOf(view.ringPrint(spans, marks, noOvers(),
+                                          emptyBlocks(), suns));
+        suns[1 * Source.SUN_VALUES + 1] = 0.62;
+        var set = copyOf(view.ringPrint(spans, marks, noOvers(),
+                                        emptyBlocks(), suns));
+        Test.assertMessage(FrameGate.ringMoved(before, risen, 1),
+            "a sunrise appearing must move its ring's print");
+        Test.assertMessage(FrameGate.ringMoved(risen, set, 1),
+            "a sunset appearing must move its ring's print");
+        for (var ring = 0; ring < StatMap.RINGS; ring++) {
+            if (ring != 1) {
+                Test.assertMessage(!FrameGate.ringMoved(before, set, ring),
+                    "ring " + ring + " carries no sun and must not move");
+            }
+        }
+        return true;
+    }
+
+    //! The sun dots draw on every repaint of their ring, cost a delta nothing
+    //! while they stay put, and when one moves its old cell is rubbed out and
+    //! the whole ring repainted, which puts that dot's cross back.
+    (:test)
+    function aMovedSunDotRepaintsItsRingAndLeavesNoGhost(logger as Logger)
+            as Boolean {
+        Config.reload();
+        DotGrid.ensureBuilt();
+        var dc = probeDc(logger);
+        if (dc == null) {
+            return true;
+        }
+        var spans = everySpan(0.0, 0.40);
+        var overs = noOvers();
+        settleBuffer(dc, spans, overs, null);
+        var marks = noMarks();
+        var suns = copyOf(MatrixRenderer.NO_SUNS);
+        suns[2] = 0.53;     // ring 1 sunrise, about half past six
+        suns[3] = 0.65;     // ring 1 sunset, about a quarter to eight
+
+        MatrixRenderer.drawAt(dc, spans, marks, suns, overs, emptyBlocks(),
+                              Palette.active, Palette.rampActive, null,
+                              onlyRingDirty(1), false, Drift.current());
+        Test.assertEqualMessage(MatrixRenderer.sunsDrawn, 2,
+            "both sun dots must be drawn");
+        Test.assertEqualMessage(MatrixRenderer.drawnSun[2],
+            DotGrid.sunDotFor(1, 0, 0.53), "the sunrise dot was not remembered");
+        Test.assertEqualMessage(MatrixRenderer.drawnSun[3],
+            DotGrid.sunDotFor(1, 1, 0.65), "the sunset dot was not remembered");
+        Test.assertEqualMessage(MatrixRenderer.painted, ringSize(1),
+            "a sun dot appearing must repaint its ring in full");
+
+        // The band moves, the sun does not: a delta, nothing rubbed out, and
+        // both dots drawn back over whatever the delta touched.
+        spans[1] = [0.0, 0.45] as Array<Float>;
+        MatrixRenderer.drawAt(dc, spans, marks, suns, overs, emptyBlocks(),
+                              Palette.active, Palette.rampActive, null,
+                              onlyRingDirty(1), false, Drift.current());
+        Test.assertEqualMessage(MatrixRenderer.erased, 0,
+            "a sun dot that stayed put has nothing to rub out");
+        Test.assertMessage(MatrixRenderer.painted * 4 < ringSize(1),
+            "a sun dot that stayed put must not cost the ring its delta");
+        Test.assertEqualMessage(MatrixRenderer.sunsDrawn, 2,
+            "every repaint of the ring must draw its sun dots again");
+
+        // The sunrise moves on.
+        suns[2] = 0.56;
+        MatrixRenderer.drawAt(dc, spans, marks, suns, overs, emptyBlocks(),
+                              Palette.active, Palette.rampActive, null,
+                              onlyRingDirty(1), false, Drift.current());
+        Test.assertEqualMessage(MatrixRenderer.erased, 1,
+            "the old sunrise cell must be rubbed out, and only that one");
+        Test.assertEqualMessage(MatrixRenderer.painted, ringSize(1),
+            "a moved sun dot must repaint its ring, or its old cell stays " +
+            "black where the cross should be");
+        Test.assertEqualMessage(MatrixRenderer.drawnSun[2],
+            DotGrid.sunDotFor(1, 0, 0.56), "the moved sunrise was not followed");
+
+        // A clear forgets them, so there is nothing to rub out after one.
+        MatrixRenderer.drawAt(dc, spans, marks, suns, overs, emptyBlocks(),
+                              Palette.active, Palette.rampActive, null,
+                              FrameGate.everything(), true, Drift.current());
+        Test.assertEqualMessage(MatrixRenderer.erased, 0,
+            "a cleared frame has no old sun dot on it");
+        Test.assertEqualMessage(MatrixRenderer.sunsDrawn, 2,
+            "a cleared frame must draw the sun dots");
+        return true;
+    }
+
+    //! The temperature mark and the hands both outrank a sun dot.
+    (:test)
+    function theMarkAndTheHandsOutrankTheSunDots(logger as Logger) as Boolean {
+        Config.reload();
+        DotGrid.ensureBuilt();
+        var dc = probeDc(logger);
+        if (dc == null) {
+            return true;
+        }
+        var spans = everySpan(0.0, 0.40);
+        var overs = noOvers();
+
+        // Find a position where the innermost ring's mark lands on a sun dot.
+        var ring = StatMap.RINGS - 1;
+        var shared = -1.0;
+        for (var s = 0; s < 240 && shared < 0.0; s++) {
+            var at = s.toFloat() / 240;
+            var mark = DotGrid.markedDotFor(ring, at);
+            if (mark == DotGrid.sunDotFor(ring, 0, at) ||
+                    mark == DotGrid.sunDotFor(ring, 1, at)) {
+                shared = at;
+            }
+        }
+        if (shared >= 0.0) {
+            var marks = noMarks();
+            marks[ring] = shared;
+            var suns = copyOf(MatrixRenderer.NO_SUNS);
+            suns[ring * Source.SUN_VALUES] = shared;
+            suns[ring * Source.SUN_VALUES + 1] = shared;
+            MatrixRenderer.drawAt(dc, spans, marks, suns, overs, emptyBlocks(),
+                                  Palette.active, Palette.rampActive, null,
+                                  FrameGate.everything(), true, Drift.current());
+            Test.assertEqualMessage(MatrixRenderer.sunsDrawn, 1,
+                "the sun dot under the mark must give way to it");
+        } else {
+            logger.debug("no position shares a dot on ring " + ring);
+        }
+
+        // Under the minute hand, on a ring it crosses end to end: neither
+        // sun dot may be drawn over it.
+        var minuteTurn = HandBacking.axes()[5];
+        var inner = 2;
+        var suns = copyOf(MatrixRenderer.NO_SUNS);
+        suns[inner * Source.SUN_VALUES] = minuteTurn;
+        suns[inner * Source.SUN_VALUES + 1] = minuteTurn;
+        MatrixRenderer.drawAt(dc, spans, noMarks(), suns, overs, emptyBlocks(),
+                              Palette.active, Palette.rampActive,
+                              Palette.BACKING_WHITE,
+                              FrameGate.everything(), true, Drift.current());
+        Test.assertEqualMessage(MatrixRenderer.sunsDrawn, 0,
+            "a sun dot under a hand must leave the hand showing");
+        return true;
+    }
+
+    //! Two solid dots a ring on top of everything the always-on budget already
+    //! carries — the field at its fullest and every ring marked — priced on
+    //! every theme, as theAlwaysOnMarkFitsTheBudget prices the mark.
+    (:test)
+    function theSunDotsFitTheAlwaysOnBudget(logger as Logger) as Boolean {
+        var full = everySpan(0.0, 1.0);
+        var area = Math.PI * DotGrid.RADIUS * DotGrid.RADIUS;
+        var brightestSun = 0.0;
+        for (var k = 0; k < Palette.SUN_COLOURS.size(); k++) {
+            var lum = relativeLuminance(Palette.SUN_COLOURS[k]);
+            if (lum > brightestSun) { brightestSun = lum; }
+        }
+        for (var themeIndex = 0;
+             themeIndex < StatMap.THEME_IDS.size(); themeIndex++) {
+            var theme = StatMap.THEME_IDS[themeIndex];
+            Properties.setValue(StatMap.PROPERTY_THEME, theme);
+            Config.reload();
+            var dimmest = 1.0;
+            var brightestMark = 0.0;
+            for (var ring = 0; ring < StatMap.RINGS; ring++) {
+                var band = relativeLuminance(Palette.alwaysOn[ring * 2 + 1]);
+                if (band < dimmest) { dimmest = band; }
+                var mark = relativeLuminance(Palette.markerOf[ring]);
+                if (mark > brightestMark) { brightestMark = mark; }
+            }
+            var solid = DotGrid.DOT * DotGrid.DOT;
+            var marks = ((brightestMark * solid) -
+                         (dimmest * LIT_PIXELS_PER_DOT)) *
+                        StatMap.RINGS / area;
+            var suns = ((brightestSun * solid) -
+                        (dimmest * LIT_PIXELS_PER_DOT)) *
+                       StatMap.RINGS * Source.SUN_VALUES / area;
+            var worst = frameLuminance(full, Palette.alwaysOn);
+            logger.debug("theme " + theme + " always-on " + worst + " + marks " +
+                         marks + " + suns " + suns);
+            Test.assertMessage(worst + marks + suns < BUDGET,
+                "theme " + theme + " exceeds the burn-in budget once every " +
+                "ring carries the sun");
+        }
+        Properties.setValue(StatMap.PROPERTY_THEME, StatMap.THEME_TERRAIN);
+        Config.reload();
         return true;
     }
 }

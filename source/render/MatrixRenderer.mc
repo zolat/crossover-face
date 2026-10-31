@@ -26,8 +26,10 @@ import Toybox.Lang;
 //! inside today's low-to-high. It is a single dot: a whole row of them, drawn
 //! out of crosses, reads as a bumpy dotted band rather than a line, and a
 //! radial run of dots on a square lattice staggers instead of lining up. The
-//! dot is chosen once per ring by DotGrid.markedDot() and drawn after the loop,
-//! so the loop itself never learns marks exist.
+//! dot is chosen once per ring by DotGrid.markedDotFor() and drawn after the
+//! loop, so the loop itself never learns marks exist. The sun dots on the
+//! temperature-and-sun ring are two more of the same, placed by
+//! DotGrid.sunDotFor() at the ring's edges.
 //!
 //! A ring may also carry **blocks** rather than an arc — twelve of them, one
 //! per clock position, each filled from the ring's inner edge outward through
@@ -69,6 +71,22 @@ module MatrixRenderer {
     //! is being fully repainted anyway, so erase-then-draw is the same picture
     //! either way and needs no reasoning about which frame a move landed on.
     var drawnMark as Array<Number> = [] as Array<Number>;
+
+    //! Which sun dots each ring has on screen: Source.SUN_VALUES per ring,
+    //! sunrise then sunset, flat. -1 for none.
+    //!
+    //! Rubbed out only when one *moves*, unlike the mark, and that move costs
+    //! the ring its delta for one frame. A sun time shifts by a minute a day,
+    //! so the dot changes perhaps once a week — paying a full ring repaint then
+    //! is free, where forcing two more indices through the delta's per-dot test
+    //! would be paid on every dot of every ring. A sun dot that stayed put is
+    //! simply drawn over again after the loop, which covers whatever cross the
+    //! loop may have put back underneath it.
+    var drawnSun as Array<Number> = [] as Array<Number>;
+
+    //! How many sun dots the last draw put down. Like `painted`, a claim the
+    //! screen cannot be read back to check.
+    var sunsDrawn as Number = 0;
 
     //! Which rings the last draw actually walked, and how many marks it rubbed
     //! out. Four writes and an integer per frame.
@@ -160,6 +178,15 @@ module MatrixRenderer {
 
     //! Per-frame mark scratch, retained with the renderer's other tables.
     var markAt as Array<Number> = new [StatMap.RINGS] as Array<Number>;
+    var sunDrawAt as Array<Number> =
+        new [StatMap.RINGS * Source.SUN_VALUES] as Array<Number>;
+
+    //! No ring shows a sun time. What draw() hands drawAt(), so the many
+    //! callers that predate the sun channel need not learn it exists.
+    //! Literals, because a const array initialised from other consts has come
+    //! back empty on the watch; noSunsCoverEveryRing pins it to the shape.
+    const NO_SUNS = [-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0]
+        as Array<Float>;
 
     //! Axes and turn positions ignored while hand backing is off. A constant
     //! avoids allocating a six-float placeholder on every drawn frame.
@@ -172,15 +199,86 @@ module MatrixRenderer {
                   palette as Array<Number>, ramp as Array<Number>,
                   backing as Number?,
                   dirty as Array<Boolean>, clears as Boolean) as Void {
-        drawAt(dc, spans, markers, overs, blocks, palette, ramp, backing,
-               dirty, clears, Drift.current());
+        drawAt(dc, spans, markers, NO_SUNS, overs, blocks, palette, ramp,
+               backing, dirty, clears, Drift.current());
     }
 
     //! Draw with the drift snapshot already used by the frame fingerprint.
     //! The live view calls this path so it reads the clock once and cannot
     //! allocate or cross a drift boundary between planning and rendering.
+    //! Which dots this ring's sun times land on this frame, into sunDrawAt,
+    //! and true when either differs from the one on screen — whose cell is
+    //! rubbed out here, before the ring is repainted over it.
+    //!
+    //! Its own function, not inline in drawAt(), for the stack's sake rather
+    //! than readability's: Monkey C gives every local in a function a slot
+    //! for the whole call, and drawAt() is already as wide a frame as the
+    //! test runner's stack can hold — inlined, these few locals overflowed it.
+    function placeSuns(dc as Dc, ring as Number, suns as Array<Float>,
+                       centreX as Number, centreY as Number) as Boolean {
+        var key = ring * Source.SUN_VALUES;
+        var moved = false;
+        for (var slot = 0; slot < Source.SUN_VALUES; slot++) {
+            var at = DotGrid.sunDotFor(ring, slot, suns[key + slot]);
+            var gone = drawnSun[key + slot];
+            sunDrawAt[key + slot] = at;
+            if (gone == at) {
+                continue;
+            }
+            moved = true;
+            if (gone >= 0) {
+                dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_TRANSPARENT);
+                dc.fillRectangle(centreX + DotGrid.xs[gone] - DotGrid.DOT / 2,
+                                 centreY + DotGrid.ys[gone] - DotGrid.DOT / 2,
+                                 DotGrid.DOT, DotGrid.DOT);
+                erased++;
+            }
+        }
+        return moved;
+    }
+
+    //! The sun dots, after the dot loop and before the marks. Solid for the
+    //! reason the mark is — a tinted cross vanishes among crosses — and in two
+    //! fixed colours rather than the theme's, since what they say is the same
+    //! on every theme: light yellow for the sun coming up, blue for it going
+    //! down.
+    //!
+    //! The temperature mark outranks them. It is the ring's own reading, and
+    //! on the innermost ring a mark window can be one dot wide, so when both
+    //! land on the same dot the sun dot gives way. The hands outrank both, as
+    //! they outrank the mark. `axes` is null when nothing is backed.
+    function drawSuns(dc as Dc, dirty as Array<Boolean>,
+                      centreX as Number, centreY as Number,
+                      axes as Array<Float>?) as Void {
+        var half = DotGrid.DOT / 2;
+        for (var k = 0; k < sunDrawAt.size(); k++) {
+            var ring = k / Source.SUN_VALUES;
+            if (!dirty[ring]) {
+                continue;
+            }
+            var at = sunDrawAt[k];
+            drawnSun[k] = at;
+            if (at < 0 || at == markAt[ring]) {
+                continue;
+            }
+            var dx = DotGrid.xs[at];
+            var dy = DotGrid.ys[at];
+            if (axes != null && HandBacking.handAt(dx, dy, axes[0], axes[1],
+                                                   axes[2], axes[3])
+                    != HandBacking.NONE) {
+                continue;
+            }
+            dc.setColor(Palette.SUN_COLOURS[k % Source.SUN_VALUES],
+                        Graphics.COLOR_TRANSPARENT);
+            dc.fillRectangle(centreX + dx - half, centreY + dy - half,
+                             DotGrid.DOT, DotGrid.DOT);
+            sunsDrawn++;
+        }
+    }
+
     function drawAt(dc as Dc, spans as Array<Array<Float> >,
-                    markers as Array<Float>, overs as Array<Boolean>,
+                    markers as Array<Float>, suns as Array<Float>,
+                    overs as Array<Boolean>,
                     blocks as Array<Number>,
                     palette as Array<Number>, ramp as Array<Number>,
                     backing as Number?, dirty as Array<Boolean>,
@@ -215,6 +313,10 @@ module MatrixRenderer {
             lastRamp = new [StatMap.RINGS] as Array<Boolean>;
             lastBlocks = new [StatMap.RINGS] as Array<Boolean>;
             stableFor = new [StatMap.RINGS] as Array<Number>;
+            drawnSun = new [StatMap.RINGS * Source.SUN_VALUES] as Array<Number>;
+            for (var k = 0; k < drawnSun.size(); k++) {
+                drawnSun[k] = -1;
+            }
             for (var ring = 0; ring < StatMap.RINGS; ring++) {
                 drawnMark[ring] = -1;
                 lastFrom[ring] = 0.0;
@@ -239,6 +341,9 @@ module MatrixRenderer {
             // The screen is black; nothing is on it to rub out.
             for (var ring = 0; ring < StatMap.RINGS; ring++) {
                 drawnMark[ring] = -1;
+            }
+            for (var k = 0; k < drawnSun.size(); k++) {
+                drawnSun[k] = -1;
             }
         }
 
@@ -332,6 +437,7 @@ module MatrixRenderer {
         erased = 0;
         painted = 0;
         recorded = 0;
+        sunsDrawn = 0;
         for (var ring = 0; ring < StatMap.RINGS; ring++) {
             walked[ring] = dirty[ring];
             if (!dirty[ring]) {
@@ -411,7 +517,7 @@ module MatrixRenderer {
             }
             var minuteWraps = (minuteFrom > minuteTo);
 
-            var isRamp = (rings[ring] == Source.SOURCE_TEMPERATURE);
+            var isRamp = Source.isTemperatureRange(rings[ring]);
             var isBlocks = Source.usesBlocks(rings[ring]);
             var last = ringStart[ring + 1];
 
@@ -477,7 +583,18 @@ module MatrixRenderer {
             // Because it never deltas, its packed words need not join the key
             // below: being in the frame print is what makes the ring dirty, and
             // a dirty block ring is always repainted in full.
-            var delta = !clears && !isBlocks && stableFor[ring] >= 1 &&
+            // The sun dots, placed now rather than with the mark below, because
+            // whether they moved decides whether this ring may delta at all.
+            // A moved one has its old cell blacked and the whole ring
+            // repainted, which puts that dot's cross back without the delta
+            // having to know about it.
+            var sunMoved = placeSuns(dc, ring, suns, centreX, centreY);
+            if (sunMoved) {
+                lastColour = -1;    //! the erase moved the pen
+            }
+
+            var delta = !clears && !isBlocks && !sunMoved &&
+                        stableFor[ring] >= 1 &&
                         lastWeak[ring] == weak && lastStrong[ring] == strong &&
                         lastOver[ring] == overs[ring] &&
                         lastRamp[ring] == isRamp &&
@@ -500,7 +617,7 @@ module MatrixRenderer {
                                lastOver[ring] == overs[ring] &&
                                lastRamp[ring] == isRamp &&
                                lastBlocks[ring] == isBlocks &&
-                               lastBacking[ring] == backingKey)
+                               lastBacking[ring] == backingKey && !sunMoved)
                             ? stableFor[ring] + 1 : 1;
             lastWeak[ring] = weak;
             lastStrong[ring] = strong;
@@ -761,6 +878,8 @@ module MatrixRenderer {
                 painted++;
             }
         }
+
+        drawSuns(dc, dirty, centreX, centreY, hasBacking ? axes : null);
 
         // The marks, last, so each covers whatever the loop drew there.
         // At most one per ring, so this costs four tests a frame rather than

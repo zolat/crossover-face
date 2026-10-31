@@ -411,6 +411,25 @@ module StatMap {
         }
     }
 
+    //! Every ring's sunrise and sunset positions, flat: ring * SUN_VALUES,
+    //! then sunrise, sunset. Read once per frame, beside markers().
+    //!
+    //! Like the temperature mark, the sun dots take no power mode: they are
+    //! two dots a ring, worth as much asleep as awake, and only holding the
+    //! fills back hides them.
+    function fillSuns(out as Array<Float>) as Void {
+        for (var i = 0; i < RINGS; i++) {
+            Source.fillSuns(rings[i], out, i * Source.SUN_VALUES);
+        }
+    }
+
+    //! No ring shows a sun time, for always-on when the fills are held back.
+    function fillNoSuns(out as Array<Float>) as Void {
+        for (var i = 0; i < RINGS * Source.SUN_VALUES; i++) {
+            out[i] = Source.NO_MARKER;
+        }
+    }
+
     //! The span a mark occupies: a window of the given half-width around a
     //! position, normalised onto the ring.
     //!

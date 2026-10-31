@@ -22,7 +22,8 @@
          0 steps, 1 retired, 2 battery, 3 body battery,
          4 temperature range, 5 rain chance, 6 intensity minutes,
          7 seconds, 8 off, 9 rain next 12h, 10 UV next 12h,
-         11 Body Battery last 12h, 12 temperature next 12h. Seconds reports nothing in always-on.
+         11 Body Battery last 12h, 12 temperature next 12h,
+         13 temperature range with sunrise and sunset. Seconds reports nothing in always-on.
          Block sources are offered on
          ring1 and ring2 only — the inner two rings have too few dots per hour
          to carry them, and StatMap.load() reads them as off anywhere else.

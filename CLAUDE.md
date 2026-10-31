@@ -681,6 +681,27 @@ The temperature mark stays a single dot. `markedWide` is in the cache key becaus
 crossing its goal keeps the same position while changing how many cells it occupies, and
 `markedAt` is flat, `MARK_DOTS` per ring, padded with -1 at the tail.
 
+### Sunrise and sunset ride beside the temperature mark
+
+`SOURCE_TEMP_SUN` is the temperature range plus two solid dots: sunrise (`0xFFE680`) on the
+ring's **outer** edge, sunset (`0x4D8CFF`) on its **inner** edge, each at its time on the
+twelve-hour dial. Opposite edges because 06:05 and 18:10 are the same position on that
+dial. `Source.isTemperatureRange()` is the predicate for span, mark and ramp — never test
+`SOURCE_TEMPERATURE` alone.
+
+- **The times come from the Sunrise/Sunset complications**, which need the
+  `ComplicationSubscriber` permission. `Weather.getSunrise()` needs a location, and the
+  weather's `observationLocationPosition` is null without Positioning.
+- **The sun channel is two floats a ring** (`Source.SUN_VALUES`), in the ring print, so
+  `PER_RING` is 9. A moved sun dot costs its ring the delta for one frame instead of adding
+  a per-dot test; an unmoved one is simply redrawn after the loop.
+- **Placing a dot no longer walks the ring.** `DotGrid.nearDot()` searches the 5x5 cells
+  round the anchor point and binary-searches the index; three walks (mark + two suns) on
+  one frame tripped the 416 watchdog with hands drawn. `theQuickMarkSearchAgreesWithTheWalk`
+  pins it to `markedDotNear()`, the definition.
+- **`drawAt()`'s frame is at the stack's limit.** Inlining the sun placement overflowed the
+  test runner's stack, which is why it lives in `placeSuns()`/`drawSuns()`.
+
 ### Every other source reports a span, not a level
 
 `Source.span()` returns `[start, end]`, both 0.0–1.0. Levels are just `[0.0, value]`. This is why
@@ -735,8 +756,8 @@ this rule by five for nothing, and a setting would stop meaning the same thing a
 **A new source is appended after `SOURCE_OFF`, not before it.** That looks wrong and is the
 only safe place: the stored value is an index, so inserting below Off renumbers Off and
 everything under it on every watch already carrying a setting. `SOURCE_RAIN_HOURS = 9`,
-`SOURCE_UV_HOURS = 10`, `SOURCE_BODY_BATTERY_HOURS = 11` and `SOURCE_TEMP_HOURS = 12` sit
-above `SOURCE_OFF = 8` for
+`SOURCE_UV_HOURS = 10`, `SOURCE_BODY_BATTERY_HOURS = 11`, `SOURCE_TEMP_HOURS = 12` and
+`SOURCE_TEMP_SUN = 13` sit above `SOURCE_OFF = 8` for
 that reason, while `Source.OFFERED` — which decides picker *order* — groups each with its
 related source. `sourceTablesCoverEveryKind` used to assert
 `SOURCE_OFF == COUNT - 1`; that was always a claim about `OFFERED`'s order and only happened

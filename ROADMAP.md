@@ -14,6 +14,13 @@ block sources since.
     watch, 65 by default.
 - [x] Always-on temperature mark — the current-temperature dot now draws asleep too, held
   back only with the fills.
+- [x] Temp range + sun — the temperature range ring with today's sunrise (light yellow, outer
+  edge) and sunset (blue, inner edge) as solid dots at their clock positions, from the
+  watch's own Sunrise/Sunset complications. Mark and sun dots are now placed by `nearDot()`,
+  a few-cell search that agrees with the ring walk, because three walks on one frame tripped
+  the 416 watchdog.
+  - [ ] Temperature range + drawn hands on the 454 Epix trips the watchdog — on `main` too,
+    plain range included. Measured, not yet diagnosed.
 
 ## Epix 2 family
 

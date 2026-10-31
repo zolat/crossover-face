@@ -35,8 +35,8 @@ module FrameGate {
     var _forceFull as Boolean = true;
 
     //! Values per ring in the ring print: span start, span end, mark, over,
-    //! and the block channel's three packed words.
-    const PER_RING = 7;
+    //! the block channel's three packed words, then sunrise and sunset.
+    const PER_RING = 9;
 
     //! Plan an update against the last frame known to be in the buffer.
     //!

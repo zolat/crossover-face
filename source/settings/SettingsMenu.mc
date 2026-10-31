@@ -36,7 +36,8 @@ const SOURCE_LABELS = [
     Rez.Strings.SourceRainHours,
     Rez.Strings.SourceUvHours,
     Rez.Strings.SourceBodyBatteryHours,
-    Rez.Strings.SourceTempHours
+    Rez.Strings.SourceTempHours,
+    Rez.Strings.SourceTempSun
 ] as Array<ResourceId>;
 
 //! On-device settings, reached from the watch's own Watch Face menu.

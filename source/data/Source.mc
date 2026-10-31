@@ -60,10 +60,15 @@ module Source {
         //! an hour at or below the low end is an empty block, at or above the
         //! high end a full one. A fixed scale cannot suit both Adelaide and
         //! Oslo, so the range is a setting rather than a constant.
-        SOURCE_TEMP_HOURS = 12
+        SOURCE_TEMP_HOURS = 12,
+        //! Temperature range, with today's sunrise and sunset called out on
+        //! the same ring: the band, ramp and current-temperature mark exactly
+        //! as SOURCE_TEMPERATURE draws them, plus one dot at each sun time.
+        //! See SunData for where those sit and fillSuns() for how they travel.
+        SOURCE_TEMP_SUN = 13
     }
 
-    const COUNT = 13;
+    const COUNT = 14;
 
     //! The sources a ring may actually be assigned to, in picker order.
     //!
@@ -77,6 +82,7 @@ module Source {
         SOURCE_BODY_BATTERY,
         SOURCE_BODY_BATTERY_HOURS,
         SOURCE_TEMPERATURE,
+        SOURCE_TEMP_SUN,
         SOURCE_TEMP_HOURS,
         SOURCE_RAIN,
         SOURCE_RAIN_HOURS,
@@ -103,7 +109,8 @@ module Source {
         0x0088CC,   // rain, next 12h
         0xFFCC00,   // UV, next 12h
         0x3388FF,   // Body Battery, last 12h
-        0xFFAA00    // temperature, next 12h
+        0xFFAA00,   // temperature, next 12h
+        0xFFAA00    // temperature range with sunrise and sunset
     ] as Array<Number>;
 
     function hue(source as Number) as Number {
@@ -141,6 +148,7 @@ module Source {
                 fillLevel(BodyBatteryData.current(), out);
                 return;
             case SOURCE_TEMPERATURE:
+            case SOURCE_TEMP_SUN:
                 if (!WeatherData.fillDayRange(out)) {
                     fillEmpty(out);
                 }
@@ -287,11 +295,46 @@ module Source {
     //!
     //! Read once per frame per ring, like span().
     function marker(source as Number) as Float {
-        if (source == SOURCE_TEMPERATURE) {
+        if (isTemperatureRange(source)) {
             var now = WeatherData.currentFraction();
             return (now != null) ? now : NO_MARKER;
         }
         return NO_MARKER;
+    }
+
+    //! Does this source draw today's temperature range — the band on the
+    //! cold-to-hot ramp with the current reading marked inside it?
+    //!
+    //! The predicate rather than the enum value, for the reason usesBlocks()
+    //! is one: the span, the mark and the renderer's ramp all have to agree on
+    //! which rings carry it, and a consumer still testing for
+    //! SOURCE_TEMPERATURE alone would draw the sun variant as a flat band.
+    function isTemperatureRange(source as Number) as Boolean {
+        return source == SOURCE_TEMPERATURE || source == SOURCE_TEMP_SUN;
+    }
+
+    //! Values per ring in the sun channel: sunrise, then sunset.
+    const SUN_VALUES = 2;
+
+    //! This ring's sun positions, [sunrise, sunset], into `out` at `at` —
+    //! NO_MARKER for each when the ring has none to show.
+    //!
+    //! A channel of its own beside the marker rather than more markers. A
+    //! marker is one position and one dot, and the tests and the gate both
+    //! lean on that; the sun times are two more positions that a single source
+    //! carries, and they travel beside the mark the way the blocks travel
+    //! beside the span.
+    //!
+    //! Read once per frame per ring. A ring without the variant never reads a
+    //! complication for it.
+    function fillSuns(source as Number, out as Array<Float>,
+                      at as Number) as Void {
+        if (source == SOURCE_TEMP_SUN) {
+            SunData.fill(out, at);
+            return;
+        }
+        out[at] = NO_MARKER;
+        out[at + 1] = NO_MARKER;
     }
 
     //! The outermost ring a block source may be assigned to.

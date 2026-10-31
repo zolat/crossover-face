@@ -46,6 +46,7 @@
             <listEntry value="3">@Strings.SourceBodyBattery</listEntry>
             <listEntry value="11">@Strings.SourceBodyBatteryHours</listEntry>
             <listEntry value="4">@Strings.SourceTemperature</listEntry>
+            <listEntry value="13">@Strings.SourceTempSun</listEntry>
             <listEntry value="12">@Strings.SourceTempHours</listEntry>
             <listEntry value="5">@Strings.SourceRain</listEntry>
             <listEntry value="9">@Strings.SourceRainHours</listEntry>
@@ -62,6 +63,7 @@
             <listEntry value="3">@Strings.SourceBodyBattery</listEntry>
             <listEntry value="11">@Strings.SourceBodyBatteryHours</listEntry>
             <listEntry value="4">@Strings.SourceTemperature</listEntry>
+            <listEntry value="13">@Strings.SourceTempSun</listEntry>
             <listEntry value="12">@Strings.SourceTempHours</listEntry>
             <listEntry value="5">@Strings.SourceRain</listEntry>
             <listEntry value="9">@Strings.SourceRainHours</listEntry>
@@ -77,6 +79,7 @@
             <listEntry value="2">@Strings.SourceBattery</listEntry>
             <listEntry value="3">@Strings.SourceBodyBattery</listEntry>
             <listEntry value="4">@Strings.SourceTemperature</listEntry>
+            <listEntry value="13">@Strings.SourceTempSun</listEntry>
             <listEntry value="5">@Strings.SourceRain</listEntry>
             <listEntry value="6">@Strings.SourceIntensityMinutes</listEntry>
             <listEntry value="7">@Strings.SourceSeconds</listEntry>
@@ -89,6 +92,7 @@
             <listEntry value="2">@Strings.SourceBattery</listEntry>
             <listEntry value="3">@Strings.SourceBodyBattery</listEntry>
             <listEntry value="4">@Strings.SourceTemperature</listEntry>
+            <listEntry value="13">@Strings.SourceTempSun</listEntry>
             <listEntry value="5">@Strings.SourceRain</listEntry>
             <listEntry value="6">@Strings.SourceIntensityMinutes</listEntry>
             <listEntry value="7">@Strings.SourceSeconds</listEntry>
