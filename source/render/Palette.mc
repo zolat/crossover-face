@@ -164,17 +164,34 @@ module Palette {
     const MARKER = 0xFFFFFF;
     const MARKER_TINT = 0.55;
 
-    //! The two sun dots on the temperature-and-sun ring: sunrise, then
-    //! sunset, in Source.SUN_VALUES order.
+    //! The two sun dots on the temperature-and-sun ring start from these
+    //! hues: sunrise, then sunset, in Source.SUN_VALUES order — a light
+    //! yellow and a mid blue.
     //!
-    //! Fixed rather than drawn from the theme. What they say is the same on
-    //! every theme, and a hue borrowed from a ring would mean "that ring" on a
-    //! face where colour already means that. Sunrise is a light yellow that no
-    //! theme's band uses; sunset is a mid blue, light enough to stand off the
-    //! black around it at the inner edge. Both drawn in both modes, like the
-    //! mark — two solid dots a ring, which theSunDotsFitTheAlwaysOnBudget
-    //! prices on every theme.
-    const SUN_COLOURS = [0xFFE680, 0x4D8CFF] as Array<Number>;
+    //! Drawn as they are, they read as stickers on the field: the same two
+    //! colours on every theme and ring, belonging to none of them. So each is
+    //! mixed toward its ring's band by SUN_TINT, the move the temperature mark
+    //! makes toward white — warm and cool still say rise and set, and the dot
+    //! sits in the theme. See sunOf.
+    const SUN_HUES = [0xFFE680, 0x4D8CFF] as Array<Number>;
+
+    //! How far each sun dot is mixed toward its band. Just under the mark's
+    //! MARKER_TINT, so the sun's own hue still leads;
+    //! theSunDotsCarryATouchOfTheirBand holds that the blend never lands a
+    //! dot on its band, its mark or the other sun.
+    const SUN_TINT = 0.70;
+
+    //! How far the current-temperature mark is mixed toward its band — far
+    //! further than MARKER_TINT, which now governs only the over-goal
+    //! waterline.
+    //!
+    //! At MARKER_TINT the mark was nearly half white and glared. It never
+    //! needed the white to be found: it is the only solid square on a field of
+    //! thin crosses, and density is what reads. So the reading mark is mostly
+    //! its own band, lifted a touch — easy to find when looked for, quiet
+    //! otherwise. The waterline keeps the brighter mix because it has to stand
+    //! above the lap's own tint (everyThemeKeepsTheTierOrder).
+    const SOFT_MARK_TINT = 0.85;
 
     //! How far an over-goal ring's second lap is tinted toward the mark.
     //!
@@ -243,6 +260,14 @@ module Palette {
     //! The mark's colour on each ring. One entry per ring, not per slot.
     var markerOf as Array<Number> = [] as Array<Number>;
 
+    //! The sun dots' colours, flat: ring * Source.SUN_VALUES, then sunrise,
+    //! sunset. Indexed exactly as MatrixRenderer.drawnSun is. One table for
+    //! both power modes, for markerOf's reason.
+    var sunOf as Array<Number> = [] as Array<Number>;
+
+    //! The current-temperature mark's colour on each ring. See SOFT_MARK_TINT.
+    var softMarkOf as Array<Number> = [] as Array<Number>;
+
     //! The second lap's colour on each ring — what a ring past its goal draws
     //! where it would otherwise draw the plain filled colour. One entry per
     //! ring, not per slot: the renderer swaps it into the ring's filled slot
@@ -278,11 +303,17 @@ module Palette {
         var asleep = [] as Array<Number>;
         var held = [] as Array<Number>;
         var marks = [] as Array<Number>;
+        var suns = [] as Array<Number>;
+        var soft = [] as Array<Number>;
         var beyond = [] as Array<Number>;
         var faint = [] as Array<Number>;
         for (var ring = 0; ring < StatMap.RINGS; ring++) {
             var colour = themeColour(ring);
             marks.add(mix(MARKER, colour, MARKER_TINT));
+            soft.add(mix(MARKER, colour, SOFT_MARK_TINT));
+            for (var slot = 0; slot < SUN_HUES.size(); slot++) {
+                suns.add(mix(SUN_HUES[slot], colour, SUN_TINT));
+            }
             faint.add(scale(colour, WEAK_UNKNOWN));
             beyond.add(mix(MARKER, colour, OVER_TINT));
             var lifted = scale(colour, LIFT);
@@ -302,6 +333,8 @@ module Palette {
         alwaysOn = asleep;
         heldBack = held;
         markerOf = marks;
+        sunOf = suns;
+        softMarkOf = soft;
         overOf = beyond;
         dimOf = faint;
 

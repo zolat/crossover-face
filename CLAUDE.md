@@ -684,11 +684,16 @@ crossing its goal keeps the same position while changing how many cells it occup
 ### Sunrise and sunset ride beside the temperature mark
 
 `SOURCE_TEMP_SUN` is the temperature range plus two solid dots: sunrise (`0xFFE680`) on the
-ring's **outer** edge, sunset (`0x4D8CFF`) on its **inner** edge, each at its time on the
+ring's **outer** edge, sunset (`0x4D8CFF`) on its **inner** edge — each mixed 70% toward its
+ring's band (`Palette.sunOf`, `SUN_TINT`) so it sits in the theme — each at its time on the
 twelve-hour dial. Opposite edges because 06:05 and 18:10 are the same position on that
 dial. `Source.isTemperatureRange()` is the predicate for span, mark and ramp — never test
 `SOURCE_TEMPERATURE` alone.
 
+- **The current-temperature mark is soft now too**: `Palette.softMarkOf`, 85% band
+  (`SOFT_MARK_TINT`). Only the over-goal waterline still uses `markerOf`/`MARKER_TINT`,
+  because it must stand above the lap tint. Density, not brightness, is what makes a
+  solid dot findable.
 - **The times come from the Sunrise/Sunset complications**, which need the
   `ComplicationSubscriber` permission. `Weather.getSunrise()` needs a location, and the
   weather's `observationLocationPosition` is null without Positioning.

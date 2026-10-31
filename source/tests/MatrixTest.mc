@@ -6652,16 +6652,16 @@ module MatrixTest {
     function theSunDotsFitTheAlwaysOnBudget(logger as Logger) as Boolean {
         var full = everySpan(0.0, 1.0);
         var area = Math.PI * DotGrid.RADIUS * DotGrid.RADIUS;
-        var brightestSun = 0.0;
-        for (var k = 0; k < Palette.SUN_COLOURS.size(); k++) {
-            var lum = relativeLuminance(Palette.SUN_COLOURS[k]);
-            if (lum > brightestSun) { brightestSun = lum; }
-        }
         for (var themeIndex = 0;
              themeIndex < StatMap.THEME_IDS.size(); themeIndex++) {
             var theme = StatMap.THEME_IDS[themeIndex];
             Properties.setValue(StatMap.PROPERTY_THEME, theme);
             Config.reload();
+            var brightestSun = 0.0;
+            for (var k = 0; k < Palette.sunOf.size(); k++) {
+                var lum = relativeLuminance(Palette.sunOf[k]);
+                if (lum > brightestSun) { brightestSun = lum; }
+            }
             var dimmest = 1.0;
             var brightestMark = 0.0;
             for (var ring = 0; ring < StatMap.RINGS; ring++) {
@@ -6683,6 +6683,101 @@ module MatrixTest {
             Test.assertMessage(worst + marks + suns < BUDGET,
                 "theme " + theme + " exceeds the burn-in budget once every " +
                 "ring carries the sun");
+        }
+        Properties.setValue(StatMap.PROPERTY_THEME, StatMap.THEME_TERRAIN);
+        Config.reload();
+        return true;
+    }
+
+    //! The sun dots are mixed toward their ring's band so they sit in the
+    //! theme, and the mix must stop short of losing them: on every theme and
+    //! ring each sits between its own hue and the band on every channel, and
+    //! stays clear of the other sun. Mark and suns are told apart by where
+    //! they sit across the ring — middle, outer edge, inner edge — rather than
+    //! by colour, now that all three lean on their band.
+    //!
+    //! Not clear of the band itself, and that is measured rather than missed:
+    //! Activity's blue ring is within 50 of the sunset hue before any mix, so
+    //! a blue sunset on a blue ring is close in colour whatever the tint. The
+    //! solid shape carries it there, as it carries the lap block — on a field
+    //! of crosses only a change of density reads.
+    (:test)
+    function theSunDotsCarryATouchOfTheirBand(logger as Logger) as Boolean {
+        for (var themeIndex = 0;
+             themeIndex < StatMap.THEME_IDS.size(); themeIndex++) {
+            var theme = StatMap.THEME_IDS[themeIndex];
+            Properties.setValue(StatMap.PROPERTY_THEME, theme);
+            Config.reload();
+            Test.assertEqualMessage(Palette.sunOf.size(),
+                StatMap.RINGS * Source.SUN_VALUES,
+                "every ring needs a sunrise and a sunset colour");
+            for (var ring = 0; ring < StatMap.RINGS; ring++) {
+                var band = Palette.themeColour(ring);
+                var rise = Palette.sunOf[ring * Source.SUN_VALUES];
+                var set = Palette.sunOf[ring * Source.SUN_VALUES + 1];
+                for (var slot = 0; slot < Source.SUN_VALUES; slot++) {
+                    var sun = Palette.sunOf[ring * Source.SUN_VALUES + slot];
+                    var hue = Palette.SUN_HUES[slot];
+                    for (var shift = 0; shift <= 16; shift += 8) {
+                        var c = Palette.channel(sun, shift);
+                        var a = Palette.channel(hue, shift);
+                        var b = Palette.channel(band, shift);
+                        var lo = (a < b) ? a : b;
+                        var hi = (a < b) ? b : a;
+                        Test.assertMessage(c >= lo && c <= hi,
+                            "theme " + theme + " ring " + ring + " sun " +
+                            slot + " is not a mix of its hue and its band");
+                    }
+                }
+                Test.assertMessage(colourDistance(rise, set) >= 96,
+                    "theme " + theme + " ring " + ring +
+                    " sunrise and sunset have converged");
+                logger.debug("theme " + theme + " ring " + ring + " rise " +
+                             rise.format("%06X") + " set " + set.format("%06X"));
+            }
+        }
+        Properties.setValue(StatMap.PROPERTY_THEME, StatMap.THEME_TERRAIN);
+        Config.reload();
+        return true;
+    }
+
+    //! Sum of absolute channel differences, 0-765.
+    function colourDistance(a as Number, b as Number) as Number {
+        var total = 0;
+        for (var shift = 0; shift <= 16; shift += 8) {
+            total += (Palette.channel(a, shift) - Palette.channel(b, shift)).abs();
+        }
+        return total;
+    }
+
+    //! The current-temperature mark leans on its band: between white and the
+    //! band on every channel, at least as light as the band so it never reads
+    //! as a hole, and dimmer than the waterline mark on every ring, which is
+    //! the one that has to stand out.
+    (:test)
+    function theReadingMarkIsSofterThanTheWaterline(logger as Logger)
+            as Boolean {
+        for (var themeIndex = 0;
+             themeIndex < StatMap.THEME_IDS.size(); themeIndex++) {
+            var theme = StatMap.THEME_IDS[themeIndex];
+            Properties.setValue(StatMap.PROPERTY_THEME, theme);
+            Config.reload();
+            Test.assertEqualMessage(Palette.softMarkOf.size(), StatMap.RINGS,
+                "every ring needs a reading-mark colour");
+            for (var ring = 0; ring < StatMap.RINGS; ring++) {
+                var band = Palette.themeColour(ring);
+                var soft = Palette.softMarkOf[ring];
+                for (var shift = 0; shift <= 16; shift += 8) {
+                    var c = Palette.channel(soft, shift);
+                    Test.assertMessage(c >= Palette.channel(band, shift),
+                        "theme " + theme + " ring " + ring +
+                        ": the reading mark is darker than its band");
+                }
+                Test.assertMessage(relativeLuminance(soft) <
+                                   relativeLuminance(Palette.markerOf[ring]),
+                    "theme " + theme + " ring " + ring +
+                    ": the reading mark must be softer than the waterline");
+            }
         }
         Properties.setValue(StatMap.PROPERTY_THEME, StatMap.THEME_TERRAIN);
         Config.reload();

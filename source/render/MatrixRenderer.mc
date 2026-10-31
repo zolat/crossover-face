@@ -238,10 +238,9 @@ module MatrixRenderer {
     }
 
     //! The sun dots, after the dot loop and before the marks. Solid for the
-    //! reason the mark is — a tinted cross vanishes among crosses — and in two
-    //! fixed colours rather than the theme's, since what they say is the same
-    //! on every theme: light yellow for the sun coming up, blue for it going
-    //! down.
+    //! reason the mark is — a tinted cross vanishes among crosses — in a light
+    //! yellow for the sun coming up and a blue for it going down, each mixed
+    //! toward its ring's band (Palette.sunOf).
     //!
     //! The temperature mark outranks them. It is the ring's own reading, and
     //! on the innermost ring a mark window can be one dot wide, so when both
@@ -268,8 +267,7 @@ module MatrixRenderer {
                     != HandBacking.NONE) {
                 continue;
             }
-            dc.setColor(Palette.SUN_COLOURS[k % Source.SUN_VALUES],
-                        Graphics.COLOR_TRANSPARENT);
+            dc.setColor(Palette.sunOf[k], Graphics.COLOR_TRANSPARENT);
             dc.fillRectangle(centreX + dx - half, centreY + dy - half,
                              DotGrid.DOT, DotGrid.DOT);
             sunsDrawn++;
@@ -907,7 +905,10 @@ module MatrixRenderer {
                     != HandBacking.NONE) {
                 continue;
             }
-            dc.setColor(markerColour[ring], Graphics.COLOR_TRANSPARENT);
+            // A waterline keeps the bright mix; a reading takes the soft one.
+            dc.setColor(overs[ring] ? markerColour[ring]
+                                    : Palette.softMarkOf[ring],
+                        Graphics.COLOR_TRANSPARENT);
             dc.fillRectangle(centreX + dx - half, centreY + dy - half,
                              DotGrid.DOT, DotGrid.DOT);
         }
