@@ -674,8 +674,8 @@ module MatrixRenderer {
             // nothing else follows the dot loop inside the ring loop; the marks
             // are drawn in their own pass afterwards.
             if (Source.isTime(rings[ring])) {
-                TimeRing.draw(dc, ring, centreX, centreY, from, to,
-                              rings[ring], weak);
+                drew += TimeRing.draw(dc, ring, centreX, centreY, from, to,
+                                      rings[ring], weak);
                 lastColour = -1;    //! TimeRing moved the pen
                 continue;
             }

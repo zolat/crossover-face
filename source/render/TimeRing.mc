@@ -39,9 +39,12 @@ module TimeRing {
     //! `dim` is the ring's dim tier, which only the split style draws. The pen
     //! colour is left wherever the last dot set it; the caller forgets its own
     //! cached pen afterwards.
+    //!
+    //! Returns how many dots it painted — every one in the ring — for the
+    //! caller to add to its own count, which it publishes once a draw.
     function draw(dc as Dc, ring as Number, centreX as Number,
                   centreY as Number, hourEnd as Float, minuteEnd as Float,
-                  source as Number, dim as Number) as Void {
+                  source as Number, dim as Number) as Number {
         var xs = DotGrid.xs;
         var ys = DotGrid.ys;
         var positionOf = DotGrid.positionOf;
@@ -99,8 +102,8 @@ module TimeRing {
             }
             dc.drawLine(x - ax, y - ay, x + ax, y + ay);
             dc.drawLine(x - bx, y - by, x + bx, y + by);
-            MatrixRenderer.painted++;
         }
+        return last - DotGrid.ringStart[ring];
     }
 
     //! What each slot is painted, for this style.
