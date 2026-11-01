@@ -288,11 +288,12 @@ module MatrixTest {
     }
 
     //! What a ring stored as `stored` loads as. The same as stored, except on a
-    //! watch with no hands, whose time ring is placed by the face whatever the
-    //! setting says — so a loader test asserts this rather than `stored`.
+    //! watch with no hands, whose time ring keeps a stored time style and
+    //! takes the default style for anything else — so a loader test asserts
+    //! this rather than `stored`.
     function loadedAs(ring as Number, stored as Number) as Number {
         if (HandStyle.TIME_RING && ring == StatMap.TIME_RING) {
-            return Source.SOURCE_TIME;
+            return Source.isTime(stored) ? stored : Source.TIME_DEFAULT;
         }
         return stored;
     }
@@ -573,14 +574,16 @@ module MatrixTest {
             "temperature range with sun must stay 13");
         Test.assertEqualMessage(Source.SOURCE_TIME, 14,
             "the time ring must stay 14");
-        Test.assertEqualMessage(Source.COUNT, 15,
+        Test.assertEqualMessage(Source.SOURCE_TIME_OVERLAP, 15,
+            "the overlapping time ring must stay 15");
+        Test.assertEqualMessage(Source.COUNT, 16,
             "COUNT counts slots, not offers — the tables are indexed by it");
 
-        // The retired slot is never offered, and neither is the time, which a
-        // watch with no hands places on its outer ring itself.
-        Test.assertEqualMessage(Source.OFFERED.size(), Source.COUNT - 2,
+        // The retired slot is never offered, and neither are the two time
+        // styles, which only a hands-free watch's time ring offers.
+        Test.assertEqualMessage(Source.OFFERED.size(), Source.COUNT - 3,
             "the picker must offer every source but the retired one and " +
-            "the time");
+            "the time styles");
         for (var i = 0; i < Source.OFFERED.size(); i++) {
             Test.assertMessage(Source.OFFERED[i] != Source.SOURCE_RETIRED,
                 "the picker must not offer the retired source");
@@ -6267,6 +6270,11 @@ module MatrixTest {
             Test.assertEqualMessage(labels.size(), offered.size(),
                 "ring " + ring + "'s picker labels and values disagree, so " +
                 "it would store the wrong source with no symptom");
+            // A hands-free watch's time ring offers the time styles instead;
+            // TimeRingTest holds that picker.
+            if (HandStyle.TIME_RING && ring == StatMap.TIME_RING) {
+                continue;
+            }
 
             var carried = 0;
             for (var i = 0; i < offered.size(); i++) {

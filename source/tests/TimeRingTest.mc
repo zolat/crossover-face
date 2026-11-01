@@ -25,6 +25,17 @@ module TimeRingTest {
     const MOCKUP_LIT = [261, 299, 336] as Array<Number>;
     const MOCKUP_HOUR_LIT = [115, 129, 150] as Array<Number>;
 
+    //! The overlapping style on ring 0, as tools/mockup.py counts it: dots in
+    //! each slot at 10:29, where the hour is ahead, and at 4:29, where the
+    //! minute is. Both times clear every dot by 0.0013 of a turn, as above.
+    //! Per row: hour-only, minute-only, both, neither.
+    const OVERLAP_AHEAD_HOUR = [170, 0, 210, 56,
+                                194, 0, 242, 64,
+                                217, 0, 268, 71] as Array<Number>;
+    const OVERLAP_AHEAD_MINUTE = [0, 48, 162, 226,
+                                  0, 56, 186, 258,
+                                  0, 61, 207, 288] as Array<Number>;
+
     function fractions(hour as Number, minute as Number) as Array<Float> {
         var out = [0.0, 0.0] as Array<Float>;
         ClockData.timeFractions(hour, minute, out);
@@ -137,34 +148,143 @@ module TimeRingTest {
         return true;
     }
 
-    //! A watch with no hands always tells the time on its outer ring, whatever
-    //! that ring stores — including the Steps a watch that wore this face
-    //! before will have saved. A watch with hands never does, and a stored
-    //! time, which no menu can write, reads as Off on any ring.
+    //! A watch with no hands always tells the time on its outer ring. A
+    //! stored time style is kept — the ring's picker wrote it — and anything
+    //! else, including the Steps a watch that wore this face before will have
+    //! saved, takes the default style. A watch with hands never tells the time
+    //! in a ring, and a stored time style reads as Off on any ring.
     (:test)
     function aHandsFreeWatchAlwaysTellsTheTime(logger as Logger) as Boolean {
         var stored = [Source.SOURCE_STEPS, Source.SOURCE_OFF,
-                      Source.SOURCE_RAIN_HOURS] as Array<Number>;
+                      Source.SOURCE_RAIN_HOURS, Source.SOURCE_TIME,
+                      Source.SOURCE_TIME_OVERLAP, 99] as Array<Number>;
         for (var k = 0; k < stored.size(); k++) {
             Properties.setValue(StatMap.PROPERTY_RINGS[0], stored[k]);
             Config.reload();
-            var expected = HandStyle.TIME_RING ? Source.SOURCE_TIME : stored[k];
+            var expected = stored[k];
+            if (HandStyle.TIME_RING) {
+                expected = Source.isTime(stored[k]) ? stored[k]
+                                                    : Source.TIME_DEFAULT;
+            } else if (Source.isTime(stored[k])) {
+                expected = Source.SOURCE_OFF;
+            } else if (stored[k] == 99) {
+                expected = Source.SOURCE_STEPS;
+            }
             Test.assertEqualMessage(StatMap.rings[StatMap.TIME_RING], expected,
                 "ring 1 stored as " + stored[k] + " loaded as " +
                 StatMap.rings[0]);
         }
-        Properties.setValue(StatMap.PROPERTY_RINGS[2], Source.SOURCE_TIME);
-        Config.reload();
-        Test.assertEqualMessage(StatMap.rings[2], Source.SOURCE_OFF,
-            "a stored time is not a choice anyone made and must read as Off");
+        for (var k = 0; k < Source.TIME_STYLES.size(); k++) {
+            Properties.setValue(StatMap.PROPERTY_RINGS[2],
+                                Source.TIME_STYLES[k]);
+            Config.reload();
+            Test.assertEqualMessage(StatMap.rings[2], Source.SOURCE_OFF,
+                "a time style off the time ring must read as Off");
+        }
         for (var i = 0; i < Source.OFFERED.size(); i++) {
             Test.assertMessage(!Source.isTime(Source.OFFERED[i]),
-                "the time is placed by the watch and must never be offered");
+                "the time styles must never be in the general picker");
         }
         Properties.setValue(StatMap.PROPERTY_RINGS[0], Source.SOURCE_STEPS);
         Properties.setValue(StatMap.PROPERTY_RINGS[2], Source.SOURCE_BATTERY);
         Config.reload();
+        Test.assertEqualMessage(Source.TIME_DEFAULT,
+            Source.SOURCE_TIME_OVERLAP, "a hands-free watch starts overlapping");
         return true;
+    }
+
+    //! The time ring's picker offers the two styles and nothing else, so the
+    //! face can be restyled but never left without the time — and no other
+    //! ring's picker offers a style. On the Crossover no picker offers one.
+    (:test)
+    function onlyTheTimeRingOffersTheTimeStyles(logger as Logger) as Boolean {
+        for (var ring = 0; ring < StatMap.RINGS; ring++) {
+            var offered = Source.offeredFor(ring);
+            var styles = 0;
+            for (var i = 0; i < offered.size(); i++) {
+                if (Source.isTime(offered[i])) {
+                    styles++;
+                }
+            }
+            var timeRing = HandStyle.TIME_RING && ring == StatMap.TIME_RING;
+            Test.assertEqualMessage(styles,
+                timeRing ? Source.TIME_STYLES.size() : 0,
+                "ring " + ring + " offers " + styles + " time styles");
+            if (timeRing) {
+                Test.assertEqualMessage(offered.size(), styles,
+                    "the time ring must offer nothing but the time styles");
+                Test.assertEqualMessage(offeredLabelsFor(ring).size(), styles,
+                    "the time ring's labels and values disagree");
+            }
+        }
+        return true;
+    }
+
+    //! Overlapping, each fill covers the whole thickness: the slot a dot is in
+    //! depends on its position alone, and the counts match the mockup.
+    (:test)
+    function theOverlapPaintsEachFillWholeAndTheirMeetingPurple(
+            logger as Logger) as Boolean {
+        DotGrid.ensureBuilt();
+        var row = MOCKUP_COLS.indexOf(DotGrid.COLS);
+        Test.assertMessage(row >= 0,
+            "no mockup pin for a " + DotGrid.COLS + "-column lattice");
+        var times = [[10, 29], [4, 29]] as Array<Array<Number> >;
+        var pins = [OVERLAP_AHEAD_HOUR, OVERLAP_AHEAD_MINUTE]
+                   as Array<Array<Number> >;
+        for (var t = 0; t < times.size(); t++) {
+            var at = fractions(times[t][0], times[t][1]);
+            var counts = [0, 0, 0, 0] as Array<Number>;
+            for (var i = DotGrid.ringStart[0]; i < DotGrid.ringStart[1]; i++) {
+                var position = DotGrid.positionOf[i];
+                var slot = TimeRing.slotOf(0, DotGrid.xs[i], DotGrid.ys[i],
+                    position, at[0], at[1], Source.SOURCE_TIME_OVERLAP);
+                var expected = TimeRing.NEITHER;
+                if (position < at[0]) {
+                    expected += TimeRing.HOUR;
+                }
+                if (position < at[1]) {
+                    expected += TimeRing.MINUTE;
+                }
+                Test.assertEqualMessage(slot, expected,
+                    "a dot at " + position + " is in the wrong slot at " +
+                    times[t][0] + ":" + times[t][1] + " — radius must not " +
+                    "matter when overlapping");
+                counts[slot]++;
+            }
+            logger.debug(times[t][0] + ":" + times[t][1] + " overlapping on " +
+                         DotGrid.COLS + " columns: hour " + counts[1] +
+                         ", minute " + counts[2] + ", both " + counts[3] +
+                         ", neither " + counts[0]);
+            for (var k = 0; k < 4; k++) {
+                // Pins are hour, minute, both, neither; slots are neither,
+                // hour, minute, both.
+                Test.assertEqualMessage(counts[(k + 1) % 4], pins[t][row * 4 + k],
+                    "the overlapping ring has drifted from tools/mockup.py");
+            }
+        }
+        var colours = TimeRing.coloursFor(Source.SOURCE_TIME_OVERLAP, 0);
+        Test.assertEqualMessage(colours[TimeRing.BOTH], Palette.TIME_BOTH,
+            "where both have passed must be purple");
+        Test.assertEqualMessage(colours[TimeRing.HOUR], Palette.TIME_HOUR,
+            "the hour alone must be blue");
+        Test.assertEqualMessage(colours[TimeRing.MINUTE], Palette.TIME_MINUTE,
+            "the minute alone must be red");
+        return true;
+    }
+
+    //! Whichever colour either time style draws is brightest.
+    function brightestTimeColour() as Number {
+        var all = [Palette.TIME_LIT, Palette.TIME_HOUR, Palette.TIME_MINUTE,
+                   Palette.TIME_BOTH, Palette.TIME_UNLIT] as Array<Number>;
+        var best = all[0];
+        for (var i = 1; i < all.size(); i++) {
+            if (MatrixTest.relativeLuminance(all[i]) >
+                    MatrixTest.relativeLuminance(best)) {
+                best = all[i];
+            }
+        }
+        return best;
     }
 
     //! Holding the fills back hides the data and keeps the time.
@@ -200,7 +320,17 @@ module TimeRingTest {
             return true;
         }
         var saved = StatMap.rings[0];
-        StatMap.rings[0] = Source.SOURCE_TIME;
+        for (var s = 0; s < Source.TIME_STYLES.size(); s++) {
+            repaintsInFull(logger, dc, Source.TIME_STYLES[s]);
+        }
+        StatMap.rings[0] = saved;
+        Config.reload();
+        return true;
+    }
+
+    function repaintsInFull(logger as Logger, dc as Graphics.Dc,
+                            style as Number) as Void {
+        StatMap.rings[0] = style;
         DateGlyph.ensure(MatrixTest.GLYPH_DAY);
         DateGlyph.active = true;
 
@@ -220,7 +350,8 @@ module TimeRingTest {
                             MatrixTest.onlyRingDirty(0), false);
         var whole = MatrixTest.ringSize(0);
         var mine = DateGlyph.firstFor[1] - DateGlyph.firstFor[0];
-        logger.debug("time ring repaint: " + MatrixRenderer.painted + " of " +
+        logger.debug("style " + style + " repaint: " +
+                     MatrixRenderer.painted + " of " +
                      whole + ", recorded " + MatrixRenderer.recorded + " of " +
                      mine + " numeral dots");
         Test.assertEqualMessage(MatrixRenderer.painted, whole,
@@ -229,9 +360,6 @@ module TimeRingTest {
             "the time ring must record every numeral dot it carries");
 
         DateGlyph.active = false;
-        StatMap.rings[0] = saved;
-        Config.reload();
-        return true;
     }
 
     //! A minute's move dirties the time ring and nothing else.
@@ -257,7 +385,10 @@ module TimeRingTest {
     }
 
     //! Every theme stays under the always-on budget at its brightest with the
-    //! time: the ring all white at 11:59-and-a-bit, every other ring full.
+    //! time: the ring all in the brightest colour either style draws, every
+    //! other ring full. White at 11:59 is the split's worst; the overlap's
+    //! every colour is darker, which `brightestTimeColour` makes the test
+    //! rather than an assumption.
     (:test)
     function theTimeRingFitsTheAlwaysOnBudget(logger as Logger) as Boolean {
         DotGrid.ensureBuilt();
@@ -266,7 +397,7 @@ module TimeRingTest {
             Config.reload();
             var total = 0.0;
             for (var ring = 0; ring < StatMap.RINGS; ring++) {
-                var colour = (ring == 0) ? Palette.TIME_LIT
+                var colour = (ring == 0) ? brightestTimeColour()
                                          : Palette.alwaysOn[ring * 2 + 1];
                 var each = MatrixTest.relativeLuminance(colour) *
                            MatrixTest.LIT_PIXELS_PER_DOT;

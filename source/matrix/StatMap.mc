@@ -173,11 +173,15 @@ module StatMap {
             loaded[i] = stored;
         }
         // On a watch with no hands the outermost ring *is* the clock, whatever
-        // ring1 says. Overriding rather than defaulting is the point: a watch
-        // that has carried this face before already stores ring1, and a new
-        // default would never reach it. The stored value is left alone, unread.
+        // else ring1 says. Overriding rather than defaulting is the point: a
+        // watch that has carried this face before already stores ring1 —
+        // Steps, most likely — and a new default would never reach it. Only a
+        // time style, which the ring's own picker writes, is kept.
         if (HandStyle.TIME_RING) {
-            loaded[TIME_RING] = Source.SOURCE_TIME;
+            var style = readNumber(PROPERTY_RINGS[TIME_RING],
+                                   Source.TIME_DEFAULT, 0, Source.COUNT - 1);
+            loaded[TIME_RING] = Source.isTime(style) ? style
+                                                     : Source.TIME_DEFAULT;
         }
         rings = loaded;
     }

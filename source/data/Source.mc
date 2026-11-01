@@ -66,24 +66,39 @@ module Source {
         //! as SOURCE_TEMPERATURE draws them, plus one dot at each sun time.
         //! See SunData for where those sit and fillSuns() for how they travel.
         SOURCE_TEMP_SUN = 13,
-        //! The time, on a watch with no hands: the hour fills the ring's inner
-        //! sub-band and the minute its outer two, both clockwise from twelve.
+        //! The time, on a watch with no hands, split: the hour fills the
+        //! ring's inner sub-band and the minute its outer two, both clockwise
+        //! from twelve, in white.
         //!
-        //! **Never offered and never stored.** It is not in OFFERED nor in
-        //! settings.xml; a watch whose HandStyle carries the time in a ring has
-        //! StatMap.load() put it on the outermost ring whatever that ring's
-        //! setting says, so a face can never end up without the time. A stored
-        //! 14 reads as Off everywhere, which keeps it off the Crossover, whose
+        //! **Never in OFFERED and never in settings.xml.** A watch whose
+        //! HandStyle carries the time in a ring has StatMap.load() put a time
+        //! style on the outermost ring whatever else that ring stores, so a
+        //! face can never end up without the time; the ring's own picker
+        //! offers the styles and nothing else (offeredFor). Anywhere else a
+        //! stored time reads as Off, which keeps it off the Crossover, whose
         //! brass hands already say what o'clock it is.
         //!
         //! Its span is not a start and an end like every other source's. It is
         //! the two hands' ends — [hour, minute] — which TimeRing reads as two
-        //! fills of the same ring, split by radius. Riding the span is what
-        //! puts the time in the ring print, and so in the gate, for free.
-        SOURCE_TIME = 14
+        //! fills of the same ring. Riding the span is what puts the time in the
+        //! ring print, and so in the gate, for free.
+        SOURCE_TIME = 14,
+        //! The time again, overlapping: hour and minute each fill the *whole*
+        //! ring from twelve, the hour blue, the minute red, and purple where
+        //! both have passed. Whichever colour sticks out past the purple is the
+        //! one ahead. The same span as SOURCE_TIME; only the drawing differs.
+        SOURCE_TIME_OVERLAP = 15
     }
 
-    const COUNT = 15;
+    const COUNT = 16;
+
+    //! The time styles, in picker order: what the time ring offers instead
+    //! of OFFERED.
+    const TIME_STYLES = [SOURCE_TIME_OVERLAP, SOURCE_TIME] as Array<Number>;
+
+    //! The style a hands-free watch starts on, and falls back to when its time
+    //! ring stores anything that is not a time style.
+    const TIME_DEFAULT = SOURCE_TIME_OVERLAP;
 
     //! The sources a ring may actually be assigned to, in picker order.
     //!
@@ -126,7 +141,8 @@ module Source {
         0x3388FF,   // Body Battery, last 12h
         0xFFAA00,   // temperature, next 12h
         0xFFAA00,   // temperature range with sunrise and sunset
-        0xFFFFFF    // time (drawn in Palette.TIME_LIT; this is the fallback)
+        0xFFFFFF,   // time, split (drawn from Palette; this is the fallback)
+        0x9B5CFF    // time, overlap (likewise)
     ] as Array<Number>;
 
     function hue(source as Number) as Number {
@@ -209,6 +225,7 @@ module Source {
                 }
                 return;
             case SOURCE_TIME:
+            case SOURCE_TIME_OVERLAP:
                 // Both power modes. The minute is all always-on is asked for,
                 // and it is the one mode a watch without hands most needs it.
                 ClockData.fillTime(out);
@@ -337,7 +354,7 @@ module Source {
     //! Does this ring tell the time? A predicate for usesBlocks()'s reason:
     //! the loader, the held-back mode and the renderer all have to agree.
     function isTime(source as Number) as Boolean {
-        return source == SOURCE_TIME;
+        return source == SOURCE_TIME || source == SOURCE_TIME_OVERLAP;
     }
 
     //! Values per ring in the sun channel: sunrise, then sunset.
@@ -405,7 +422,14 @@ module Source {
     }
 
     //! The sources this particular ring may be assigned to, in picker order.
+    //!
+    //! A hands-free watch's time ring is the exception: it offers the time
+    //! styles and only them, so the face can be restyled but never left
+    //! without the time.
     function offeredFor(ring as Number) as Array<Number> {
+        if (HandStyle.TIME_RING && ring == StatMap.TIME_RING) {
+            return TIME_STYLES;
+        }
         var out = [] as Array<Number>;
         for (var i = 0; i < OFFERED.size(); i++) {
             if (allowedOn(OFFERED[i], ring)) {

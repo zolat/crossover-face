@@ -36,9 +36,13 @@ untouched.
   as `[hourEnd, minuteEnd]` rather than a channel of its own, so the ring print, the gate and
   held-back needed no new slots; `drawAt` hands the ring to `TimeRing` and keeps it out of the
   delta. On Epix ring 0 is forced to Time whatever `ring1` stores. 172/172 on all five.
-- [ ] Phase 1.1 — overlap style: hour blue, minute red, both purple, unlit grey, each filling
-  the whole ring; picked on the ring 1 row and the Epix default ← current
-- [ ] Phase 2 — remove drawn hands, the peek and the date deferral from the Epix
+- [x] Phase 1.1 — overlap style (`SOURCE_TIME_OVERLAP = 15`): hour blue, minute red, both
+  purple, unlit grey, each filling the whole ring; mocked up in `14d-time-overlap.png` and
+  chosen from four variants. The ring 1 row picks between the two styles and nothing else;
+  Overlap is the Epix default. `TimeRing` walks both styles in one loop, with a four-slot
+  colour table and two radius bounds set before the walk. Always-on at 11:59: 4.22% on the
+  454. 174/174 on all five.
+- [ ] Phase 2 — remove drawn hands, the peek and the date deferral from the Epix ← current
 - [ ] Phase 3 — docs
 
 ## Epix 2 family

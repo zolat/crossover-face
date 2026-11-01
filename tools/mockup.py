@@ -102,6 +102,10 @@ BLOCK_SOURCES = (SOURCE_RAIN_HOURS, SOURCE_UV_HOURS,
 #: The clock, on a watch with no hands. Never offered in a picker; a hands-free
 #: build pins it to the outermost ring. Mirrors Source.SOURCE_TIME.
 SOURCE_TIME = 14
+#: The time again, hour and minute each filling the whole ring and overlapping.
+#: Mirrors Source.SOURCE_TIME_OVERLAP.
+SOURCE_TIME_OVERLAP = 15
+TIME_SOURCES = (SOURCE_TIME, SOURCE_TIME_OVERLAP)
 
 # Shipping ring colours, outermost first. These mirror Palette.THEMES exactly;
 # keeping them separate from CANDIDATE_THEMES is what prevents a palette being
@@ -406,8 +410,16 @@ TIME_LIT = (0xFF, 0xFF, 0xFF)
 #: 0.25 is what made the split readable. Mirrors Palette.TIME_UNLIT.
 TIME_UNLIT = 0.25
 
+#: The overlapping style's hour, minute, both and unfilled. Mirrors
+#: Palette.TIME_HOUR / TIME_MINUTE / TIME_BOTH / TIME_UNLIT.
+TIME_HOUR = (0x1F, 0x8F, 0xFE)
+TIME_MINUTE = (0xFE, 0x46, 0x46)
+TIME_BOTH = (0x9B, 0x5C, 0xFF)
+TIME_OVERLAP_UNLIT = (0x3A, 0x3A, 0x3A)
 
-def time_colour(ring, position, dist_sq, time, always_on, held_back):
+
+def time_colour(ring, position, dist_sq, time, always_on, held_back,
+                style=SOURCE_TIME):
     """One dot of the time ring. Mirrors TimeRing.draw.
 
     The hour fills the innermost sub-band and the minute the outer two, both
@@ -415,6 +427,16 @@ def time_colour(ring, position, dist_sq, time, always_on, held_back):
     has, half of it. The same in every mode, held back included: on a watch
     with no hands this ring is the only thing saying what o'clock it is."""
     hour_end, minute_end = time
+    if style == SOURCE_TIME_OVERLAP:
+        # Each fills the whole ring; the colour says which have passed.
+        hour, minute = position < hour_end, position < minute_end
+        if hour and minute:
+            return TIME_BOTH
+        if hour:
+            return TIME_HOUR
+        if minute:
+            return TIME_MINUTE
+        return TIME_OVERLAP_UNLIT
     end = hour_end if dist_sq <= band_edge(ring, 1) else minute_end
     if position < end:
         return TIME_LIT
@@ -671,10 +693,10 @@ def render(spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
                     marked_here = True
                 else:
                     source = assign[ring]
-                    if source == SOURCE_TIME:
+                    if source in TIME_SOURCES:
                         colour = time_colour(ring, position, dist_sq,
                                              time or (0.0, 0.0), always_on,
-                                             held_back)
+                                             held_back, source)
                         if (col, row) in glyph:
                             glyph_colours[(col, row)] = colour
                         draw_dot(draw, x - half + drift[0],
@@ -1203,6 +1225,22 @@ def main(outdir: str = "build/mockups", device: str = DEFAULT_DEVICE) -> int:
               for h, m in ((3, 15), (10, 9), (7, 52))]
     path = os.path.join(outdir, "14c-time-ring-true-size.png")
     sheet(panels, "Time ring at 1:1").save(path)
+    written.append(path)
+
+    # 14d. The overlapping style: hour blue, minute red, purple where both
+    #      have passed, each over the whole ring. The tail past the purple is
+    #      the one ahead, so the sheet leans on times where it is a sliver.
+    overlap_assign = (SOURCE_TIME_OVERLAP, 1, 2, 3)
+    panels = []
+    for h, m in ((12, 5), (3, 15), (6, 30), (10, 9), (11, 59)):
+        face = render(values, assign=overlap_assign, time=time_fractions(h, m))
+        panels.append((f"{h}:{m:02d}   lum {measure(face) * 100:.2f}%", face))
+    worst = render(values, assign=overlap_assign, always_on=True,
+                   time=time_fractions(11, 59))
+    panels.append((f"ALWAYS-ON 11:59   lum {measure(worst) * 100:.2f}%", worst))
+    path = os.path.join(outdir, "14d-time-overlap.png")
+    sheet(panels, "Time ring, overlapping - hour blue, minute red, "
+                  "both purple").save(path)
     written.append(path)
 
     # 11. Burn-in drift: how long any one pixel stays lit over a full cycle.

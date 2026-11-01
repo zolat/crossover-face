@@ -38,7 +38,8 @@ const SOURCE_LABELS = [
     Rez.Strings.SourceBodyBatteryHours,
     Rez.Strings.SourceTempHours,
     Rez.Strings.SourceTempSun,
-    Rez.Strings.SourceTime
+    Rez.Strings.SourceTime,
+    Rez.Strings.SourceTimeOverlap
 ] as Array<ResourceId>;
 
 //! On-device settings, reached from the watch's own Watch Face menu.
@@ -261,11 +262,6 @@ class RingMenuDelegate extends WatchUi.Menu2InputDelegate {
                 StatMap.PROPERTY_TEMP_AHEAD_HIGH, StatMap.tempAheadHigh);
         } else if (ring instanceof Number) {
             var index = ring as Number;
-            // A ring telling the time is placed by the watch, not chosen: its
-            // row stays where it is, so no other row moves, and says "Time".
-            if (Source.isTime(StatMap.rings[index])) {
-                return;
-            }
             WatchUi.pushView(
                 new ChoiceMenu(Rez.Strings.RingsTitle,
                                StatMap.PROPERTY_RINGS[index],

@@ -667,7 +667,7 @@ module MatrixRenderer {
             // are drawn in their own pass afterwards.
             if (Source.isTime(rings[ring])) {
                 TimeRing.draw(dc, ring, centreX, centreY, from, to,
-                              strong, weak);
+                              rings[ring], weak);
                 lastColour = -1;    //! TimeRing moved the pen
                 continue;
             }
