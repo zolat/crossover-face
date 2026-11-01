@@ -22,6 +22,26 @@ block sources since.
   - [ ] Temperature range + drawn hands on the 454 Epix trips the watchdog — on `main` too,
     plain range included. Measured, not yet diagnosed.
 
+## Web configurator
+
+Out-of-band. Every setting plus a custom theme, edited in a browser and carried to the
+watch as a **config code**: a 38-character string in one text setting. No server; the
+code format is the payload a later background sync would carry unchanged. The watch writes
+its live config back into the same field, so Garmin Connect shows it and it can be pasted
+back into the web. The code is a transport, not a store: the numeric Properties stay the
+source of truth. Plan: `docs/config-code.md` for the format.
+
+- [ ] Phase 1 — codec: format spec, shared vectors, Python / Monkey C / TypeScript codecs,
+  string values in `setfile` ← current
+- [ ] Phase 2 — watch: custom theme (ID 99) and its properties, `ConfigCode` apply/publish,
+  menu and phone-side entries, all-white budget proof
+- [ ] Phase 0 — spike on the wrist, **needs the user**: a private beta build shows the
+  watch-written code in Garmin Connect, and a pasted code applies; a sideloaded watch
+  honours a pushed `.SET`. Runs once Phase 2 builds.
+- [ ] Phase 3 — configurator: geometry export, `web/configurator/` with its own UI, preview,
+  settings form, theme builder, code in/out, `#c=` link
+- [ ] Phase 4 — `make push-config` to the simulator and the watch, end-to-end
+
 ## Epix 2 family
 
 Out-of-band device work, not a phase of the performance roadmap that follows.
