@@ -1,0 +1,74 @@
+// The face's settings, themes and palette factors, generated from the watch's own
+// resources by tools/face_schema_export.py. Nothing here is written by hand.
+import raw from "../generated/face-schema.json";
+
+export interface SettingOption {
+  value: number;
+  label: string;
+  labelDrawn: string;
+}
+
+export interface Setting {
+  key: string;
+  type: "list" | "numeric" | "alphaNumeric";
+  title: string;
+  titleDrawn: string;
+  prompt: string;
+  promptDrawn: string;
+  options?: SettingOption[];
+  min?: number;
+  max?: number;
+  maxLength?: number;
+}
+
+export interface Theme {
+  id: number;
+  name: string;
+  colours: [number, number, number, number];
+  ramp: [number, number, number];
+}
+
+export interface PaletteFactors {
+  WEAK_ACTIVE: number;
+  WEAK_ALWAYS_ON: number;
+  WEAK_HELD_BACK: number;
+  WEAK_UNKNOWN: number;
+  LIFT: number;
+  MARKER: number;
+  MARKER_TINT: number;
+  SOFT_MARK_TINT: number;
+  OVER_TINT: number;
+  SUN_TINT: number;
+  SUN_HUES: number[];
+  BACKING_WHITE: number;
+  BACKING_DARK: number;
+  HAND_MINUTE: number;
+  RAMP_STEPS: number;
+}
+
+export interface FaceSchema {
+  settings: Setting[];
+  defaults: Record<string, number | string>;
+  defaultsDrawn: Record<string, number | string>;
+  themes: Theme[];
+  themeCustom: number;
+  palette: PaletteFactors;
+  sources: {
+    kinds: Record<string, number>;
+    blocks: number[];
+    temperatureRange: number[];
+    blocksTopRing: number;
+  };
+}
+
+export const schema = raw as unknown as FaceSchema;
+
+export function setting(key: string): Setting {
+  const found = schema.settings.find((entry) => entry.key === key);
+  if (!found) throw new Error(`no setting ${key}`);
+  return found;
+}
+
+export const SOURCE = schema.sources.kinds;
+export const isBlockSource = (source: number) => schema.sources.blocks.includes(source);
+export const isTemperatureRange = (source: number) => schema.sources.temperatureRange.includes(source);

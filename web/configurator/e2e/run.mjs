@@ -1,0 +1,151 @@
+// End-to-end check of the built configurator in the machine's own Chrome.
+//
+// Every expected code is produced by the *Python* codec (tools/simctl/configcode.py),
+// not by the page's own TypeScript, so a check that passes means two independent codecs
+// agree on what the page produced. Run with `npm run e2e`; screenshots land in
+// E2E_SHOTS (default: e2e/shots, gitignored).
+import { execFileSync, spawn } from "node:child_process";
+import { mkdirSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import puppeteer from "puppeteer-core";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const repo = resolve(here, "../../..");
+const shots = process.env.E2E_SHOTS ?? join(here, "shots");
+const chrome = process.env.CHROME ?? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+const port = 4319;
+const origin = `http://localhost:${port}`;
+mkdirSync(shots, { recursive: true });
+
+const PAGE_START = { ring2: 6 };
+function python(config) {
+  return execFileSync("python3", ["-m", "simctl.configcode", "encode", JSON.stringify(config)], {
+    cwd: repo, env: { ...process.env, PYTHONPATH: join(repo, "tools") }, encoding: "utf8",
+  }).trim();
+}
+
+let failures = 0;
+function check(name, ok, detail = "") {
+  console.log(`${ok ? "PASS" : "FAIL"}  ${name}${ok || !detail ? "" : `  (${detail})`}`);
+  if (!ok) failures++;
+}
+
+const server = spawn("npx", ["vite", "preview", "--port", String(port), "--strictPort"], { cwd: resolve(here, ".."), stdio: "ignore" });
+for (let i = 0; i < 50; i++) {
+  try { if ((await fetch(origin)).ok) break; } catch { /* not up yet */ }
+  await new Promise((r) => setTimeout(r, 200));
+}
+
+const browser = await puppeteer.launch({ executablePath: chrome, headless: true, args: ["--no-first-run"] });
+try {
+  await browser.defaultBrowserContext().overridePermissions(origin, ["clipboard-read", "clipboard-write", "clipboard-sanitized-write"]);
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(String(error)));
+  page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
+  page.on("response", (response) => { if (response.status() >= 400) errors.push(`${response.status()} ${response.url()}`); });
+  await page.setViewport({ width: 1440, height: 1000 });
+  await page.evaluateOnNewDocument(() => localStorage.clear());
+  await page.goto(origin + "/", { waitUntil: "networkidle0" });
+
+  const code = () => page.$eval(".code output", (el) => el.textContent);
+  const pickLabel = async (text) => {
+    const labels = await page.$$("label");
+    for (const label of labels) {
+      if ((await label.evaluate((el) => el.textContent.trim())) === text) { await label.click(); return; }
+    }
+    throw new Error(`no label ${text}`);
+  };
+  const pixel = (x, y) => page.$eval("canvas.face", (canvas, x, y) => {
+    const [r, g, b] = canvas.getContext("2d").getImageData(x, y, 1, 1).data;
+    return (r << 16) | (g << 8) | b;
+  }, x, y);
+  // The outermost row's dot at dx=5, dy=-185: ring 0, a hair past twelve, lit by Steps.
+  const topDot = [195 + 5, 195 - 185];
+
+  check("opens on the page's starting config", (await code()) === python(PAGE_START), await code());
+  check("draws the 390 lattice for the Crossover", (await page.$eval("canvas.face", (c) => c.width)) === 390);
+  check("ring 1 lit dot is Terrain orchid", (await pixel(...topDot)) === 0xe879f9);
+  await page.screenshot({ path: join(shots, "desktop-terrain.png") });
+
+  await pickLabel("Beacon");
+  check("choosing Beacon changes the code", (await code()) === python({ ...PAGE_START, theme: 7 }), await code());
+  check("…and the drawn colour", (await pixel(...topDot)) === 0x5cd9f0);
+
+  await page.select(".rings .ring:nth-child(2) select", "7");
+  check("ring 2 to Seconds", (await code()) === python({ ...PAGE_START, theme: 7, ring2: 7 }), await code());
+
+  await pickLabel("Always-on");
+  check("always-on keeps a lit dot at full band", (await pixel(...topDot)) === 0x5cd9f0);
+  check("always-on leaves the code alone", (await code()) === python({ ...PAGE_START, theme: 7, ring2: 7 }));
+  await pickLabel("Awake");
+
+  await pickLabel("Make your own");
+  check("Make your own selects theme 99", (await code()) === python({ ...PAGE_START, theme: 99, ring2: 7 }), await code());
+  const picker = await page.$("#colour-1");
+  await page.$eval("#colour-1", (input) => {
+    input.value = "#050505";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  const colours = [0xe879f9, 0x050505, 0x7fd4ff, 0xff6b5b];
+  check("a picked colour reaches the code",
+    (await code()) === python({ ...PAGE_START, theme: 99, ring2: 7, customColours: colours }), await code());
+  const warnings = await page.$$eval(".warnings p", (ps) => ps.map((p) => p.textContent));
+  check("a too-dark colour is warned about", warnings.some((text) => text.includes("ring 2 is very dark")), warnings.join(" | "));
+  check("the colour picker is not rebuilt under the cursor", await picker.evaluate((el) => el.isConnected));
+  await page.select("#stop-0", "1");
+  check("a ramp stop reaches the code",
+    (await code()) === python({ ...PAGE_START, theme: 99, ring2: 7, customColours: colours, customRamp: [1, 0, 3] }), await code());
+  await page.screenshot({ path: join(shots, "desktop-custom.png") });
+
+  await page.click(".actions .primary");
+  await new Promise((r) => setTimeout(r, 200));
+  check("Copy code puts the code on the clipboard",
+    (await page.evaluate(() => navigator.clipboard.readText())) === (await code()));
+
+  const vector = "AWMCAQEAAgkKDQcARv___wAAABI0VqvN7wcDSQ";
+  const buttons = await page.$$(".actions .quiet");
+  await buttons[1].click();
+  await page.type("#paste", "AWMCAQEAAgkKDQcARv///wAAABI0VqvN7wcDSQ==");
+  await page.click(".paste button");
+  check("a pasted code loads, spelled either way", (await code()) === vector, await code());
+  check("…and closes the paste box", (await page.$("#paste")) === null);
+
+  const before = await code();
+  await (await page.$$(".actions .quiet"))[1].click();
+  await page.type("#paste", vector.slice(0, -1) + "x");
+  await page.click(".paste button");
+  const error = await page.$eval(".error", (el) => el.textContent).catch(() => "");
+  check("a damaged code is refused with a reason", error.includes("checksum"), error);
+  check("…and changes nothing", (await code()) === before);
+
+  await page.goto(`${origin}/#c=${vector}&w=epix2pro51mm`, { waitUntil: "networkidle0" });
+  await page.reload({ waitUntil: "networkidle0" });
+  check("a link opens on its code", (await code()) === vector);
+  check("…and its watch", (await page.$eval("canvas.face", (c) => c.width)) === 454);
+  check("…with the drawn-hands labels", (await page.content()).includes("White and grey"));
+
+  const phone = await browser.newPage();
+  await phone.setViewport({ width: 390, height: 844, deviceScaleFactor: 3, isMobile: true, hasTouch: true });
+  await phone.goto(`${origin}/#c=${vector}&w=instinctcrossoveramoled`, { waitUntil: "networkidle0" });
+  const width = await phone.evaluate(() => document.documentElement.scrollWidth);
+  check("no sideways scroll at phone width", width <= 390, `${width}px`);
+  const bar = await phone.$eval(".code", (el) => el.getBoundingClientRect().bottom);
+  check("the code stays on screen at phone width", bar <= 844 + 1, `${bar}`);
+  const meter = await phone.$eval(".meter", (el) => {
+    const box = el.getBoundingClientRect();
+    const stage = el.closest(".stage").getBoundingClientRect();
+    return box.top >= stage.top && box.bottom <= stage.bottom;
+  });
+  check("the brightness meter sits under the face at phone width", meter);
+  await phone.screenshot({ path: join(shots, "phone-top.png") });
+  await phone.screenshot({ path: join(shots, "phone-full.png"), fullPage: true });
+
+  check("no console errors", errors.length === 0, errors.join(" | "));
+} finally {
+  await browser.close();
+  server.kill();
+}
+console.log(failures ? `${failures} check(s) failed` : "all checks passed");
+process.exit(failures ? 1 : 0);
