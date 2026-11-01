@@ -416,6 +416,9 @@ module ConfigCodeTest {
     (:test)
     function aPastedCodeWinsOverAListFieldSavedWithIt(logger as Logger) as Boolean {
         var saved = snapshot();
+        // Start from a known configuration: if the watch were already running
+        // vector 1, pasting it would rightly count as no change at all.
+        ConfigCode.apply(configAt(0));
         Config.reload();
         ConfigCode.publish();
 
