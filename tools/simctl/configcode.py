@@ -264,8 +264,10 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("decode").add_argument("code")
     sub.add_parser("encode").add_argument("config", help="JSON object, or - for stdin")
-    pusher = sub.add_parser("push", help="apply a code on a simulator (build first)")
+    pusher = sub.add_parser("push", help="apply a code on a simulator (build first), or a watch")
     pusher.add_argument("code")
+    pusher.add_argument("--watch", action="store_true",
+                        help="write it to the watch on the cable instead; unplug to apply")
     pusher.add_argument("--instance", default="shared",
                         help="'shared' (default, takes the simulator lock) or a private name")
     pusher.add_argument("--device", default="instinctcrossoveramoled")
@@ -280,6 +282,20 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         return 0
     try:
+        if args.command == "push" and args.watch:
+            # Checked here, under this module's own ConfigCodeError: run as a script this
+            # module is __main__, and simctl.watch imports a second copy of it.
+            decode(args.code)
+            from simctl import watch
+            try:
+                result = watch.push(args.code)
+            except watch.WatchError as error:
+                print(f"error: {error}", file=sys.stderr)
+                return 1
+            print(f"wrote {result['code']} to {result['file']}")
+            print(f"the watch's previous file is saved at {result['backup']}")
+            print("Unplug the watch: the face applies the code as the cable comes out.")
+            return 0
         if args.command == "push":
             result = push(args.code, args.instance, args.device)
             print(json.dumps(result, indent=2, default=str))

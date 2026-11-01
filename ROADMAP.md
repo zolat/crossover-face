@@ -58,9 +58,12 @@ source of truth. `docs/config-code.md` is the format.
   watch-written code in Garmin Connect and applies a pasted one; the custom theme survives
   a phone-side save. Then decide whether `push-config` gets a watch target — a pushed
   `.SET` replaces every setting at once, so that waits on seeing a real watch's file.
-  - Next, over the cable first (agreed 2026-11-01): `make install`, back up and decode the
-    watch's own `.SET` after a menu change, then push one with a new `configCode` and see
-    whether a face restart applies it. Success gives `push-config` a watch target.
+  - [x] Over the cable, on an Instinct Crossover AMOLED (2026-11-01): after a menu change
+    the watch's own `.SET` carried a canonical code agreeing with every value beside it,
+    and a `.SET` pushed with a new `configCode` applied in full the moment the cable came
+    out, then persisted. `make push-config TO=watch` does that now.
+  - [ ] Garmin Connect, through a private beta: the field shows the watch's code, a pasted
+    code applies, and the custom theme survives a phone-side save.
   - If the Garmin Connect round trip fails, there are other routes to weigh later (an API,
     rather than the phone's settings field).
 

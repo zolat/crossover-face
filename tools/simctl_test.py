@@ -12,6 +12,7 @@ import fcntl
 import json
 import os
 import re
+import shutil
 import signal
 import struct
 import subprocess
@@ -27,7 +28,7 @@ from xml.etree import ElementTree
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from simctl import instance as instances
-from simctl import configcode, paths, setfile
+from simctl import configcode, paths, setfile, watch
 from simctl import lock as simctl_lock
 from simctl.session import LEASE_FILE, SessionInstances
 from simctl.runner import Runner, parse_tests, read_crash
@@ -230,6 +231,102 @@ class ConfigCodeVectors(unittest.TestCase):
         code = self.vectors["valid"][0]["code"]
         with self.assertRaises(configcode.ConfigCodeError):
             configcode.decode(code[:10] + "!" + code[10:])
+
+
+class FakeWatch:
+    """The slice of the MTP binding watch.push_code uses, over a dict of files."""
+
+    def __init__(self, files: dict[str, bytes], corrupt_uploads: bool = False):
+        self.files = dict(files)
+        self.uploads = 0
+        self.corrupt_uploads = corrupt_uploads
+
+    def storages(self):
+        return [{"Sid": 131073}]
+
+    def walk(self, storage, path):
+        assert path == watch.SETTINGS_DIR
+        return [{"name": name, "size": len(data), "isFolder": False} for name, data in self.files.items()]
+
+    def download(self, storage, sources, destination):
+        Path(destination).mkdir(parents=True, exist_ok=True)
+        for source in sources:
+            name = source.rsplit("/", 1)[1]
+            (Path(destination) / name).write_bytes(self.files[name])
+
+    def upload(self, storage, sources, destination):
+        assert destination == watch.SETTINGS_DIR
+        self.uploads += 1
+        for source in sources:
+            data = Path(source).read_bytes()
+            self.files[Path(source).name] = data[:-1] + bytes([data[-1] ^ 0xFF]) if self.corrupt_uploads else data
+
+
+class WatchConfigPush(unittest.TestCase):
+    """make push-config TO=watch, against the settings file a real watch wrote."""
+
+    WATCH_FILE = (Path(__file__).resolve().parent / "testdata" / "CrossoverFace-watch.SET").read_bytes()
+    CODE = "AWMAAAAAAAQMCQAUQXDugLVV6Y7V3qvgjx5DUg"
+
+    def setUp(self):
+        self.backups = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.backups, ignore_errors=True)
+
+    def test_the_watch_file_round_trips_byte_for_byte(self):
+        values = setfile.decode(self.WATCH_FILE)
+        self.assertEqual(setfile.encode(values), self.WATCH_FILE)
+        # The watch wrote its own code, and it agrees with every value beside it.
+        decoded = configcode.decode(values["configCode"])
+        for key, value in values.items():
+            if key in decoded:
+                self.assertEqual(decoded[key], value, key)
+
+    def test_only_the_code_changes_and_the_old_file_is_kept(self):
+        fake = FakeWatch({"CrossoverFace.SET": self.WATCH_FILE})
+        result = watch.push_code(self.CODE, fake, self.backups)
+        before = setfile.decode(self.WATCH_FILE)
+        after = setfile.decode(fake.files["CrossoverFace.SET"])
+        self.assertEqual(after["configCode"], self.CODE)
+        self.assertEqual({k: v for k, v in after.items() if k != "configCode"},
+                         {k: v for k, v in before.items() if k != "configCode"})
+        self.assertEqual(Path(result["backup"]).read_bytes(), self.WATCH_FILE)
+        self.assertEqual(result["previous"], before["configCode"])
+
+    def test_a_code_is_written_in_its_canonical_spelling(self):
+        fake = FakeWatch({"CrossoverFace.SET": self.WATCH_FILE})
+        padded = self.CODE.replace("-", "+").replace("_", "/") + "=="
+        self.assertEqual(watch.push_code(padded, fake, self.backups)["code"], self.CODE)
+
+    def test_the_file_is_found_whatever_its_case(self):
+        fake = FakeWatch({"CROSSOVERFACE.SET": self.WATCH_FILE})
+        watch.push_code(self.CODE, fake, self.backups)
+        self.assertIn("CROSSOVERFACE.SET", fake.files)
+        self.assertEqual(len(fake.files), 1)
+
+    def test_a_damaged_code_touches_nothing(self):
+        fake = FakeWatch({"CrossoverFace.SET": self.WATCH_FILE})
+        with self.assertRaises(configcode.ConfigCodeError):
+            watch.push_code(self.CODE[:10] + "A" + self.CODE[11:], fake, self.backups)
+        self.assertEqual(fake.uploads, 0)
+
+    def test_a_watch_without_a_settings_file_is_refused(self):
+        fake = FakeWatch({})
+        with self.assertRaisesRegex(watch.WatchError, "no settings file"):
+            watch.push_code(self.CODE, fake, self.backups)
+        self.assertEqual(fake.uploads, 0)
+
+    def test_a_face_that_predates_codes_is_refused(self):
+        values = setfile.decode(self.WATCH_FILE)
+        del values["configCode"]
+        fake = FakeWatch({"CrossoverFace.SET": setfile.encode(values)})
+        with self.assertRaisesRegex(watch.WatchError, "predates config codes"):
+            watch.push_code(self.CODE, fake, self.backups)
+        self.assertEqual(fake.uploads, 0)
+
+    def test_a_write_that_does_not_read_back_is_reported(self):
+        fake = FakeWatch({"CrossoverFace.SET": self.WATCH_FILE}, corrupt_uploads=True)
+        with self.assertRaisesRegex(watch.WatchError, "not the one written"):
+            watch.push_code(self.CODE, fake, self.backups)
 
 
 class GeneratedForTheWeb(unittest.TestCase):

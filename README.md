@@ -386,11 +386,15 @@ watch's own dot layout:
 ```sh
 cd web/configurator && npm ci && npm run dev     # the configurator
 make push-config CODE=<code>                      # apply a code on the simulator
+make push-config TO=watch CODE=<code>             # write it to the watch on the cable
 make web-test                                     # unit tests + a real-browser run
 ```
 
 The format is `docs/config-code.md`. A sideloaded face gets no Garmin Connect settings,
-so there the code arrives by `make push-config` (simulator) or the on-watch menu.
+so there the code goes over the cable: `make push-config TO=watch` writes it into the
+face's settings file on the watch, and the face applies it when you unplug. The face must
+be a build with config codes (`make install`) and must have saved a setting once — change
+anything in its menu — so the watch has a settings file to write into.
 
 ### Colour theme
 

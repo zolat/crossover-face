@@ -809,6 +809,16 @@ it (pinned by `GeometryTest.mc`). Both refuse to be stale under `make test-simct
 settings change means re-running them. `make push-config CODE=...` applies a code on the
 simulator through the face's own `sync()`.
 
+**`make push-config TO=watch` puts a code on the watch on the cable**, and that was
+measured, not assumed: a real watch keeps the face's settings in
+`/GARMIN/Apps/SETTINGS/CrossoverFace.SET` — mixed case, unlike the simulator's — in the
+same format `setfile` already decodes byte for byte, and the watch restarts the face when
+the cable comes out, so the code applies on unplugging with no face switch or reboot.
+`tools/simctl/watch.py` changes only `configCode` and backs the old file up under
+`build/watch-settings/`. It refuses a watch with no settings file rather than writing one
+it did not make, because whether a watch reads a file it never wrote is still untested.
+`tools/testdata/CrossoverFace-watch.SET` is a file the watch wrote, pinned byte for byte.
+
 ### Settings live in five places that must stay in step
 
 Stored values are **list indices**, so `resources/properties.xml`, `resources/settings/settings.xml`,
