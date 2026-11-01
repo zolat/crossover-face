@@ -99,6 +99,9 @@ SOURCE_BODY_BATTERY_HOURS = 11
 SOURCE_TEMP_HOURS = 12
 BLOCK_SOURCES = (SOURCE_RAIN_HOURS, SOURCE_UV_HOURS,
                  SOURCE_BODY_BATTERY_HOURS, SOURCE_TEMP_HOURS)
+#: The clock, on a watch with no hands. Never offered in a picker; a hands-free
+#: build pins it to the outermost ring. Mirrors Source.SOURCE_TIME.
+SOURCE_TIME = 14
 
 # Shipping ring colours, outermost first. These mirror Palette.THEMES exactly;
 # keeping them separate from CANDIDATE_THEMES is what prevents a palette being
@@ -387,6 +390,37 @@ def hourly_colour(ring, position, dist_sq, levels, always_on, held_back):
     return scale(colour, weak)
 
 
+def time_fractions(hour: int, minute: int) -> tuple[float, float]:
+    """How far round the dial each half of the time ring runs. Mirrors
+    Source.fillTime: the hour is continuous like an hour hand, the minute reads
+    like a minute hand — empty on the hour, a quarter at :15."""
+    return ((hour % 12 + minute / 60.0) / 12.0, minute / 60.0)
+
+
+#: Elapsed time is drawn white: the Crossover's own hour hand, and the one
+#: colour no theme uses, so it reads as the clock rather than as a fifth stat.
+#: Mirrors Palette.TIME_LIT.
+TIME_LIT = (0xFF, 0xFF, 0xFF)
+#: What has not elapsed yet, as a fraction of the ring's colour. At the
+#: ordinary unfilled tier (0.55) white against hue barely separated at 1:1;
+#: 0.25 is what made the split readable. Mirrors Palette.TIME_UNLIT.
+TIME_UNLIT = 0.25
+
+
+def time_colour(ring, position, dist_sq, time, always_on, held_back):
+    """One dot of the time ring. Mirrors TimeRing.draw.
+
+    The hour fills the innermost sub-band and the minute the outer two, both
+    clockwise from twelve. Where both have passed the ring is whole; where one
+    has, half of it. The same in every mode, held back included: on a watch
+    with no hands this ring is the only thing saying what o'clock it is."""
+    hour_end, minute_end = time
+    end = hour_end if dist_sq <= band_edge(ring, 1) else minute_end
+    if position < end:
+        return TIME_LIT
+    return scale(THEME[ring % len(THEME)], TIME_UNLIT)
+
+
 def scale(rgb: tuple[int, int, int], factor: float) -> tuple[int, int, int]:
     return tuple(max(0, min(255, round(c * factor))) for c in rgb)
 
@@ -588,7 +622,8 @@ def render(spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
            at_time: tuple[int, int] = (10, 9),
            drift: tuple[int, int] = (0, 0), marks=None,
            overs=None, rotate: bool = True,
-           date: int | None = None) -> Image.Image:
+           date: int | None = None,
+           time: tuple[float, float] | None = None) -> Image.Image:
     img = Image.new("RGB", (SIZE, SIZE), (0, 0, 0))
     # The watermark's cells, resolved once rather than per dot.
     # Awake only, and drawn hands own the ordinary time view: their date
@@ -636,6 +671,16 @@ def render(spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
                     marked_here = True
                 else:
                     source = assign[ring]
+                    if source == SOURCE_TIME:
+                        colour = time_colour(ring, position, dist_sq,
+                                             time or (0.0, 0.0), always_on,
+                                             held_back)
+                        if (col, row) in glyph:
+                            glyph_colours[(col, row)] = colour
+                        draw_dot(draw, x - half + drift[0],
+                                 y - half + drift[1], colour,
+                                 arm_for(dx, dy, rotate))
+                        continue
                     if source in BLOCK_SOURCES:
                         # Its own path, mirroring the renderer's own loop: the
                         # forecast reads a radius as well as an angle, so it
@@ -1118,6 +1163,46 @@ def main(outdir: str = "build/mockups", device: str = DEFAULT_DEVICE) -> int:
     path = os.path.join(outdir, "13b-date-true-size.png")
     sheet(panels, "Date at 1:1 - on both fields, and absent in always-on"
           ).save(path)
+    written.append(path)
+
+    # 14. The time ring: the hour fills the inner sub-band and the minute the
+    #     outer two, so where both have passed the ring is whole. Ring 0 on a
+    #     watch with no hands; the other three keep their data.
+    time_assign = (SOURCE_TIME, 1, 2, 3)
+    panels = []
+    for h, m in ((12, 0), (3, 15), (6, 30), (9, 45), (11, 59), (10, 9)):
+        face = render(values, assign=time_assign, time=time_fractions(h, m))
+        panels.append((f"{h}:{m:02d}   lum {measure(face) * 100:.2f}%",
+                       composite(face, hands=False)))
+    path = os.path.join(outdir, "14-time-ring.png")
+    sheet(panels, "Time ring - hour inside, minute outside, "
+                  "both clockwise from twelve").save(path)
+    written.append(path)
+
+    #     The time survives every mode, held-back included: on a watch with no
+    #     hands it is the one ring that must.
+    at = time_fractions(10, 9)
+    panels = []
+    for label, kwargs in (("AWAKE", {}),
+                          ("ALWAYS-ON", {"always_on": True}),
+                          ("HELD BACK", {"always_on": True,
+                                         "held_back": True}),
+                          ("AWAKE + DATE", {"date": 23})):
+        spans = nothing if kwargs.get("held_back") else values
+        face = render(spans, assign=time_assign, time=at, **kwargs)
+        panels.append((f"{label}   lum {measure(face) * 100:.2f}%",
+                       composite(face, hands=False)))
+    path = os.path.join(outdir, "14b-time-ring-modes.png")
+    sheet(panels, "Time ring at 10:09 - awake, always-on, held back, "
+                  "and under the date").save(path)
+    written.append(path)
+
+    # 14c. True size, uncomposited, so the split can be judged at 1:1.
+    panels = [(f"{h}:{m:02d}",
+               render(values, assign=time_assign, time=time_fractions(h, m)))
+              for h, m in ((3, 15), (10, 9), (7, 52))]
+    path = os.path.join(outdir, "14c-time-ring-true-size.png")
+    sheet(panels, "Time ring at 1:1").save(path)
     written.append(path)
 
     # 11. Burn-in drift: how long any one pixel stays lit over a full cycle.

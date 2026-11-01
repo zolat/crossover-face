@@ -22,6 +22,20 @@ block sources since.
   - [ ] Temperature range + drawn hands on the 454 Epix trips the watchdog — on `main` too,
     plain range included. Measured, not yet diagnosed.
 
+## Epix time ring
+
+Out-of-band. The Epix stops drawing hands out of the dot field and tells the time in its
+outermost ring instead: the hour fills the inner sub-band, the minute the outer two, both
+clockwise from twelve, elapsed in white over the ring's colour at 25%. The Crossover is
+untouched.
+
+- [x] Phase 0 — mockup (`14-time-ring*.png`). Ring-coloured tiers at the usual 0.55 did not
+  read at 1:1; white over 0.25 did, and was chosen. Worst always-on frame, every ring full at
+  11:59, measures 7.06% (Terrain, 416) against 5.75% with no time ring.
+- [ ] Phase 1 — `SOURCE_TIME`, its channel and print slots, `TimeRing` renderer ← current
+- [ ] Phase 2 — remove drawn hands, the peek and the date deferral from the Epix
+- [ ] Phase 3 — docs
+
 ## Epix 2 family
 
 Out-of-band device work, not a phase of the performance roadmap that follows.
