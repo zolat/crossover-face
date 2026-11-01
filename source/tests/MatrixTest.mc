@@ -3376,6 +3376,7 @@ module MatrixTest {
         DotGrid.ys = [] as Array<Number>;
         DotGrid.positionOf = [] as Array<Float>;
         DotGrid.armOf = [] as Array<Number>;
+        DotGrid.blockAt = []b;
         DotGrid.invalidate();
 
         var before = System.getSystemStats().freeMemory;
@@ -5923,6 +5924,68 @@ module MatrixTest {
             }
         }
         logger.debug(probes + " boundary probes agree");
+        return true;
+    }
+
+    //! DotGrid.blockAt is HourBands.blockCodeOf(), cached: for every dot of
+    //! every ring, the byte the build stored is what the definition says. The
+    //! build inlines it, so this is what keeps the copy honest.
+    (:test)
+    function theBlockCacheMatchesItsDefinition(logger as Logger) as Boolean {
+        DotGrid.ensureBuilt();
+        var gutters = 0;
+        for (var i = 0; i < DotGrid.count; i++) {
+            var expected = HourBands.blockCodeOf(DotGrid.positionOf[i]);
+            Test.assertEqualMessage(DotGrid.blockAt[i], expected,
+                "dot " + i + " at " + DotGrid.positionOf[i] +
+                " cached the wrong block");
+            if (expected == HourBands.GUTTER) {
+                gutters++;
+            }
+        }
+        logger.debug(gutters + " of " + DotGrid.count + " dots sit in a gutter");
+        Test.assertMessage(gutters > 0 && gutters < DotGrid.count,
+            "a lattice with no gutter dots, or nothing else, is not this one");
+        return true;
+    }
+
+    //! The renderer's block test, rewritten against the cached code, lights
+    //! exactly the dots HourBands.litAt() does — every dot of every ring a
+    //! block source may use, at every level of the scale, plus a mixed table
+    //! with unknown hours in it.
+    (:test)
+    function theCachedBlockCodeLightsWhatLitAtDoes(logger as Logger)
+            as Boolean {
+        DotGrid.ensureBuilt();
+        var checked = 0;
+        for (var ring = 0; ring <= Source.BLOCKS_TOP_RING; ring++) {
+            for (var level = -1; level <= HourBands.LEVELS; level++) {
+                var levels = new [HourBands.HOURS] as Array<Number>;
+                for (var b = 0; b < HourBands.HOURS; b++) {
+                    // -1 is the mixed table: every level, and unknown hours.
+                    levels[b] = (level >= 0) ? level
+                        : ((b % 4 == 3) ? HourBands.UNKNOWN
+                                        : (b * 5) % (HourBands.LEVELS + 1));
+                }
+                var t = new BlockTables(ring, levels);
+                for (var i = DotGrid.ringStart[ring];
+                        i < DotGrid.ringStart[ring + 1]; i++) {
+                    var dx = DotGrid.xs[i];
+                    var dy = DotGrid.ys[i];
+                    var radiusSq = dx * dx + dy * dy;
+                    var position = DotGrid.positionOf[i];
+                    var cached = HourBands.litInBlock(DotGrid.blockAt[i],
+                        position, radiusSq, t.full, t.part, t.lo, t.hi);
+                    if (cached != t.lit(position, radiusSq)) {
+                        Test.assertMessage(false, "ring " + ring + " level " +
+                            level + " dot " + i + ": the cached block code " +
+                            "lights " + cached + ", litAt says otherwise");
+                    }
+                    checked++;
+                }
+            }
+        }
+        logger.debug(checked + " (dot, table) pairs agree");
         return true;
     }
 

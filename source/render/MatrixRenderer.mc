@@ -363,6 +363,9 @@ module MatrixRenderer {
         var overColour = Palette.overOf;
         var dimColour = Palette.dimOf;
         var bandEdge = DotGrid.bandEdge;
+        // Which hour block each dot sits in, cached by DotGrid.build(); only
+        // the block loop reads it.
+        var blockAt = DotGrid.blockAt;
 
         // Unpack the hand axes once. With the hands on, handAt() is the only
         // call left in the dot loop; reading its four floats out of an array
@@ -697,26 +700,32 @@ module MatrixRenderer {
                     if (hand != NO_HAND) {
                         colour = handColour[hand];
                     } else {
-                        // HourBands.litAt()'s body, inlined — the same trade
-                        // litBetween gets, and the same obligation: HourBands
-                        // keeps the readable definition and a test pins the two
-                        // together at the block edge, the gutter, every band
-                        // edge and both sides of the partial band's window.
-                        var at = positionOf[i] * HourBands.HOURS;
-                        var block = at.toNumber();
-                        var into = at - block;
-                        var radiusSq = dx * dx + dy * dy;
-                        if (into < HourBands.LEAD ||
-                                into >= HourBands.TRAIL) {
+                        // HourBands.litInBlock()'s body, inlined — the same
+                        // trade litBetween gets, and the same obligation:
+                        // HourBands keeps the readable definition and
+                        // theCachedBlockCodeLightsWhatLitAtDoes pins it to
+                        // litAt() on every dot. The block and the gutter are
+                        // read from DotGrid.blockAt rather than worked out per
+                        // dot, which was a multiply, a toNumber() and two
+                        // comparisons on every dot of every block ring; only a
+                        // dot inside the partial band's radius still pays for
+                        // how far into its block it sits.
+                        var block = blockAt[i];
+                        if (block == HourBands.GUTTER) {
                             colour = weak;              //! a gutter, either side
-                        } else if (radiusSq <= blockFull[block]) {
-                            colour = strong;
-                        } else if (radiusSq <= blockPart[block] &&
-                                   into > blockLo[block] &&
-                                   into < blockHi[block]) {
-                            colour = strong;            //! the partial band
                         } else {
-                            colour = blockUnlit[block];
+                            var radiusSq = dx * dx + dy * dy;
+                            if (radiusSq <= blockFull[block]) {
+                                colour = strong;
+                            } else if (radiusSq <= blockPart[block]) {
+                                var into = position * HourBands.HOURS - block;
+                                colour = (into > blockLo[block] &&
+                                          into < blockHi[block])
+                                    ? strong            //! the partial band
+                                    : blockUnlit[block];
+                            } else {
+                                colour = blockUnlit[block];
+                            }
                         }
                     }
                     if (colour != lastColour) {

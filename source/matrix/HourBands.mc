@@ -304,6 +304,37 @@ module HourBands {
         return into >= LEAD && into < TRAIL;
     }
 
+    //! What DotGrid.blockAt stores for a dot at this position: its block, or
+    //! GUTTER when it sits in the gap either side of one. Fixed geometry —
+    //! LEAD and TRAIL are constants — which is what lets it be cached per dot.
+    const GUTTER = HOURS;
+
+    function blockCodeOf(position as Float) as Number {
+        return insideBlock(position) ? blockOf(position) : GUTTER;
+    }
+
+    //! litAt(), written against the cached block code instead of the
+    //! position alone. This is the shape MatrixRenderer inlines now: the
+    //! block and the gutter come from DotGrid.blockAt, and only a dot inside
+    //! the partial band's radius works out how far into its block it sits.
+    //! theCachedBlockCodeLightsWhatLitAtDoes holds the two to each other.
+    function litInBlock(code as Number, position as Float, radiusSq as Number,
+                        fullEdges as Array<Number>, partEdges as Array<Number>,
+                        partLo as Array<Float>,
+                        partHi as Array<Float>) as Boolean {
+        if (code == GUTTER) {
+            return false;
+        }
+        if (radiusSq <= fullEdges[code]) {
+            return true;
+        }
+        if (radiusSq > partEdges[code]) {
+            return false;
+        }
+        var into = position * HOURS - code;
+        return into > partLo[code] && into < partHi[code];
+    }
+
     //! Is a dot lit, given the per-block tables the renderer precomputes?
     //!
     //! `fullEdges[b]` is the squared radius a dot must be within to be lit

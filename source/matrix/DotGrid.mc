@@ -92,6 +92,14 @@ module DotGrid {
     var ys as Array<Number> = [] as Array<Number>;      //! dy from centre
     var positionOf as Array<Float> = [] as Array<Float>;//! 0.0-1.0 along it
     var armOf as Array<Number> = [] as Array<Number>;   //! offset into ARMS
+    //! Which hour block each dot sits in, or HourBands.GUTTER — a byte a dot.
+    //!
+    //! The one per-dot cache that is not about drawing every ring: only a
+    //! block ring reads it. It exists because working the block out per dot
+    //! (a multiply, a toNumber() and two gutter comparisons) is what pushed
+    //! three block rings past the watchdog; read from here it is one byte.
+    //! A ByteArray, so it costs a fifth of what another Array would.
+    var blockAt as ByteArray = []b;
 
     //! Half the width, in position units, of the window a mark occupies on
     //! each ring. Geometry, so it is cached here with everything else.
@@ -700,6 +708,7 @@ module DotGrid {
             ys = new [total] as Array<Number>;
             positionOf = new [total] as Array<Float>;
             armOf = new [total] as Array<Number>;
+            blockAt = new [total]b;
         }
 
         var ringCount = StatMap.RINGS;
@@ -844,7 +853,28 @@ module DotGrid {
             }
         }
 
+        fillBlockCodes(total);
+
         stale = false;
         generation++;
+    }
+
+    //! The block every dot falls in, into blockAt.
+    //!
+    //! HourBands.blockCodeOf(), inlined: the build is ~1400 dots against the
+    //! same watchdog as a frame, and a call per dot is most of the cost.
+    //! theBlockCacheMatchesItsDefinition pins the two together.
+    //!
+    //! A function of its own for the stack's sake, as drawAt()'s helpers are:
+    //! build() can run from inside drawAt(), and its locals inline here
+    //! overflowed the test runner's stack.
+    function fillBlockCodes(total as Number) as Void {
+        for (var i = 0; i < total; i++) {
+            var turns = positionOf[i] * HourBands.HOURS;
+            var block = turns.toNumber();
+            var into = turns - block;
+            blockAt[i] = (into < HourBands.LEAD || into >= HourBands.TRAIL)
+                ? HourBands.GUTTER : block;
+        }
     }
 }
