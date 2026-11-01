@@ -255,12 +255,19 @@ PYTHONPATH=tools python3 -m simctl.window shot face.png --crop face
 PYTHONPATH=tools python3 -m simctl.window list           # simulator windows, by instance
 ```
 
-**Each checkout gets its own simulator, so sessions no longer take turns.** The singleton
+**Each MCP session gets one simulator, reused across its calls and devices.** The singleton
 is a habit, not a constraint: `TMPDIR` moves the simulated device filesystem, `HOME` moves
 the `Sim-$USER` file that refuses a second instance, and `SHELL_SERVER_PORT` moves the
 control channel. `simctl/instance.py` sets all three, symlinking `~/.Garmin/ConnectIQ` back
-so devices and the signing key stay shared. Two checkouts have run the full suite
-concurrently, both green, neither touching the other or the lock.
+so devices and the signing key stay shared. Omit `instance` for normal work, including a
+device matrix: loading a new device into the default replaces the previous one. Only name
+an instance when two simulator windows genuinely need to coexist.
+
+`sim_release` stops both the sideload and a private simulator; it leaves the machine's
+shared simulator running and releases only that lock. The MCP server also releases every
+private instance at shutdown. Each instance carries an advisory lease, so after an abrupt
+server death the next server can prove the lease is abandoned and reap it without matching
+or killing another agent's process.
 
 > **The MCP server drives the checkout *it* runs from, not yours.** `.mcp.json` is registered
 > at the repo root, so `simctl.paths.repo_root()` — which resolves relative to its own file —

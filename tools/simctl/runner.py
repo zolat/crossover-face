@@ -163,6 +163,7 @@ class Runner:
             f"SDK={instances.sdk_path()}/",
             f"KEY={Path.home() / '.Garmin' / 'ConnectIQ' / 'developer_key.der'}",
             "SIM_LOCK=true",
+            f"SIM_PORT={self.instance.port}",
             f"MONKEYDO={self.repo / 'tools' / 'simctl' / 'monkeydo_pinned.sh'}",
         ]
 
@@ -182,33 +183,45 @@ class Runner:
     # -- lifecycle ----------------------------------------------------------
 
     def release(self) -> dict:
-        """Stop *our* sideload. Never `pkill monkeydo` — that kills every session's.
+        """Stop *our* sideload and private simulator, never another session's.
 
         Says which of the three things happened, because "False" covers two very
         different situations: nothing was ever loaded, and the sideload had already
-        exited (a test run replaces the app, which ends the attached monkeydo).
+        exited (a test run replaces the app, which ends the attached monkeydo). The
+        machine's shared simulator is deliberately left running; only its lock is ours.
+
+        Never use ``pkill monkeydo`` or a broad simulator match here: both would kill
+        every parallel session rather than the target represented by this Runner.
         """
+        cleanup_errors = []
         try:
-            pid = int(self._child_pid_file.read_text().strip())
-        except (OSError, ValueError):
-            pid = None
-
-        if pid is None:
-            outcome = "nothing was loaded by this session"
+            stopped, outcome = self._stop_sideload()
+        except Exception as error:
             stopped = False
-        else:
-            try:
-                os.killpg(os.getpgid(pid), signal.SIGTERM)
-                outcome, stopped = f"stopped sideload {pid}", True
-            except (ProcessLookupError, PermissionError):
-                outcome, stopped = f"sideload {pid} had already exited", False
-            self._child_pid_file.unlink(missing_ok=True)
-
+            outcome = f"could not stop sideload: {error}"
+            cleanup_errors.append(outcome)
+        simulator_stopped = False
         released = False
-        if self.lock is not None and self.lock.held_by_us():
-            self.lock.release()
-            released = True
-        return {"stopped": stopped, "detail": outcome, "lock_released": released}
+        try:
+            if self.instance.isolated:
+                try:
+                    simulator_stopped = self.instance.stop()
+                except Exception as error:
+                    cleanup_errors.append(f"could not stop simulator: {error}")
+        finally:
+            if self.lock is not None and self.lock.held_by_us():
+                try:
+                    self.lock.release()
+                    released = True
+                except Exception as error:
+                    cleanup_errors.append(f"could not release shared lock: {error}")
+        return {
+            "stopped": stopped,
+            "detail": outcome,
+            "simulator_stopped": simulator_stopped,
+            "lock_released": released,
+            "cleanup_errors": cleanup_errors,
+        }
 
     def load(self, build: bool = True, timeout: float = 45.0) -> dict:
         """Get the face running and wait until it is actually drawing.
@@ -231,89 +244,138 @@ class Runner:
             return {"ok": False, "stage": "lock",
                     "error": f"the shared simulator is held by pid {self.lock.holder()}"}
 
-        started = time.time()
-        self.instance.start()
-        self.release_child_only()
+        # From here on we own either an isolated process or the shared lock. Any failure
+        # must release it; only a fully ready face remains alive for subsequent calls.
+        keep_running = False
+        try:
+            started = time.time()
+            self.instance.start()
+            self.release_child_only()
 
-        log = self.instance.state_dir / f"monkeydo-{self.instance.name}.log"
-        with open(log, "wb") as stream:
-            child = subprocess.Popen(
-                [*self._monkeydo(), self.prg, self.device],
-                cwd=self.repo, env=self._make_environment(),
-                stdout=stream, stderr=subprocess.STDOUT, start_new_session=True,
-            )
-        self._child_pid_file.write_text(str(child.pid))
+            log = self.instance.state_dir / f"monkeydo-{self.instance.name}.log"
+            with open(log, "wb") as stream:
+                child = subprocess.Popen(
+                    [*self._monkeydo(), self.prg, self.device],
+                    cwd=self.repo, env=self._make_environment(),
+                    stdout=stream, stderr=subprocess.STDOUT, start_new_session=True,
+                )
+            self.instance._sideload_process = child
+            self._child_pid_file.write_text(str(child.pid))
 
-        # Readiness needs two facts, not one. Killing monkeydo does not stop the app
-        # inside the simulator, so a reload leaves the previous face on screen and a
-        # "not black" test passes instantly against the *old* build. So wait for this
-        # push to actually land - the app binary in the device filesystem is rewritten
-        # by the push - and only then for something to be drawn.
-        installed = paths.installed_prg(self.instance.root, self.prg)
-        deadline = time.time() + timeout
-        last = None
-        ready_frames = 0
-        while time.time() < deadline:
-            pushed = installed.exists() and installed.stat().st_mtime >= started
-            if pushed:
-                crash = read_crash(self.instance.root, started)
-                if crash is not None:
-                    return {"ok": False, "stage": "runtime",
-                            "error": crash["error"], "crash": crash,
-                            "log": str(log)}
-                if child.poll() is not None:
-                    detail = log.read_text(errors="replace").strip()[-2000:]
-                    return {"ok": False, "stage": "runtime",
-                            "error": detail or "monkeydo exited before the face was ready",
-                            "crash": read_crash(self.instance.root, started),
-                            "log": str(log)}
-                found = window.main_window(self.instance.pid())
-                if found is not None:
-                    try:
-                        shot = window.capture(found)
-                        if not window.is_black(shot):
-                            # One non-black frame can be Garmin's IQ error
-                            # screen arriving just before CIQ_LOG is flushed.
-                            # Require a second live frame so a crash cannot be
-                            # mistaken for readiness.
-                            ready_frames += 1
-                            if ready_frames >= 2:
-                                return {"ok": True, "pid": self.instance.pid(),
-                                        "port": self.instance.port,
-                                        "window": found.window_id,
-                                        "monkeydo": child.pid,
-                                        "seconds": round(time.time() - started, 1)}
-                        else:
+            # Readiness needs two facts, not one. Killing monkeydo does not stop the app
+            # inside the simulator, so a reload leaves the previous face on screen and a
+            # "not black" test passes instantly against the *old* build. So wait for this
+            # push to actually land - the app binary in the device filesystem is rewritten
+            # by the push - and only then for something to be drawn.
+            installed = paths.installed_prg(self.instance.root, self.prg)
+            deadline = time.time() + timeout
+            last = None
+            ready_frames = 0
+            while time.time() < deadline:
+                pushed = installed.exists() and installed.stat().st_mtime >= started
+                if pushed:
+                    crash = read_crash(self.instance.root, started)
+                    if crash is not None:
+                        return {"ok": False, "stage": "runtime",
+                                "error": crash["error"], "crash": crash,
+                                "log": str(log)}
+                    if child.poll() is not None:
+                        detail = log.read_text(errors="replace").strip()[-2000:]
+                        return {"ok": False, "stage": "runtime",
+                                "error": detail or "monkeydo exited before the face was ready",
+                                "crash": read_crash(self.instance.root, started),
+                                "log": str(log)}
+                    found = window.main_window(self.instance.pid())
+                    if found is not None:
+                        try:
+                            shot = window.capture(found)
+                            if not window.is_black(shot):
+                                # One non-black frame can be Garmin's IQ error
+                                # screen arriving just before CIQ_LOG is flushed.
+                                # Require a second live frame so a crash cannot be
+                                # mistaken for readiness.
+                                ready_frames += 1
+                                if ready_frames >= 2:
+                                    keep_running = True
+                                    return {"ok": True, "pid": self.instance.pid(),
+                                            "port": self.instance.port,
+                                            "window": found.window_id,
+                                            "monkeydo": child.pid,
+                                            "seconds": round(time.time() - started, 1)}
+                            else:
+                                ready_frames = 0
+                                last = "the face is drawing black"
+                        except window.CaptureError as error:
                             ready_frames = 0
-                            last = "the face is drawing black"
-                    except window.CaptureError as error:
-                        ready_frames = 0
-                        last = str(error)
-            else:
-                last = "the app was never pushed to this instance"
-            time.sleep(1.0)
+                            last = str(error)
+                else:
+                    last = "the app was never pushed to this instance"
+                time.sleep(1.0)
 
-        return {"ok": False, "stage": "ready", "error": last or "no simulator window appeared",
+            return {
+                "ok": False,
+                "stage": "ready",
+                "error": last or "no simulator window appeared",
                 "display_asleep": window.display_is_asleep(),
                 "crash": read_crash(self.instance.root, started),
-                "log": str(log)}
+                "log": str(log),
+            }
+        finally:
+            if not keep_running:
+                self.release()
 
     def release_child_only(self) -> None:
         """Drop a previous sideload without giving up the lock."""
+        self._stop_sideload()
+
+    def _stop_sideload(self) -> tuple[bool, str]:
+        """Stop only the child launched through this cached Instance object."""
         try:
-            pid = int(self._child_pid_file.read_text().strip())
+            saved_pid = int(self._child_pid_file.read_text().strip())
         except (OSError, ValueError):
-            return
+            saved_pid = None
+
+        owns_shared = (
+            self.instance.isolated
+            or (self.lock is not None and self.lock.held_by_us())
+        )
+        if not owns_shared:
+            detail = (
+                f"left shared sideload {saved_pid} alone because this session "
+                "does not hold its lock"
+            )
+            return False, detail
+
+        process = self.instance._sideload_process
+        if process is None:
+            self._child_pid_file.unlink(missing_ok=True)
+            if saved_pid is None:
+                return False, "nothing was loaded by this session"
+            return False, f"sideload {saved_pid} was not owned by this session"
+
+        pid = process.pid
+        if process.poll() is not None:
+            self.instance._sideload_process = None
+            self._child_pid_file.unlink(missing_ok=True)
+            return False, f"sideload {pid} had already exited"
+
         try:
             os.killpg(os.getpgid(pid), signal.SIGTERM)
-            time.sleep(1.0)
-        except (ProcessLookupError, PermissionError):
-            pass
+            try:
+                process.wait(timeout=2.0)
+            except subprocess.TimeoutExpired:
+                os.killpg(os.getpgid(pid), signal.SIGKILL)
+                process.wait(timeout=1.0)
+            stopped, detail = True, f"stopped sideload {pid}"
+        except ProcessLookupError:
+            stopped, detail = False, f"sideload {pid} had already exited"
+        self.instance._sideload_process = None
         self._child_pid_file.unlink(missing_ok=True)
+        return stopped, detail
 
     # -- tests --------------------------------------------------------------
 
-    def run_tests(self, timeout: float = 600.0) -> TestReport:
+    def run_tests(self, timeout: float = 600.0, keep_running: bool = False) -> TestReport:
         """Run the Monkey C suite and return it parsed.
 
         In shared mode the lock is taken here rather than left to the recipe, so that a
@@ -321,12 +383,15 @@ class Runner:
         through instead of deadlocking against itself. Holding continuously also beats
         releasing and re-acquiring, which would open a gap another session could win
         halfway through the run.
+
+        A standalone test-only instance is stopped by default. The MCP server passes
+        ``keep_running=True`` because its session lease owns cleanup and successive tool
+        calls should reuse the same process.
         """
         started = time.time()
         mine = False
-        if self.instance.isolated:
-            self.instance.start()
-        elif self.lock is not None and not self.lock.held_by_us():
+        started_here = False
+        if not self.instance.isolated and self.lock is not None and not self.lock.held_by_us():
             if not self.lock.acquire():
                 report = TestReport(contention=True)
                 report.summary = (f"did not start: the shared simulator is held by pid "
@@ -335,6 +400,9 @@ class Runner:
             mine = True  # ours to give back; a lock sim_load took stays held
 
         try:
+            if self.instance.isolated:
+                started_here = not self.instance.is_running()
+                self.instance.start()
             result = subprocess.run(
                 ["make", "test", *self._make_overrides()],
                 cwd=self.repo, env=self._make_environment(),
@@ -343,6 +411,8 @@ class Runner:
         finally:
             if mine and self.lock is not None:
                 self.lock.release()
+            if started_here and not keep_running:
+                self.instance.stop()
 
         report = parse_tests(result.stdout + result.stderr)
         report.crash = read_crash(self.instance.root, started)

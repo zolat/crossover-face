@@ -30,4 +30,4 @@ Recent commits use imperative, sentence-style subjects such as `Centre each fore
 
 ## Workflow & Security
 
-Create branches in `.claude/worktrees/<name>`; keep `main` buildable. Prefer the `crossover-simulator` MCP: omit `instance` for Codex's private simulator and pass the same `device` through load, settings, screenshot, test, and release. Use `instance="shared"` only when explicitly coordinating with Claude; Make targets lock it. Never commit signing keys (`*.der`, `*.pem`) or generated artifacts.
+Create branches in `.claude/worktrees/<name>`; keep `main` buildable. Prefer the `crossover-simulator` MCP: omit `instance` to reuse the agent session's private simulator, including when moving between devices, and pass the same `device` through load, settings, screenshot, test, and release. Use a named instance only when two simulators must be visible concurrently. Call `sim_release` as soon as visual work is done; it stops the private simulator, and server shutdown is the fallback cleanup. Use `instance="shared"` only when explicitly coordinating with Claude; Make targets lock it. Never commit signing keys (`*.der`, `*.pem`) or generated artifacts.

@@ -9,6 +9,12 @@
 # Override with CROSSOVER_PYTHON if you keep the dependencies somewhere else.
 HERE="$(cd "$(dirname "$0")" && pwd)"
 
+# A server reuses one simulator throughout its own lifetime, while another agent in the
+# same checkout gets a different one. exec preserves $$, so the token also identifies
+# the process that holds the instance lease in simctl/session.py.
+CROSSOVER_SIM_SESSION="${CROSSOVER_SIM_SESSION:-$$}"
+export CROSSOVER_SIM_SESSION
+
 # pyenv first among the fallbacks: where a version manager is in use, the system
 # interpreter is exactly the one that will not have the packages. Measured here - under
 # PATH=/usr/bin:/bin nothing else on this machine can import mcp.
