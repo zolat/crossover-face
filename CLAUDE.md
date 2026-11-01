@@ -384,8 +384,8 @@ the face would not load. The rule:
 > Nothing is computed in the render loop that `DotGrid.build()` could compute once, and nothing
 > calls out of the loop that could be an array lookup.
 
-`DotGrid` caches parallel arrays (`xs`, `ys`, `positionOf`, `armOf`) built once per
-rebuild; `MatrixRenderer` is a flat indexed walk. There is no `ringOf`: dots are stored grouped
+`DotGrid` caches parallel arrays (`xs`, `ys`, `positionOf`, `armOf`, and the byte-per-dot
+`blockAt` that only block rings read) built once per rebuild; `MatrixRenderer` is a flat indexed walk. There is no `ringOf`: dots are stored grouped
 by ring, so `ringStart` already says which ring an index belongs to. The single deliberate exception is
 `StatMap.isLit()`, called per dot (~6ms/frame) so the lit test has one definition shared with the
 tests.
@@ -470,6 +470,17 @@ nothing to do. Never fold them together. Set `Diagnostics.TRACE = true` to have 
 printed every ten frames — that is the only way to read it outside the on-device menu, since
 the simulator has no input injection to reach that menu with.
 
+**For the watchdog itself, measure headroom, not milliseconds.** A timing says how slow a
+frame was on this machine today; whether it trips is a different question, and with other
+simulators loading the Mac the timings stopped meaning anything at all (multi-second
+"averages"). The probe that settled three block rings: a temporary build that forces a full
+clear and forgets the data caches every frame — every frame a worst-case first frame — then
+runs an empty `for` loop of `PAD` iterations after the draw, printing `PAD` and growing it by
+100 a frame. The `PAD` printed when the watchdog trips is that configuration's headroom.
+Within a session it repeats to about ±200; across sessions it drifts, so interleave the A and
+B legs. Compile the ring set into the probe rather than writing settings — a fresh
+instance's first push resets `CROSSOVERFACE.SET` to the defaults.
+
 **Measure with an A/B out of one binary, never against a figure from another day.** This
 machine ran ~2.4x the frame times of the ones in `2ec08e3`, and a second simulator starting
 up mid-session moved a "before" by 9ms on its own — enough to invent a regression that was
@@ -502,8 +513,9 @@ built `.prg` against it. That comparison is meaningless.
   **46k of 123k, about 37%**. Note the app is granted 123k rather than the nominal 128k.
 
 The dominant runtime consumer is the `DotGrid` cache — four parallel arrays of one entry per
-dot, **22,240 bytes at 1112 dots**, five bytes a slot. `theDotCacheFitsItsShareOfMemory`
-measures it and fails if a fifth per-dot array appears. That test has to drop the arrays'
+dot, **22,240 bytes at 1112 dots**, five bytes a slot, plus `blockAt`, a `ByteArray` at one
+byte a dot. `theDotCacheFitsItsShareOfMemory` measures it and fails if another full per-dot
+array appears. That test has to drop the arrays'
 references before sampling: a rebuild in place frees each old array as the new one is assigned,
 so measuring across `invalidate()` alone reports a delta of nothing and passes vacuously.
 
@@ -579,6 +591,13 @@ Consequences worth knowing before touching it:
 - **A block ring costs about 2.7ms more per drawn frame** than the whole-band fill did (87ms
   against 85ms on ring 0's 436 dots, worst case, A/B'd out of one binary). The span loop is
   byte-for-byte unchanged, so no other ring moved.
+- **Which block a dot is in is cached, not computed** — `DotGrid.blockAt`, a byte a dot,
+  holding the block or `HourBands.GUTTER`. Working it out per dot (a multiply, `toNumber()`
+  and two gutter comparisons) is what put three block rings past the Crossover's watchdog;
+  read from the cache it gave back about 600 `PAD` iterations per block ring. The renderer
+  inlines `HourBands.litInBlock()`, which only computes how far into its block a dot sits
+  inside the partial band's radius. `theCachedBlockCodeLightsWhatLitAtDoes` pins it to
+  `litAt()` on every dot at every level; `theBlockCacheMatchesItsDefinition` pins the cache.
 
 Five things about the channel are load-bearing:
 
@@ -625,11 +644,15 @@ trade rather than kept out on a threshold, once its window floor (above) made ev
 visible. The innermost ring stays out: eight (block, level) pairs light nothing there, which
 no floor fixes without merging rungs.
 
-**Three block rings sit close to the 454 watchdog with drawn hands.** On `epix2pro51mm`, hands
-on, rain/UV/temperature on rings 0–2, one load tripped *Watchdog Tripped Error* in
-`MatrixRenderer.drawAt`; every later run on a fresh simulator held, and the third block ring
-measured about +5% on a drawn frame against two. The Crossover (physical hands) never
-tripped. Treat that combination as the one to re-check whenever per-dot work grows.
+**Three block rings are what the watchdog budget is sized against.** Measured with the
+headroom probe (see *Measuring a frame*), Crossover, hands on, every frame a worst-case first
+frame: default rings ~3600, two block rings ~2300, three ~1300–1400 with temperature and
+**~200–700 with Body Battery** — thin, and the simulator holds no Body Battery *history*, so
+on a wrist the hourly history read adds cost the simulator never shows. Every combination of
+three held for 75s of forced worst-case frames. **The Epix screens do not fit two**: the 416
+with drawn hands holds one block ring (on any offered ring) and trips with two, and the 454
+trips on default rings — both on `main` before ring 3 was offered. Re-run the probe whenever
+per-dot or first-frame work grows.
 
 ### Past the goal, a lapped dot changes shape rather than colour
 
@@ -716,7 +739,12 @@ dial. `Source.isTemperatureRange()` is the predicate for span, mark and ramp —
   one frame tripped the 416 watchdog with hands drawn. `theQuickMarkSearchAgreesWithTheWalk`
   pins it to `markedDotNear()`, the definition.
 - **`drawAt()`'s frame is at the stack's limit.** Inlining the sun placement overflowed the
-  test runner's stack, which is why it lives in `placeSuns()`/`drawSuns()`.
+  test runner's stack, which is why it lives in `placeSuns()`/`drawSuns()`. The deepest path
+  is `drawAt()` → `ensureBuilt()` → `build()` → a helper, taken whenever a test leaves the
+  lattice stale: a new local in either `drawAt()` or `build()` overflows it, and the failure
+  shows up in whichever later test first draws, as *Stack Overflow Error* in `bandEdges()`.
+  `fillBlockCodes()` is a function of its own and `Palette.markerOf`/`overOf` are not
+  hoisted for that reason.
 
 ### Every other source reports a span, not a level
 
