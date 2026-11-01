@@ -65,10 +65,25 @@ module Source {
         //! the same ring: the band, ramp and current-temperature mark exactly
         //! as SOURCE_TEMPERATURE draws them, plus one dot at each sun time.
         //! See SunData for where those sit and fillSuns() for how they travel.
-        SOURCE_TEMP_SUN = 13
+        SOURCE_TEMP_SUN = 13,
+        //! The time, on a watch with no hands: the hour fills the ring's inner
+        //! sub-band and the minute its outer two, both clockwise from twelve.
+        //!
+        //! **Never offered and never stored.** It is not in OFFERED nor in
+        //! settings.xml; a watch whose HandStyle carries the time in a ring has
+        //! StatMap.load() put it on the outermost ring whatever that ring's
+        //! setting says, so a face can never end up without the time. A stored
+        //! 14 reads as Off everywhere, which keeps it off the Crossover, whose
+        //! brass hands already say what o'clock it is.
+        //!
+        //! Its span is not a start and an end like every other source's. It is
+        //! the two hands' ends — [hour, minute] — which TimeRing reads as two
+        //! fills of the same ring, split by radius. Riding the span is what
+        //! puts the time in the ring print, and so in the gate, for free.
+        SOURCE_TIME = 14
     }
 
-    const COUNT = 14;
+    const COUNT = 15;
 
     //! The sources a ring may actually be assigned to, in picker order.
     //!
@@ -110,7 +125,8 @@ module Source {
         0xFFCC00,   // UV, next 12h
         0x3388FF,   // Body Battery, last 12h
         0xFFAA00,   // temperature, next 12h
-        0xFFAA00    // temperature range with sunrise and sunset
+        0xFFAA00,   // temperature range with sunrise and sunset
+        0xFFFFFF    // time (drawn in Palette.TIME_LIT; this is the fallback)
     ] as Array<Number>;
 
     function hue(source as Number) as Number {
@@ -191,6 +207,11 @@ module Source {
                 } else {
                     fillEmpty(out);
                 }
+                return;
+            case SOURCE_TIME:
+                // Both power modes. The minute is all always-on is asked for,
+                // and it is the one mode a watch without hands most needs it.
+                ClockData.fillTime(out);
                 return;
             default:
                 fillEmpty(out);
@@ -311,6 +332,12 @@ module Source {
     //! SOURCE_TEMPERATURE alone would draw the sun variant as a flat band.
     function isTemperatureRange(source as Number) as Boolean {
         return source == SOURCE_TEMPERATURE || source == SOURCE_TEMP_SUN;
+    }
+
+    //! Does this ring tell the time? A predicate for usesBlocks()'s reason:
+    //! the loader, the held-back mode and the renderer all have to agree.
+    function isTime(source as Number) as Boolean {
+        return source == SOURCE_TIME;
     }
 
     //! Values per ring in the sun channel: sunrise, then sunset.

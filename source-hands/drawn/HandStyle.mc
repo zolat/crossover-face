@@ -41,6 +41,9 @@ module HandStyle {
     //! thing on the glass saying what o'clock it is.
     const ALWAYS_ON = true;
 
+    //! True: the outermost ring tells the time. See Source.SOURCE_TIME.
+    const TIME_RING = true;
+
     //! Colour for each slot `HandBacking.handAt()` can return: nothing, the
     //! hour hand, the minute hand.
     //!

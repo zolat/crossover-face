@@ -48,6 +48,7 @@
     <string id="SourceBodyBattery">Body Battery</string>
     <string id="SourceTemperature">Temperature range</string>
     <string id="SourceTempSun">Temp range + sun</string>
+    <string id="SourceTime">Time</string>
     <string id="SourceTempHours">Temp, next 12h</string>
     <string id="SourceRain">Chance of rain</string>
     <string id="SourceRainHours">Rain, next 12h</string>

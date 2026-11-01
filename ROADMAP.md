@@ -32,7 +32,12 @@ untouched.
 - [x] Phase 0 — mockup (`14-time-ring*.png`). Ring-coloured tiers at the usual 0.55 did not
   read at 1:1; white over 0.25 did, and was chosen. Worst always-on frame, every ring full at
   11:59, measures 7.06% (Terrain, 416) against 5.75% with no time ring.
-- [ ] Phase 1 — `SOURCE_TIME`, its channel and print slots, `TimeRing` renderer ← current
+- [x] Phase 1 — `SOURCE_TIME` and its `TimeRing` renderer. The time rides the ring's span
+  as `[hourEnd, minuteEnd]` rather than a channel of its own, so the ring print, the gate and
+  held-back needed no new slots; `drawAt` hands the ring to `TimeRing` and keeps it out of the
+  delta. On Epix ring 0 is forced to Time whatever `ring1` stores. 172/172 on all five.
+- [ ] Phase 1.1 — overlap style: hour blue, minute red, both purple, unlit grey, each filling
+  the whole ring; picked on the ring 1 row and the Epix default ← current
 - [ ] Phase 2 — remove drawn hands, the peek and the date deferral from the Epix
 - [ ] Phase 3 — docs
 

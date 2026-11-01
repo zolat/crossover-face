@@ -164,10 +164,27 @@ module StatMap {
             if (!Source.allowedOn(stored, i)) {
                 stored = Source.SOURCE_OFF;
             }
+            // The time is placed, never chosen, so a stored one is not a
+            // wearer's choice to honour: it reads as Off like any value the
+            // menu cannot have written.
+            if (Source.isTime(stored)) {
+                stored = Source.SOURCE_OFF;
+            }
             loaded[i] = stored;
+        }
+        // On a watch with no hands the outermost ring *is* the clock, whatever
+        // ring1 says. Overriding rather than defaulting is the point: a watch
+        // that has carried this face before already stores ring1, and a new
+        // default would never reach it. The stored value is left alone, unread.
+        if (HandStyle.TIME_RING) {
+            loaded[TIME_RING] = Source.SOURCE_TIME;
         }
         rings = loaded;
     }
+
+    //! The ring a hands-free watch tells the time on: the outermost, which has
+    //! the most dots round it and so the finest minute.
+    const TIME_RING = 0;
 
     //! Read the two ends and make them a usable scale whatever was stored.
     //!
@@ -248,9 +265,16 @@ module StatMap {
         return out;
     }
 
-    //! Refill an existing span table with spans nothing can light.
+    //! Refill an existing span table with spans nothing can light — except a
+    //! ring telling the time, which keeps it. Holding the fills back hides the
+    //! data; the time is not data, and on a watch with no hands it is the one
+    //! thing the glass must still say.
     function fillNoSpans(out as Array<Array<Float> >) as Void {
         for (var i = 0; i < RINGS; i++) {
+            if (Source.isTime(rings[i])) {
+                Source.fillSpan(rings[i], false, out[i]);
+                continue;
+            }
             out[i][0] = NEVER_LIT[0];
             out[i][1] = NEVER_LIT[1];
         }
