@@ -25,7 +25,7 @@
          11 Body Battery last 12h, 12 temperature next 12h,
          13 temperature range with sunrise and sunset. Seconds reports nothing in always-on.
          Block sources are offered on
-         ring1 and ring2 only — the inner two rings have too few dots per hour
+         ring1 to ring3 only — the innermost ring has too few dots per hour
          to carry them, and StatMap.load() reads them as off anywhere else.
          New sources are appended after 8
          rather than inserted, so no stored index changes meaning. -->
