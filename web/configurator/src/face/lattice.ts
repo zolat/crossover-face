@@ -2,6 +2,8 @@
 // orientations come from there; GeometryTest.mc pins that export to DotGrid.
 export interface Lattice {
   screen: number;
+  /** Lattice columns (and rows): DotGrid.COLS. */
+  cols: number;
   radius: number;
   hub: number;
   pitch: number;
@@ -18,6 +20,8 @@ export interface Device {
   id: string;
   screen: number;
   drawnHands: boolean;
+  /** The display's published diameter, for the real-size view. */
+  displayMm: number;
 }
 
 const cache = new Map<number, Promise<Lattice>>();

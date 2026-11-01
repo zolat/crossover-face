@@ -5,10 +5,10 @@
 // the watch lights — not an anti-aliased impression of them.
 //
 // What it draws: every dot in its tier for the chosen sources (sample readings), the
-// temperature ramp, the current-temperature mark, sun dots and forecast blocks. What it
-// does not: hands, the date, a lap past the goal. Those are the face's own business and
-// read the same whatever the configuration.
+// temperature ramp, the current-temperature mark, sun dots, forecast blocks and, awake,
+// the date's outline. What it does not: hands or a lap past the goal.
 import type { Config } from "../codec/configCode";
+import { cellLit, cellOf, dimmed, gap, GLYPH_COLS, LINE_PERCENTS, origin, outline } from "./date";
 import type { Lattice } from "./lattice";
 import type { BuiltPalette } from "./palette";
 import { inSpan, readingFor } from "./samples";
@@ -65,7 +65,9 @@ interface Solid {
   colour: number;
 }
 
-export function render(image: ImageData, lattice: Lattice, palette: BuiltPalette, config: Config, mode: Mode): void {
+/** `day` is the day of the month the date shows; the setting decides whether it does. */
+export function render(image: ImageData, lattice: Lattice, palette: BuiltPalette, config: Config, mode: Mode,
+                       day: number | null = null): void {
   const { data, width } = image;
   data.fill(0);
   for (let i = 3; i < data.length; i += 4) data[i] = 255;
@@ -91,6 +93,10 @@ export function render(image: ImageData, lattice: Lattice, palette: BuiltPalette
   const sources = ringSources(config);
   const readings = sources.map((source) => readingFor(source, alwaysOn));
   const solids: Solid[] = [];
+  // Awake only, as on the watch: always-on carries no date.
+  const dating = day !== null && !alwaysOn && config.showDate === 1;
+  const glyphDay = day ?? 0;
+  const glyphColours = new Map<number, number>();
 
   for (const [dx, dy, ring, orientation, turn] of lattice.dots) {
     const tiers = palette.rings[ring];
@@ -110,6 +116,10 @@ export function render(image: ImageData, lattice: Lattice, palette: BuiltPalette
         : alwaysOn ? tiers.bandAlwaysOn : tiers.band;
     } else {
       colour = alwaysOn ? tiers.weakAlwaysOn : tiers.weak;
+    }
+    if (dating) {
+      const cell = cellOf(lattice, dx, dy);
+      if (cell !== null && cellLit(glyphDay, cell % GLYPH_COLS, Math.floor(cell / GLYPH_COLS))) glyphColours.set(cell, colour);
     }
     const [ax, ay, bx, by] = lattice.arms[config.dotRotation === 1 ? 0 : orientation];
     const x = centre + dx;
@@ -142,6 +152,25 @@ export function render(image: ImageData, lattice: Lattice, palette: BuiltPalette
   for (const solid of solids) {
     for (let y = -half; y <= half; y++) {
       for (let x = -half; x <= half; x++) put(centre + solid.dx + x, centre + solid.dy + y, solid.colour);
+    }
+  }
+
+  // The outline goes in after the dots, in the colour of the dot each line leaves from.
+  if (dating) {
+    const percent = LINE_PERCENTS[config.dateOutline] ?? LINE_PERCENTS[1];
+    const { from, length } = gap(lattice);
+    const [col0, row0] = origin(lattice);
+    const half = ((lattice.cols - 1) * lattice.pitch) / 2;
+    for (const [a, b] of outline(glyphDay)) {
+      const colour = glyphColours.get(a);
+      if (colour === undefined) continue;
+      const line = dimmed(colour, percent);
+      const x = centre + (col0 + (a % GLYPH_COLS)) * lattice.pitch - half;
+      const y = centre + (row0 + Math.floor(a / GLYPH_COLS)) * lattice.pitch - half;
+      for (let k = 0; k < length; k++) {
+        if (b === a + 1) put(x + from + k, y, line);
+        else put(x, y + from + k, line);
+      }
     }
   }
 }

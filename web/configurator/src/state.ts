@@ -3,11 +3,13 @@
 // because the face itself already knows which watch it is on.
 import { type Config, DEFAULT_CONFIG, tryDecode } from "./codec/configCode";
 import type { Mode } from "./face/render";
+import type { View } from "./ui/size";
 
 export interface State {
   device: string;
   config: Config;
   mode: Mode;
+  view: View;
 }
 
 type Listener = (state: State, previous: State) => void;

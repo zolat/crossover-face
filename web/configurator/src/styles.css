@@ -21,9 +21,17 @@ body { font: 400 16px/1.5 "Hanken Grotesk", system-ui, sans-serif; -webkit-font-
 .app { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(360px, 0.85fr); min-height: 100vh; }
 
 /* The stage: the face, as large as the window allows. */
-.stage { position: sticky; top: 0; height: 100vh; display: grid; place-items: center; padding: 56px 48px calc(var(--code-h) * 0 + 88px); }
-.face { width: min(calc(100vh - 200px), 92%); aspect-ratio: 1; border-radius: 50%; image-rendering: pixelated; display: block; }
-.mode { position: absolute; top: 24px; left: 48px; }
+.stage { position: sticky; top: 0; height: 100vh; display: grid; grid-template-columns: minmax(0, 1fr); place-items: center; padding: 56px 48px calc(var(--code-h) * 0 + 88px); }
+.face-box { width: min(calc(100vh - 200px), 92%); aspect-ratio: 1; display: grid; place-items: center; }
+.face { border-radius: 50%; image-rendering: pixelated; display: block; max-width: 100%; aspect-ratio: 1; height: auto; }
+.face.smooth { image-rendering: auto; }
+.face[hidden], .card[hidden] { display: none; }
+.card { border: 1px dashed var(--text); }
+.mode { position: absolute; top: 24px; left: 48px; right: 48px; display: flex; flex-wrap: wrap; gap: 10px 28px; }
+.size { position: absolute; left: 48px; right: 48px; bottom: 64px; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 16px; color: var(--quiet); font-size: 14px; text-align: center; }
+.size p { margin: 0; }
+.size label { flex-basis: 100%; }
+.size input[type=range] { flex: 1 1 200px; max-width: 320px; accent-color: var(--text); }
 .mode .field { margin: 0; }
 .mode legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 .meter { position: absolute; left: 48px; right: 48px; bottom: 36px; display: flex; gap: 14px; align-items: center; color: var(--quiet); font-size: 14px; }
@@ -95,9 +103,10 @@ button { font: 600 15px "Hanken Grotesk", sans-serif; cursor: pointer; }
 
 @media (max-width: 860px) {
   .app { display: block; }
-  .stage { position: relative; height: auto; padding: 64px 16px 64px; }
-  .face { width: 100%; }
-  .mode { top: 16px; left: 16px; }
+  .stage { position: relative; height: auto; padding: 16px 16px 64px; }
+  .face-box { width: 100%; }
+  .mode { position: static; order: -1; justify-self: start; margin-bottom: 16px; }
+  .size { position: static; margin-top: 12px; }
   .meter { left: 16px; right: 16px; bottom: 20px; }
   .panel { border: 0; padding: 8px 16px calc(var(--code-h) + 72px); }
   .code { width: 100%; min-width: 0; padding: 12px 16px 14px; border-left: 0; }

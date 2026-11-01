@@ -41,6 +41,17 @@ TAN_11_25, TAN_33_75, TAN_56_25, TAN_78_75 = 0.198912, 0.668179, 1.496606, 5.027
 ARMS = [(2, 0, 0, 2), (2, 1, -1, 2), (2, 2, -2, 2), (1, 2, -2, 1)]
 ORIENTATIONS = 4
 
+# The display's diameter as Garmin publishes it, for the preview's real-size view.
+# Nominal figures, rounded to a tenth of an inch, but they agree with the ~325ppi every
+# one of these panels has: 390/1.2 = 325, 416/1.3 = 320, 454/1.4 = 324.
+DISPLAY_INCHES = {
+    "instinctcrossoveramoled": 1.2,
+    "epix2pro42mm": 1.2,
+    "epix2": 1.3,
+    "epix2pro47mm": 1.3,
+    "epix2pro51mm": 1.4,
+}
+
 
 def orientation_for(dx: int, dy: int) -> int:
     """DotGrid.orientationFor, as an ARMS row rather than a flat offset."""
@@ -88,6 +99,7 @@ def lattice(size: int, cols: int, radius: int, hub: int) -> dict:
             shapes[ring * ORIENTATIONS + orientation] += 1
     return {
         "screen": size,
+        "cols": cols,
         "radius": radius,
         "hub": hub,
         "pitch": PITCH,
@@ -114,7 +126,8 @@ def lattices() -> dict[int, dict]:
 def devices() -> list[dict]:
     rows = []
     for device, (size, *_rest, drawn) in mockup.LATTICES.items():
-        rows.append({"id": device, "screen": size, "drawnHands": drawn})
+        rows.append({"id": device, "screen": size, "drawnHands": drawn,
+                     "displayMm": round(DISPLAY_INCHES[device] * 25.4, 2)})
     return rows
 
 

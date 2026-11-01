@@ -10,6 +10,7 @@ import { themeWarnings } from "../face/warnings";
 import { remembered, type State, type Store, writeHash } from "../state";
 import { choices, select } from "./controls";
 import { h } from "./dom";
+import { CARD_MM, calibration, estimatedPxPerMm, faceSize, type View } from "./size";
 
 const DEVICE_NAMES: Record<string, string> = {
   instinctcrossoveramoled: "Instinct Crossover AMOLED",
@@ -25,10 +26,16 @@ const TEMP_HOURS = schema.sources.kinds.SOURCE_TEMP_HOURS;
 
 export function mountApp(root: HTMLElement, store: Store, devices: Device[]) {
   const canvas = h("canvas", { class: "face", role: "img" });
+  // The face at the watch's own resolution; `canvas` shows it copied up by a whole number.
+  const source = document.createElement("canvas");
+  let drawn = false;
+  const card = h("div", { class: "card", "aria-hidden": "true" });
+  const faceBox = h("div", { class: "face-box" }, canvas, card);
   const meterText = h("span", {});
   const meterFill = h("i", {});
   const modeSlot = h("div", { class: "mode" });
-  const stage = h("section", { class: "stage", "aria-label": "Preview" }, canvas, modeSlot,
+  const sizeSlot = h("div", { class: "size" });
+  const stage = h("section", { class: "stage", "aria-label": "Preview" }, faceBox, modeSlot, sizeSlot,
     h("div", { class: "meter" }, meterText, h("span", { class: "bar", "aria-hidden": "true" }, meterFill, h("b", {})),
       h("span", {}, "10%")));
   const panel = h("section", { class: "panel" });
@@ -49,11 +56,13 @@ export function mountApp(root: HTMLElement, store: Store, devices: Device[]) {
     }
     if (store.get() !== state) return; // a newer state is already on its way
     const palette = build(themeColours(state.config.theme, custom(state.config)));
-    canvas.width = canvas.height = lattice.screen;
-    const context = canvas.getContext("2d")!;
+    source.width = source.height = lattice.screen;
+    const context = source.getContext("2d")!;
     const image = context.createImageData(lattice.screen, lattice.screen);
-    render(image, lattice, palette, state.config, state.mode);
+    render(image, lattice, palette, state.config, state.mode, new Date().getDate());
     context.putImageData(image, 0, 0);
+    drawn = true;
+    fitFace(state);
     canvas.setAttribute("aria-label",
       `${DEVICE_NAMES[device.id] ?? device.id} face, ${state.mode === "alwaysOn" ? "always-on" : "awake"}`);
 
@@ -61,6 +70,62 @@ export function mountApp(root: HTMLElement, store: Store, devices: Device[]) {
     meterText.textContent = `Always-on, brightest case ${(worst * 100).toFixed(1)}%`;
     meterFill.style.width = `${Math.min(100, (worst / BUDGET) * 100)}%`;
   }
+
+  // --- the size ------------------------------------------------------------
+
+  let pxPerMm = calibration.load() ?? estimatedPxPerMm(window.devicePixelRatio);
+  let calibrated = calibration.load() !== null;
+  let calibrating = false;
+
+  function fitFace(state: State) {
+    const device = deviceOf(state);
+    const showCard = state.view === "actual" && calibrating;
+    canvas.hidden = showCard;
+    card.hidden = !showCard;
+    if (showCard) {
+      card.style.width = `${CARD_MM.width * pxPerMm}px`;
+      card.style.height = `${CARD_MM.height * pxPerMm}px`;
+      card.style.borderRadius = `${3.18 * pxPerMm}px`;
+      return;
+    }
+    const size = faceSize(state.view, faceBox.clientWidth, window.devicePixelRatio, device.screen, device.displayMm, pxPerMm);
+    canvas.style.width = `${size.css}px`;
+    canvas.classList.toggle("smooth", size.smooth);
+    if (!drawn || source.width !== device.screen) return;
+    const side = device.screen * size.backing;
+    if (canvas.width !== side) canvas.width = canvas.height = side;
+    const context = canvas.getContext("2d")!;
+    context.imageSmoothingEnabled = false;
+    context.drawImage(source, 0, 0, side, side);
+  }
+
+  function drawSize(state: State) {
+    if (state.view !== "actual") {
+      sizeSlot.replaceChildren();
+      return;
+    }
+    if (!calibrating) {
+      sizeSlot.replaceChildren(h("p", {},
+        calibrated ? "Real size, set with a card. " : "Real size is estimated for this screen. ",
+        h("button", { class: "quiet", type: "button", onclick: () => { calibrating = true; drawSize(store.get()); fitFace(store.get()); } },
+          calibrated ? "Check it again" : "Set it with a bank card")));
+      return;
+    }
+    const slider = h("input", { id: "calibrate", type: "range", min: "2", max: "9", step: "0.01", value: String(pxPerMm),
+      oninput: (event: Event) => { pxPerMm = Number((event.target as HTMLInputElement).value); fitFace(store.get()); } });
+    sizeSlot.replaceChildren(
+      h("label", { for: "calibrate" }, "Hold any bank card flat against the screen and drag until it fills the outline exactly."),
+      slider,
+      h("button", { class: "primary", type: "button", onclick: () => {
+        calibrating = false;
+        calibrated = true;
+        calibration.save(pxPerMm);
+        drawSize(store.get());
+        fitFace(store.get());
+      } }, "Done"));
+  }
+
+  new ResizeObserver(() => fitFace(store.get())).observe(faceBox);
 
   // --- the code ------------------------------------------------------------
 
@@ -166,7 +231,9 @@ export function mountApp(root: HTMLElement, store: Store, devices: Device[]) {
       config.showDate === 1
         ? choices(label("dateOutline"), options("dateOutline"), config.dateOutline, (value) => set({ dateOutline: Number(value) }))
         : null,
-      h("p", { class: "note" }, "The preview shows typical readings. Hands and the date are drawn by the watch itself."),
+      h("p", { class: "note" }, drawn
+        ? "The preview shows typical readings, with the hands hidden. Every ring fills clockwise from twelve."
+        : "The preview shows typical readings, under where the watch's own hands sit. Every ring fills clockwise from twelve."),
     ];
     panel.replaceChildren(...sections.filter((node): node is Node => node !== null));
     drawWarnings(state);
@@ -223,8 +290,12 @@ export function mountApp(root: HTMLElement, store: Store, devices: Device[]) {
   }
 
   function drawMode(state: State) {
-    modeSlot.replaceChildren(choices("Show", [{ value: "awake", label: "Awake" }, { value: "alwaysOn", label: "Always-on" }],
-      state.mode, (value) => store.set({ mode: value as Mode })));
+    modeSlot.replaceChildren(
+      choices("Show", [{ value: "awake", label: "Awake" }, { value: "alwaysOn", label: "Always-on" }],
+        state.mode, (value) => store.set({ mode: value as Mode })),
+      choices("Size", [{ value: "fit", label: "Large" }, { value: "actual", label: "Real size" }],
+        state.view, (value) => { calibrating = false; store.set({ view: value as View }); }));
+    drawSize(state);
   }
 
   // --- wiring --------------------------------------------------------------
@@ -268,13 +339,14 @@ export function mountApp(root: HTMLElement, store: Store, devices: Device[]) {
     void drawPreview(state);
     drawCode(state);
     const onlyColours = previous !== null && previous.device === state.device && previous.mode === state.mode &&
+      previous.view === state.view &&
       encode({ ...previous.config, customColours: state.config.customColours }) === code;
     if (onlyColours) {
       // A colour picker is open: rebuilding it would close it under the wearer's cursor.
       drawWarnings(state);
       return;
     }
-    if (previous === null || previous.mode !== state.mode) drawMode(state);
+    if (previous === null || previous.mode !== state.mode || previous.view !== state.view) drawMode(state);
     if (previous === null || previous.device !== state.device || previous.config !== state.config) {
       const saved = rememberFocus();
       const legend = (document.activeElement?.closest("fieldset")?.querySelector("legend")?.textContent) ?? null;

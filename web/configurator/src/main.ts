@@ -14,7 +14,7 @@ async function start() {
   const device = devices.find((d) => d.id === deviceId)!;
   const last = fromLast.code ? tryDecode(fromLast.code) : null;
   const config = fromLink.config ?? (last?.ok ? last.config : initialConfig(device.drawnHands, schema.defaultsDrawn));
-  const store = createStore({ device: deviceId, config, mode: "awake" });
+  const store = createStore({ device: deviceId, config, mode: "awake", view: "fit" });
   mountApp(root, store, devices);
   if (fromLink.error) console.warn(`the link's code did not load: ${fromLink.error}`);
 }
