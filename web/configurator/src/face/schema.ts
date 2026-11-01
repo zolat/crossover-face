@@ -58,6 +58,8 @@ export interface FaceSchema {
     blocks: number[];
     temperatureRange: number[];
     blocksTopRing: number;
+    /** HourBands.WINDOW_FLOOR: the narrowest partial window per ring, in hour wedges. */
+    blockWindowFloor: number[];
   };
 }
 

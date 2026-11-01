@@ -3398,6 +3398,7 @@ module MatrixTest {
         DotGrid.ys = [] as Array<Number>;
         DotGrid.positionOf = [] as Array<Float>;
         DotGrid.armOf = [] as Array<Number>;
+        DotGrid.blockAt = []b;
         DotGrid.invalidate();
 
         var before = System.getSystemStats().freeMemory;
@@ -4767,12 +4768,13 @@ module MatrixTest {
     // ------------------------------------------------------------------
 
     //! The worst (block, sub-band) a ring may hold and still be offered a
-    //! block source. Measured on this lattice at a 22.5-degree block: rings 0
-    //! and 1 floor at 8 and 6 dots, rings 2 and 3 at 4 and 2. Six is what
-    //! separates them, and onlyTheOuterTwoRingsResolveTwelveHoursInThreeBands
-    //! is what holds Source.BLOCKS_TOP_RING to that measurement rather than to
-    //! taste.
-    const MIN_BAND_DOTS = 6;
+    //! block source. Measured at a 22.5-degree block: rings 0 to 3 floor at
+    //! 8-9, 6, 3-4 and 2 dots across the three screens. Three is what separates
+    //! the three offered rings from the innermost, and
+    //! blockRingsResolveTwelveHoursInThreeBands is what holds
+    //! Source.BLOCKS_TOP_RING to that measurement rather than to taste. It was
+    //! six while only the outer two rings were offered.
+    const MIN_BAND_DOTS = 3;
 
     //! Twelve levels packed the way a block source packs them:
     //! [levels low, levels high, known]. A level of HourBands.UNKNOWN leaves
@@ -4845,7 +4847,7 @@ module MatrixTest {
                     continue;
                 }
                 var bands = HourBands.fullBandsFor(level);
-                var window = HourBands.partialHalfFor(level);
+                var window = HourBands.partialHalfOn(level, ring);
                 full[b] = (bands == 0) ? 0 : DotGrid.bandEdge[base + bands - 1];
                 part[b] = (window > 0.0) ? DotGrid.bandEdge[base + bands] : 0;
                 lo[b] = HourBands.BLOCK_CENTRE - window;
@@ -5810,7 +5812,7 @@ module MatrixTest {
         return true;
     }
 
-    //! Why the forecast is offered on the outer two rings only.
+    //! Why the forecast is offered on the outer three rings only.
     //!
     //! The restriction is a claim about the lattice, so it is asserted against
     //! the lattice rather than left in a comment: every block of every
@@ -5818,7 +5820,7 @@ module MatrixTest {
     //! rings below the cut do not. If the lattice ever changes, this says
     //! whether Source.BLOCKS_TOP_RING still means what it claims to.
     (:test)
-    function onlyTheOuterTwoRingsResolveTwelveHoursInThreeBands(
+    function blockRingsResolveTwelveHoursInThreeBands(
             logger as Logger) as Boolean {
         for (var ring = 0; ring < StatMap.RINGS; ring++) {
             var worst = -1;
@@ -5864,9 +5866,8 @@ module MatrixTest {
                 // ring where it bites hardest: on the innermost ring sixteen
                 // (block, level) pairs light no dot at all, so the scale would
                 // not merely be cramped down there, part of it would be
-                // invisible. Ring 2 draws every rung — its exclusion still
-                // rests on the sub-band measurement above and on nothing else,
-                // which is worth knowing before anyone relaxes the cut.
+                // invisible. Ring 2 draws every rung, which is why it could be
+                // let in once its four-dot sub-band was accepted.
                 var blind = 0;
                 for (var level = 1; level <= HourBands.LEVELS; level++) {
                     var perBlock = tablesAt(ring, level).litPerBlock(ring);
@@ -5945,6 +5946,68 @@ module MatrixTest {
             }
         }
         logger.debug(probes + " boundary probes agree");
+        return true;
+    }
+
+    //! DotGrid.blockAt is HourBands.blockCodeOf(), cached: for every dot of
+    //! every ring, the byte the build stored is what the definition says. The
+    //! build inlines it, so this is what keeps the copy honest.
+    (:test)
+    function theBlockCacheMatchesItsDefinition(logger as Logger) as Boolean {
+        DotGrid.ensureBuilt();
+        var gutters = 0;
+        for (var i = 0; i < DotGrid.count; i++) {
+            var expected = HourBands.blockCodeOf(DotGrid.positionOf[i]);
+            Test.assertEqualMessage(DotGrid.blockAt[i], expected,
+                "dot " + i + " at " + DotGrid.positionOf[i] +
+                " cached the wrong block");
+            if (expected == HourBands.GUTTER) {
+                gutters++;
+            }
+        }
+        logger.debug(gutters + " of " + DotGrid.count + " dots sit in a gutter");
+        Test.assertMessage(gutters > 0 && gutters < DotGrid.count,
+            "a lattice with no gutter dots, or nothing else, is not this one");
+        return true;
+    }
+
+    //! The renderer's block test, rewritten against the cached code, lights
+    //! exactly the dots HourBands.litAt() does — every dot of every ring a
+    //! block source may use, at every level of the scale, plus a mixed table
+    //! with unknown hours in it.
+    (:test)
+    function theCachedBlockCodeLightsWhatLitAtDoes(logger as Logger)
+            as Boolean {
+        DotGrid.ensureBuilt();
+        var checked = 0;
+        for (var ring = 0; ring <= Source.BLOCKS_TOP_RING; ring++) {
+            for (var level = -1; level <= HourBands.LEVELS; level++) {
+                var levels = new [HourBands.HOURS] as Array<Number>;
+                for (var b = 0; b < HourBands.HOURS; b++) {
+                    // -1 is the mixed table: every level, and unknown hours.
+                    levels[b] = (level >= 0) ? level
+                        : ((b % 4 == 3) ? HourBands.UNKNOWN
+                                        : (b * 5) % (HourBands.LEVELS + 1));
+                }
+                var t = new BlockTables(ring, levels);
+                for (var i = DotGrid.ringStart[ring];
+                        i < DotGrid.ringStart[ring + 1]; i++) {
+                    var dx = DotGrid.xs[i];
+                    var dy = DotGrid.ys[i];
+                    var radiusSq = dx * dx + dy * dy;
+                    var position = DotGrid.positionOf[i];
+                    var cached = HourBands.litInBlock(DotGrid.blockAt[i],
+                        position, radiusSq, t.full, t.part, t.lo, t.hi);
+                    if (cached != t.lit(position, radiusSq)) {
+                        Test.assertMessage(false, "ring " + ring + " level " +
+                            level + " dot " + i + ": the cached block code " +
+                            "lights " + cached + ", litAt says otherwise");
+                    }
+                    checked++;
+                }
+            }
+        }
+        logger.debug(checked + " (dot, table) pairs agree");
         return true;
     }
 
@@ -6246,10 +6309,10 @@ module MatrixTest {
         return true;
     }
 
-    //! The picker offers every block source on the outer two rings only, and
-    //! its labels and values stay in step.
+    //! The picker offers every block source on the outer three rings only,
+    //! and its labels and values stay in step.
     (:test)
-    function blockSourcesAreOnlyOfferedOnTheOuterTwoRings(logger as Logger)
+    function blockSourcesAreOnlyOfferedOnTheOuterThreeRings(logger as Logger)
             as Boolean {
         var blockSources = [Source.SOURCE_RAIN_HOURS,
                             Source.SOURCE_UV_HOURS,
@@ -6430,7 +6493,7 @@ module MatrixTest {
         return true;
     }
 
-    //! Sunrise closes on the ring's outer edge and sunset on its inner one, so
+    //! Sunset closes on the ring's outer edge and sunrise on its inner one, so
     //! the two never land on one dot — and on a twelve-hour dial they are
     //! routinely at the same *position*, which is the case walked here: both
     //! at every position at once.
@@ -6458,9 +6521,9 @@ module MatrixTest {
                 var riseSq = radiusSqOf(rise);
                 var setSq = radiusSqOf(set);
                 var markSq = radiusSqOf(mark);
-                Test.assertMessage(riseSq >= markSq && markSq >= setSq,
+                Test.assertMessage(setSq >= markSq && markSq >= riseSq,
                     "ring " + ring + " at " + at + " must read outward " +
-                    "sunset, mark, sunrise");
+                    "sunrise, mark, sunset");
                 if (mark == rise || mark == set) {
                     withMark++;
                 }

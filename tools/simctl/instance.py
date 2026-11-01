@@ -27,13 +27,16 @@ find one by accident.
 from __future__ import annotations
 
 import hashlib
+import fcntl
 import os
 import re
+import signal
 import socket
 import subprocess
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import BinaryIO
 
 from simctl import paths
 
@@ -42,6 +45,8 @@ SHARED_PORT = 1234
 #: Above the SDK's 1234-1238 scan, so an unaware monkeydo cannot stumble onto ours.
 PORT_RANGE = (13000, 13999)
 SANDBOX_HOME = Path.home() / ".cache" / "crossover-sim"
+PORT_LOCK_DIR = ".port-locks"
+PORT_ALLOCATOR_LOCK = ".port-allocation.lock"
 
 
 def sdk_path() -> Path:
@@ -56,16 +61,28 @@ def simulator_binary() -> Path:
     return sdk_path() / "bin" / "ConnectIQ.app" / "Contents" / "MacOS" / "simulator"
 
 
-def default_name() -> str:
-    """One instance per MCP client and checkout, so parallel agents never share one."""
+def client_name() -> str:
+    """The stable part of an instance name: MCP client plus checkout."""
     checkout = paths.repo_root().name
     namespace = os.environ.get("CROSSOVER_SIM_NAMESPACE", "").strip()
     return f"{namespace}-{checkout}" if namespace else checkout
 
 
+def default_name() -> str:
+    """One instance per MCP server session, stable for that session's lifetime.
+
+    ``tools/sim_mcp.sh`` supplies its own pid as the session token. Direct CLI users do
+    not, and retain the old one-per-client-and-checkout behaviour so separate commands
+    can deliberately reuse an instance.
+    """
+    client = client_name()
+    session = os.environ.get("CROSSOVER_SIM_SESSION", "").strip()
+    return f"{client}-{session}" if session else client
+
+
 def _port_for(name: str) -> int:
     """Deterministic, so the same checkout keeps its port across sessions."""
-    span = PORT_RANGE[1] - PORT_RANGE[0]
+    span = PORT_RANGE[1] - PORT_RANGE[0] + 1
     digest = hashlib.sha256(name.encode()).digest()
     return PORT_RANGE[0] + int.from_bytes(digest[:2], "big") % span
 
@@ -90,8 +107,36 @@ def _alive(pid: int | None) -> bool:
     try:
         os.kill(pid, 0)
         return True
-    except (ProcessLookupError, PermissionError, TypeError):
+    except (ProcessLookupError, TypeError):
         return False
+    except PermissionError:
+        return True
+
+
+def _simulator_process(pid: int) -> bool:
+    """Does this pid still belong to a Connect IQ simulator executable?"""
+    result = subprocess.run(
+        ["lsof", "-nP", "-a", "-p", str(pid), "-d", "txt", "-Fn"],
+        capture_output=True,
+        text=True,
+    )
+    return result.returncode == 0 and any(
+        line.startswith("n") and line[1:].endswith(SIMULATOR_PROCESS)
+        for line in result.stdout.splitlines()
+    )
+
+
+def _owns_port(pid: int, port: int) -> bool:
+    """Does this exact process own the instance's listening control port?"""
+    result = subprocess.run(
+        [
+            "lsof", "-nP", "-a", "-p", str(pid), f"-iTCP:{port}",
+            "-sTCP:LISTEN", "-t",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    return result.returncode == 0 and str(pid) in result.stdout.splitlines()
 
 
 @dataclass
@@ -102,6 +147,11 @@ class Instance:
     port: int
     home: Path | None = None      # None for the shared instance
     tmpdir: Path | None = None
+    _process: subprocess.Popen | None = field(default=None, repr=False, compare=False)
+    _sideload_process: subprocess.Popen | None = field(
+        default=None, repr=False, compare=False
+    )
+    _port_lease: BinaryIO | None = field(default=None, repr=False, compare=False)
 
     @property
     def isolated(self) -> bool:
@@ -123,6 +173,11 @@ class Instance:
         home = self.home or Path.home()
         return home / f"Sim-{os.environ.get('USER', 'user')}"
 
+    @property
+    def port_file(self) -> Path | None:
+        """The selected collision-free port, persisted for an isolated instance."""
+        return self.home.parent / "port" if self.isolated else None
+
     def pid(self) -> int | None:
         try:
             text = self.pid_file.read_text(errors="ignore")
@@ -132,10 +187,17 @@ class Instance:
         # so take the leading digits rather than trusting the whole string.
         match = re.match(r"\s*(\d+)", text)
         pid = int(match.group(1)) if match else None
-        return pid if _alive(pid) else None
+        if pid is not None and _alive(pid) and _simulator_process(pid):
+            return pid
+        if self.isolated:
+            # The sandbox owns this file. Removing a stale/recycled pid prevents a later
+            # launch or cleanup from ever treating an unrelated process as the simulator.
+            self.pid_file.unlink(missing_ok=True)
+        return None
 
     def is_running(self) -> bool:
-        return self.pid() is not None
+        pid = self.pid()
+        return pid is not None and _owns_port(pid, self.port)
 
     def environment(self) -> dict:
         """The environment that makes a launch land in this instance."""
@@ -152,12 +214,62 @@ class Instance:
 
     # -- lifecycle ----------------------------------------------------------
 
+    def reserve_port(self) -> None:
+        """Reserve this instance's port against not-yet-listening parallel launches."""
+        if not self.isolated or self._port_lease is not None:
+            return
+        SANDBOX_HOME.mkdir(parents=True, exist_ok=True)
+        port_dir = SANDBOX_HOME / PORT_LOCK_DIR
+        port_dir.mkdir(exist_ok=True)
+        allocator_path = SANDBOX_HOME / PORT_ALLOCATOR_LOCK
+        with allocator_path.open("a+b") as allocator:
+            fcntl.flock(allocator.fileno(), fcntl.LOCK_EX)
+            first = self.port
+            port = first
+            while True:
+                lease = (port_dir / f"{port}.lock").open("a+b")
+                try:
+                    fcntl.flock(lease.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    lease.close()
+                else:
+                    if not _listening(port):
+                        self.port = port
+                        self.home.parent.mkdir(parents=True, exist_ok=True)
+                        port_file = self.port_file
+                        if port_file is None:  # isolated is checked above
+                            raise RuntimeError("private simulator has no port file")
+                        port_file.write_text(f"{port}\n")
+                        self._port_lease = lease
+                        return
+                    lease.close()
+
+                port = PORT_RANGE[0] + (port - PORT_RANGE[0] + 1) % (
+                    PORT_RANGE[1] - PORT_RANGE[0] + 1
+                )
+                if port == first:
+                    raise RuntimeError("no free isolated simulator ports are available")
+
+    def release_port(self) -> None:
+        """Release a reservation when its owning MCP session is finished."""
+        if self._port_lease is not None:
+            self._port_lease.close()
+            self._port_lease = None
+
     def prepare(self) -> None:
         """Create the sandbox, linking the SDK data back to the real home."""
         if not self.isolated:
             return
         self.home.mkdir(parents=True, exist_ok=True)
         self.tmpdir.mkdir(parents=True, exist_ok=True)
+        port_file = self.port_file
+        if port_file is not None:
+            try:
+                port_is_current = int(port_file.read_text().strip()) == self.port
+            except (OSError, ValueError):
+                port_is_current = False
+            if not port_is_current:
+                port_file.write_text(f"{self.port}\n")
         support = self.home / "Library" / "Application Support" / "Garmin"
         support.mkdir(parents=True, exist_ok=True)
         # Devices and the signing key stay shared; only the runtime state is private.
@@ -186,11 +298,17 @@ class Instance:
         """Launch if not already up, and wait until it is listening. Returns the pid."""
         existing = self.pid()
         if existing:
-            return existing
+            if _owns_port(existing, self.port):
+                return existing
+            raise RuntimeError(
+                f"simulator pid {existing} for instance {self.name!r} is not listening "
+                f"on its recorded port {self.port}"
+            )
+        self.reserve_port()
         self.prepare()
         log = (self.home or Path(paths.shared_tmpdir())) / "simulator.log"
         with open(log, "ab") as stream:
-            subprocess.Popen(
+            self._process = subprocess.Popen(
                 [str(simulator_binary())],
                 env=self.environment(), stdout=stream, stderr=stream,
                 start_new_session=True,
@@ -198,7 +316,7 @@ class Instance:
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             pid = self.pid()
-            if pid and _listening(self.port):
+            if pid and _owns_port(pid, self.port):
                 time.sleep(1.0)  # let the UI settle before anything sideloads
                 return pid
             time.sleep(0.3)
@@ -209,16 +327,43 @@ class Instance:
 
     def stop(self, timeout: float = 10.0) -> bool:
         """Stop *this* instance only, never another session's."""
+        deadline = time.monotonic() + timeout
+        if self._process is not None:
+            # The Popen handle is stronger ownership proof than a pid file or a port.
+            # It also lets us reap the child instead of polling a zombie until timeout.
+            process = self._process
+            if process.poll() is None:
+                try:
+                    process.terminate()
+                except ProcessLookupError:
+                    pass
+                try:
+                    process.wait(timeout=max(0.0, deadline - time.monotonic()))
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=1.0)
+            self._process = None
+            return True
+
         pid = self.pid()
         if pid is None:
             return False
-        os.kill(pid, 15)
-        deadline = time.monotonic() + timeout
+        # A stale Sim-$USER file can outlive its process and its pid can be recycled.
+        # Never signal unless this exact simulator still owns this instance's port.
+        if not _owns_port(pid, self.port):
+            return False
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            return True
         while time.monotonic() < deadline:
             if not _alive(pid):
                 return True
             time.sleep(0.2)
-        os.kill(pid, 9)
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            return True
         return True
 
 
@@ -231,12 +376,25 @@ def isolated(name: str | None = None) -> Instance:
     """A private instance for this checkout, created on first use."""
     name = name or default_name()
     base = SANDBOX_HOME / name
-    port = _port_for(name)
-    if not (base / "home").exists():
+    port_file = base / "port"
+    has_saved_port = False
+    try:
+        saved_port = int(port_file.read_text().strip())
+        has_saved_port = PORT_RANGE[0] <= saved_port <= PORT_RANGE[1]
+        port = saved_port if has_saved_port else _port_for(name)
+    except (OSError, ValueError):
+        port = _port_for(name)
+    if not has_saved_port and not (base / "home").exists():
         # First use: step past anything already listening. Once the sandbox exists the
-        # port is kept, so a running instance of ours is found rather than duplicated.
+        # selected port is persisted, so resolving after a hash collision still finds
+        # this same instance rather than reverting to the occupied hash-derived port.
+        first = port
         while _listening(port):
-            port += 1
+            port = PORT_RANGE[0] + (port - PORT_RANGE[0] + 1) % (
+                PORT_RANGE[1] - PORT_RANGE[0] + 1
+            )
+            if port == first:
+                raise RuntimeError("no free isolated simulator ports are available")
     return Instance(name=name, port=port, home=base / "home", tmpdir=base / "tmp")
 
 

@@ -27,10 +27,11 @@ KALAM := /Applications/OpenMTP.app/Contents/Resources/bin/arm64/kalam.dylib
 ## There is one simulator per machine, so parallel sessions have to take turns.
 ## SIM_LOCK serialises them; see tools/sim_lock.sh for why it is not shlock.
 SIM_LOCK := tools/sim_lock.sh
+SIM_PORT ?= 1234
 
 MONKEYC  := $(SDK)bin/monkeyc
 MONKEYDO := $(SDK)bin/monkeydo
-SIMULATOR := $(SDK)bin/connectiq
+SIMULATOR := $(SDK)bin/ConnectIQ.app/Contents/MacOS/simulator
 
 .PHONY: all build test test-lock test-simctl sim simulator-up install push push-built \
         reveal package clean sdk-info push-config web-test
@@ -82,11 +83,14 @@ test-lock:
 test-simctl:
 	@python3 tools/simctl_test.py
 
-## Start the simulator unless it is already running.
+## Start the target simulator unless its own control port is already listening. The
+## default is the shared port 1234; isolated runners override SIM_PORT after starting
+## their process directly. A broad process match would confuse the two.
 simulator-up:
-	@pgrep -f 'ConnectIQ.app/Contents/MacOS/simulator' >/dev/null && exit 0; \
-	echo "starting simulator..."; "$(SIMULATOR)"; \
-	n=0; until pgrep -f 'ConnectIQ.app/Contents/MacOS/simulator' >/dev/null; do \
+	@nc -z 127.0.0.1 $(SIM_PORT) >/dev/null 2>&1 && exit 0; \
+	echo "starting simulator..."; "$(SIMULATOR)" \
+		>>/tmp/crossover-face-shared-simulator.log 2>&1 & \
+	n=0; until nc -z 127.0.0.1 $(SIM_PORT) >/dev/null 2>&1; do \
 		n=$$((n+1)); [ $$n -ge 60 ] && { echo "simulator did not start"; exit 1; }; \
 		/bin/sleep 0.5; \
 	done; /bin/sleep 3
@@ -159,9 +163,13 @@ install: build
 		exit 1; \
 	fi; \
 	if ! python3 $(PUSH) --info >/dev/null 2>&1; then \
-		echo "The Garmin is on USB but is not available over MTP."; \
-		echo "Unplug it, plug it back in, and answer YES to \"Use MTP?\"."; \
-		exit 1; \
+		/bin/sleep 3; \
+		if ! python3 $(PUSH) --info >/dev/null 2>&1; then \
+			echo "The Garmin is on USB but did not answer over MTP (tried twice)."; \
+			echo "Quit anything holding it (OpenMTP, Android File Transfer), then replug."; \
+			echo "Probe it by hand to see why: python3 $(PUSH) --info"; \
+			exit 1; \
+		fi; \
 	fi; \
 	$(MAKE) -s push-built || { \
 		echo; echo "Direct push failed — falling back to the manual drag."; \

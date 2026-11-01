@@ -8,7 +8,7 @@ export interface Reading {
   span?: [number, number];
   /** A solid dot at this position: the current temperature. */
   mark?: number;
-  /** Sunrise on the ring's outer edge, sunset on its inner edge, in turns. */
+  /** Sunrise on the ring's inner edge, sunset on its outer edge, in turns. */
   sun?: [number, number];
   /** Twelve hour slots, clock position 0..11, each a level 0..15 or null for unknown. */
   blocks?: (number | null)[];

@@ -18,7 +18,7 @@ module ConfigCodeTest {
         "AQAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIEYw",
         "AWMCAQEAAgkKDQcARv___wAAABI0VqvN7wcDSQ",
         "AQgAAAABAQwLBQRGAOh5-bjWS3_U__9rWzKyZw",
-        "AQEAAAABAQAICQEUQeh5-bjWS3_U__9rWzK3iA",
+        "AQEAAAABAQABAgkUQeh5-bjWS3_U__9rWzIRZQ",
         "AQcAAAABAQAIAgMgIOh5-bjWS3_U__9rWwBfYg"
     ] as Array<String>;
     //! ConfigCode.FIELDS numbers per code, in VALID_CODES order.
@@ -26,7 +26,7 @@ module ConfigCodeTest {
         0, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3,
         99, 2, 1, 1, 0, 2, 9, 10, 13, 7, -20, 50, 16777215, 0, 1193046, 11259375, 3, 1, 0,
         8, 0, 0, 0, 1, 1, 12, 11, 5, 4, 50, -20, 15235577, 12113483, 8377599, 16739163, 2, 0, 3,
-        1, 0, 0, 0, 1, 1, 0, 8, 9, 1, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3,
+        1, 0, 0, 0, 1, 1, 0, 1, 2, 9, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3,
         7, 0, 0, 0, 1, 1, 0, 8, 2, 3, 12, 12, 15235577, 12113483, 8377599, 16739163, 0, 0, 0
     ] as Array<Number>;
     const ALIAS_CODES = [

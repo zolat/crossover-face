@@ -302,9 +302,10 @@ two things, and neither is mass storage:
 | No | Garmin's proprietary protocol (`idProduct 0x0003`) | No, and it may not even charge |
 
 The Crossover reports `0x5246` in MTP mode; an Epix Pro 51 mm reports `0x50DA`.
-`make install` probes the MTP protocol instead of assuming one model's product ID. So
-answer **yes** to *Use MTP?*. If the watch is plugged in but not exposing MTP, the
-installer says so and stops rather than failing obscurely.
+`make install` probes the MTP protocol instead of assuming one model's product ID.
+Current firmware connects in MTP by default without asking; older firmware asks *Use
+MTP?*, and the answer is **yes**. The first probe after plugging in can fail on its own,
+so the installer retries once before saying the watch is not exposing MTP.
 Then on the watch hold **MENU → Watch Face → Crossover Face**. The
 `.prg.debug.xml` beside the `.prg` stays on your Mac; it symbolicates crash logs
 pulled from `GARMIN/Apps/LOGS/`.
@@ -449,8 +450,8 @@ under Ring data on the watch or in Garmin Connect.
 Body Battery puts its newest value in the current hour and completed-hour averages in the
 eleven positions behind it, so reading backwards from the hand runs counter-clockwise. A
 known zero uses the ordinary unfilled tier; an hour with no sample is dimmer and cannot be
-mistaken for an actual zero. Block sources are available on the outer two rings only, where
-the lattice has enough dots to resolve them.
+mistaken for an actual zero. Block sources are available on the outer three rings, where
+the lattice has enough dots to resolve them; ring 3 is the coarsest of the three.
 
 Every other source reports a **span** — a start and an end, both 0.0–1.0 — rather than a
 single level. Levels are just spans that start at zero. That one shape is why temperature,

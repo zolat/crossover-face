@@ -38,7 +38,7 @@ function ringRadii(lattice: Lattice, ring: number): [number, number] {
 type Tier = "band" | "weak" | "dim";
 
 /** Which tier a dot takes inside a forecast block, as HourBands fills it. */
-function blockTier(lattice: Lattice, ring: number, dx: number, dy: number, turn: number,
+export function blockTier(lattice: Lattice, ring: number, dx: number, dy: number, turn: number,
                    blocks: (number | null)[]): Tier {
   const slot = Math.floor(turn * HOURS) % HOURS;
   const along = turn - slot / HOURS - LEAD;
@@ -53,7 +53,10 @@ function blockTier(lattice: Lattice, ring: number, dx: number, dy: number, turn:
   const whole = Math.floor(filled);
   if (band < whole) return "band";
   if (band === whole) {
-    const half = ((filled - whole) * BLOCK) / 2;
+    // HourBands.partialHalfOn(): a partial band never narrower than the ring's floor.
+    const floor = schema.sources.blockWindowFloor[ring] / HOURS;
+    const window = ((filled - whole) * BLOCK) / 2;
+    const half = window > 0 && window < floor ? floor : window;
     if (Math.abs(along - BLOCK / 2) < half) return "band";
   }
   return "weak";
@@ -131,7 +134,8 @@ export function render(image: ImageData, lattice: Lattice, palette: BuiltPalette
   }
 
   // Marks and sun dots are solid DOT x DOT blocks, placed on the dot nearest their
-  // position — mid-ring for the mark, the ring's outer and inner edges for the sun.
+  // position — mid-ring for the mark, sunrise on the ring's inner edge and sunset on
+  // its outer one (DotGrid's sun placement).
   if (!heldBack) {
     readings.forEach((reading, ring) => {
       const tiers = palette.rings[ring];
@@ -141,8 +145,8 @@ export function render(image: ImageData, lattice: Lattice, palette: BuiltPalette
         if (spot) solids.push({ ...spot, colour: tiers.softMark });
       }
       if (reading.sun) {
-        const rise = nearestDot(lattice, ring, reading.sun[0], outer);
-        const set = nearestDot(lattice, ring, reading.sun[1], inner);
+        const rise = nearestDot(lattice, ring, reading.sun[0], inner);
+        const set = nearestDot(lattice, ring, reading.sun[1], outer);
         if (rise) solids.push({ ...rise, colour: tiers.sunrise });
         if (set) solids.push({ ...set, colour: tiers.sunset });
       }

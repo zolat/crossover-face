@@ -14,6 +14,7 @@ the settings have to be kept in step. So it is read from them:
 - ``source/render/Palette.mc``: the shipping themes, their ramp stops and every tier
   factor.
 - ``source/data/Source.mc``: which sources draw blocks and which a temperature range.
+- ``source/matrix/HourBands.mc``: the narrowest partial block window each ring draws.
 
 Usage::
 
@@ -94,6 +95,11 @@ def _array(source: str, name: str) -> list[int]:
     return [int(token, 0) for token in re.findall(r"0x[0-9A-Fa-f]+|-?\d+", body.split(" as ")[0])]
 
 
+def _floats(source: str, name: str) -> list[float]:
+    body = _const(source, name).split(" as ")[0]
+    return [float(token) for token in re.findall(r"-?\d+(?:\.\d+)?", body)]
+
+
 def palette() -> dict:
     source = (REPO / "source" / "render" / "Palette.mc").read_text()
     colours = _array(source, "THEMES")
@@ -131,6 +137,8 @@ def sources() -> dict:
         "blocks": predicate("usesBlocks"),
         "temperatureRange": predicate("isTemperatureRange"),
         "blocksTopRing": int(_number(source, "BLOCKS_TOP_RING")),
+        "blockWindowFloor": _floats((REPO / "source" / "matrix" / "HourBands.mc").read_text(),
+                                    "WINDOW_FLOOR"),
     }
 
 

@@ -102,9 +102,9 @@
         "showDate": 1,
         "dateOutline": 1,
         "ring1": 0,
-        "ring2": 8,
-        "ring3": 9,
-        "ring4": 1,
+        "ring2": 1,
+        "ring3": 2,
+        "ring4": 9,
         "tempAheadLow": 0,
         "tempAheadHigh": 45,
         "customColours": [
@@ -119,7 +119,7 @@
           3
         ]
       },
-      "code": "AQEAAAABAQAICQEUQeh5-bjWS3_U__9rWzK3iA"
+      "code": "AQEAAAABAQABAgkUQeh5-bjWS3_U__9rWzIRZQ"
     },
     {
       "name": "beacon-equal-temperatures",

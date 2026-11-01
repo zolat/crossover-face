@@ -20,7 +20,19 @@ block sources since.
   a few-cell search that agrees with the ring walk, because three walks on one frame tripped
   the 416 watchdog.
   - [ ] Temperature range + drawn hands on the 454 Epix trips the watchdog — on `main` too,
-    plain range included. Measured, not yet diagnosed.
+    plain range included. Measured, not yet diagnosed. The headroom probe since shows the
+    454 trips on *default* rings with drawn hands, temperature or not.
+- [x] Block sources on ring 3 — rain, UV, temperature and Body Battery, next/last 12h, now
+  offered on the third ring, with a window floor so its coarser blocks still draw every rung.
+  - [x] Three block rings inside the watchdog — each dot's hour block is cached
+    (`DotGrid.blockAt`) instead of computed per frame. Headroom probe, Crossover, hands on,
+    worst-case first frame: two block rings 1100 → 2300, three with temperature 200 → 1400,
+    three with Body Battery from a trip to ~200–700. Every three-ring combination held 75s.
+  - [ ] Body Battery history on the wrist: the simulator has no history, so the hourly read's
+    real cost is unmeasured. A drafted change asks `Gregorian.info()` once per local hour
+    rather than once per sample, same answers; it needs a watch to show it matters.
+  - [ ] Epix: the 416 with drawn hands fits one block ring, not two; the 454 trips on
+    defaults. Both predate ring 3.
 
 ## Web configurator
 

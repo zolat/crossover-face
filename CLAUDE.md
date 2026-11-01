@@ -92,7 +92,7 @@ divides by the *lattice's* own `π·RADIUS²`.
 416, which takes 203 rather than 200**: past the extent `RADIUS` only clips the corners, but
 it still sets the ring thickness, and at 200 the rings lose a pixel each and ring 1's
 thinnest rain sub-band drops from 6 dots to 5, failing
-`onlyTheOuterTwoRingsResolveTwelveHoursInThreeBands`. That bar is scraped at 416 either way,
+`blockRingsResolveTwelveHoursInThreeBands`. That bar is scraped at 416 either way,
 so a fourth screen size should measure it rather than assume it.
 
 ### The 454 lattice is smaller than the screen allows, and the watchdog is why
@@ -255,12 +255,19 @@ PYTHONPATH=tools python3 -m simctl.window shot face.png --crop face
 PYTHONPATH=tools python3 -m simctl.window list           # simulator windows, by instance
 ```
 
-**Each checkout gets its own simulator, so sessions no longer take turns.** The singleton
+**Each MCP session gets one simulator, reused across its calls and devices.** The singleton
 is a habit, not a constraint: `TMPDIR` moves the simulated device filesystem, `HOME` moves
 the `Sim-$USER` file that refuses a second instance, and `SHELL_SERVER_PORT` moves the
 control channel. `simctl/instance.py` sets all three, symlinking `~/.Garmin/ConnectIQ` back
-so devices and the signing key stay shared. Two checkouts have run the full suite
-concurrently, both green, neither touching the other or the lock.
+so devices and the signing key stay shared. Omit `instance` for normal work, including a
+device matrix: loading a new device into the default replaces the previous one. Only name
+an instance when two simulator windows genuinely need to coexist.
+
+`sim_release` stops both the sideload and a private simulator; it leaves the machine's
+shared simulator running and releases only that lock. The MCP server also releases every
+private instance at shutdown. Each instance carries an advisory lease, so after an abrupt
+server death the next server can prove the lease is abandoned and reap it without matching
+or killing another agent's process.
 
 > **The MCP server drives the checkout *it* runs from, not yours.** `.mcp.json` is registered
 > at the repo root, so `simctl.paths.repo_root()` — which resolves relative to its own file —
@@ -360,7 +367,9 @@ good enough to see the face by and not good enough to measure.
   claim the USB interface; `make push` quits OpenMTP for you. USB product IDs are
   model-specific — measured `0x5246` on the Crossover and `0x50DA` on an Epix Pro 51 mm —
   so `make install` asks the MTP engine whether the device is usable instead of matching
-  one ID. Answer **yes** to *Use MTP?* on the watch.
+  one ID. Current firmware is in MTP by default and no longer asks *Use MTP?* on
+  connection. The first probe after plugging in can fail on its own, so `make install`
+  retries once; run `python3 tools/mtp_push.py --info` to see the real error.
 - **`luminance.py` wants a raw 390×390 face render**, not the contact sheets in `build/mockups/`
   — a sheet measures meaninglessly high. `mockup.py` prints per-face figures itself.
 
@@ -384,8 +393,8 @@ the face would not load. The rule:
 > Nothing is computed in the render loop that `DotGrid.build()` could compute once, and nothing
 > calls out of the loop that could be an array lookup.
 
-`DotGrid` caches parallel arrays (`xs`, `ys`, `positionOf`, `armOf`) built once per
-rebuild; `MatrixRenderer` is a flat indexed walk. There is no `ringOf`: dots are stored grouped
+`DotGrid` caches parallel arrays (`xs`, `ys`, `positionOf`, `armOf`, and the byte-per-dot
+`blockAt` that only block rings read) built once per rebuild; `MatrixRenderer` is a flat indexed walk. There is no `ringOf`: dots are stored grouped
 by ring, so `ringStart` already says which ring an index belongs to. The single deliberate exception is
 `StatMap.isLit()`, called per dot (~6ms/frame) so the lit test has one definition shared with the
 tests.
@@ -470,6 +479,17 @@ nothing to do. Never fold them together. Set `Diagnostics.TRACE = true` to have 
 printed every ten frames — that is the only way to read it outside the on-device menu, since
 the simulator has no input injection to reach that menu with.
 
+**For the watchdog itself, measure headroom, not milliseconds.** A timing says how slow a
+frame was on this machine today; whether it trips is a different question, and with other
+simulators loading the Mac the timings stopped meaning anything at all (multi-second
+"averages"). The probe that settled three block rings: a temporary build that forces a full
+clear and forgets the data caches every frame — every frame a worst-case first frame — then
+runs an empty `for` loop of `PAD` iterations after the draw, printing `PAD` and growing it by
+100 a frame. The `PAD` printed when the watchdog trips is that configuration's headroom.
+Within a session it repeats to about ±200; across sessions it drifts, so interleave the A and
+B legs. Compile the ring set into the probe rather than writing settings — a fresh
+instance's first push resets `CROSSOVERFACE.SET` to the defaults.
+
 **Measure with an A/B out of one binary, never against a figure from another day.** This
 machine ran ~2.4x the frame times of the ones in `2ec08e3`, and a second simulator starting
 up mid-session moved a "before" by 9ms on its own — enough to invent a regression that was
@@ -502,8 +522,9 @@ built `.prg` against it. That comparison is meaningless.
   **46k of 123k, about 37%**. Note the app is granted 123k rather than the nominal 128k.
 
 The dominant runtime consumer is the `DotGrid` cache — four parallel arrays of one entry per
-dot, **22,240 bytes at 1112 dots**, five bytes a slot. `theDotCacheFitsItsShareOfMemory`
-measures it and fails if a fifth per-dot array appears. That test has to drop the arrays'
+dot, **22,240 bytes at 1112 dots**, five bytes a slot, plus `blockAt`, a `ByteArray` at one
+byte a dot. `theDotCacheFitsItsShareOfMemory` measures it and fails if another full per-dot
+array appears. That test has to drop the arrays'
 references before sampling: a rebuild in place frees each old array as the new one is assigned,
 so measuring across `invalidate()` alone reports a delta of nothing and passes vacuously.
 
@@ -565,16 +586,27 @@ Consequences worth knowing before touching it:
 - **Level `LEVELS` is exactly the old top tier**, so the widened scale can draw nothing that
   was not already drawable and **no luminance bound needed re-measuring**.
   `eachSubBandLightsItsShareOfTheRing` asserts that equality rather than assuming it.
-- **There is no minimum window, and that was measured.** The obvious worry is that a level-1
-  window — a fifth of one band — falls between two dots and the bottom of the scale draws
-  nothing. On the offered rings it does not: the worst block at level 1 holds two dots on ring
-  0 and one on ring 1, and every level is monotonic in every block.
-  `everyNonZeroLevelLightsAtLeastOneDot` and `aLevelIsMonotonicInDotsLit` are what keep that
-  true; if either fails, a floor sized off `DotGrid.markerHalf` — which solves the same problem
-  for the temperature mark — is the fix, not a coarser scale.
+- **The outer two rings have no minimum window, and ring 2 has one — both measured.** The
+  worry is that a level-1 window, a fifth of one band, falls between two dots and the bottom
+  of the scale draws nothing. On rings 0 and 1 it does not: the worst block at level 1 holds
+  two dots and one, and every level is monotonic in every block. On ring 2 it did — eight
+  (block, level) pairs blank on 416 and 454, one on 390 — so `HourBands.WINDOW_FLOOR` gives
+  ring 2 alone a floor of 0.12 of a wedge, applied through `partialHalfOn(level, ring)`. That
+  lights every pair on all three screens while leaving levels 1 and 2 exactly as distinct as
+  they were (equal in 4 of 12 blocks either way); 0.15 merges them in all twelve. It only
+  raises levels 1, 6 and 11, and it is computed once per block per frame, not per dot.
+  `everyNonZeroLevelLightsAtLeastOneDot` and `aLevelIsMonotonicInDotsLit` hold all three
+  offered rings to it. `tools/mockup.py` mirrors the floor.
 - **A block ring costs about 2.7ms more per drawn frame** than the whole-band fill did (87ms
   against 85ms on ring 0's 436 dots, worst case, A/B'd out of one binary). The span loop is
   byte-for-byte unchanged, so no other ring moved.
+- **Which block a dot is in is cached, not computed** — `DotGrid.blockAt`, a byte a dot,
+  holding the block or `HourBands.GUTTER`. Working it out per dot (a multiply, `toNumber()`
+  and two gutter comparisons) is what put three block rings past the Crossover's watchdog;
+  read from the cache it gave back about 600 `PAD` iterations per block ring. The renderer
+  inlines `HourBands.litInBlock()`, which only computes how far into its block a dot sits
+  inside the partial band's radius. `theCachedBlockCodeLightsWhatLitAtDoes` pins it to
+  `litAt()` on every dot at every level; `theBlockCacheMatchesItsDefinition` pins the cache.
 
 Five things about the channel are load-bearing:
 
@@ -610,15 +642,26 @@ dots per block against three-way's 8.3/9.0/11.0. `DotGrid.bandEdges()` therefore
 **integer** thickness `ringBounds()` uses, never `markerWidths()`'s 42.25 — the float one puts
 ring 1's top edge inside ring 1's own outermost dots.
 
-They are offered on the **outer two rings only** (`Source.BLOCKS_TOP_RING`), enforced in three
-places that must agree: `StatMap.load()` maps them to Off elsewhere, the on-device picker
-walks `Source.offeredFor(ring)`, and `settings.xml` lists them in the `ring1`/`ring2` blocks alone.
-The justification is a claim about the lattice and is asserted as one —
-`onlyTheOuterTwoRingsResolveTwelveHoursInThreeBands` measures the worst (block, sub-band) at
-8 and 6 dots on rings 0 and 1, against 4 and 2 on rings 2 and 3. The level scale sharpens that
-only on the innermost ring, where sixteen (block, level) pairs light no dot at all; **ring 2
-draws every rung**, so its exclusion still rests on the dot count and on nothing else — worth
-knowing before anyone relaxes the cut.
+They are offered on the **outer three rings** (`Source.BLOCKS_TOP_RING = 2`), enforced in three
+places that must agree: `StatMap.load()` maps them to Off on the innermost, the on-device
+picker walks `Source.offeredFor(ring)`, and `settings.xml` lists them in the `ring1`–`ring3`
+blocks. The justification is a claim about the lattice and is asserted as one —
+`blockRingsResolveTwelveHoursInThreeBands` measures the worst (block, sub-band) at 8–9, 6–7,
+3–4 and 1–2 dots on rings 0–3 across the screens, against `MIN_BAND_DOTS = 3`. Ring 2 is
+coarse — a reading there is three or four dots a sub-band — and was let in as the wearer's
+trade rather than kept out on a threshold, once its window floor (above) made every rung
+visible. The innermost ring stays out: eight (block, level) pairs light nothing there, which
+no floor fixes without merging rungs.
+
+**Three block rings are what the watchdog budget is sized against.** Measured with the
+headroom probe (see *Measuring a frame*), Crossover, hands on, every frame a worst-case first
+frame: default rings ~3600, two block rings ~2300, three ~1300–1400 with temperature and
+**~200–700 with Body Battery** — thin, and the simulator holds no Body Battery *history*, so
+on a wrist the hourly history read adds cost the simulator never shows. Every combination of
+three held for 75s of forced worst-case frames. **The Epix screens do not fit two**: the 416
+with drawn hands holds one block ring (on any offered ring) and trips with two, and the 454
+trips on default rings — both on `main` before ring 3 was offered. Re-run the probe whenever
+per-dot or first-frame work grows.
 
 ### Past the goal, a lapped dot changes shape rather than colour
 
@@ -705,7 +748,12 @@ dial. `Source.isTemperatureRange()` is the predicate for span, mark and ramp —
   one frame tripped the 416 watchdog with hands drawn. `theQuickMarkSearchAgreesWithTheWalk`
   pins it to `markedDotNear()`, the definition.
 - **`drawAt()`'s frame is at the stack's limit.** Inlining the sun placement overflowed the
-  test runner's stack, which is why it lives in `placeSuns()`/`drawSuns()`.
+  test runner's stack, which is why it lives in `placeSuns()`/`drawSuns()`. The deepest path
+  is `drawAt()` → `ensureBuilt()` → `build()` → a helper, taken whenever a test leaves the
+  lattice stale: a new local in either `drawAt()` or `build()` overflows it, and the failure
+  shows up in whichever later test first draws, as *Stack Overflow Error* in `bandEdges()`.
+  `fillBlockCodes()` is a function of its own and `Palette.markerOf`/`overOf` are not
+  hoisted for that reason.
 
 ### Every other source reports a span, not a level
 

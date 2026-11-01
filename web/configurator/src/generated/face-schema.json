@@ -320,6 +320,11 @@
           "labelDrawn": "Body Battery"
         },
         {
+          "value": 11,
+          "label": "Body Battery, last 12h",
+          "labelDrawn": "Body Battery, last 12h"
+        },
+        {
           "value": 4,
           "label": "Temperature range",
           "labelDrawn": "Temperature range"
@@ -330,9 +335,24 @@
           "labelDrawn": "Temp range + sun"
         },
         {
+          "value": 12,
+          "label": "Temp, next 12h",
+          "labelDrawn": "Temp, next 12h"
+        },
+        {
           "value": 5,
           "label": "Chance of rain",
           "labelDrawn": "Chance of rain"
+        },
+        {
+          "value": 9,
+          "label": "Rain, next 12h",
+          "labelDrawn": "Rain, next 12h"
+        },
+        {
+          "value": 10,
+          "label": "UV, next 12h",
+          "labelDrawn": "UV, next 12h"
         },
         {
           "value": 6,
@@ -564,6 +584,12 @@
       4,
       13
     ],
-    "blocksTopRing": 1
+    "blocksTopRing": 2,
+    "blockWindowFloor": [
+      0.0,
+      0.0,
+      0.12,
+      0.0
+    ]
   }
 }

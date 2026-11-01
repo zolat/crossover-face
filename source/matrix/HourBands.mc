@@ -260,6 +260,28 @@ module HourBands {
         return (FILL / 2.0) * partialFractionFor(level);
     }
 
+    //! The narrowest partial window each ring draws, in wedge units. Zero —
+    //! no floor — on the outer two, for the reasons above.
+    //!
+    //! **Ring 2 is where the floor finally earned its place.** Once block
+    //! sources were offered there, its level-1 window (0.075 of a wedge) fell
+    //! between dots in eight (block, level) pairs on the 416 and 454 lattices
+    //! and in one on the 390, so a light-drizzle hour drew exactly what a dry
+    //! one does. 0.12 lights a dot in every block at every level on all three
+    //! screens and leaves levels 1 and 2 as distinct as they already were (the
+    //! same in 4 of 12 blocks, unfloored or floored); 0.15 merges them in all
+    //! twelve. It only ever raises the windows of levels 1, 6 and 11, whose
+    //! partial band is a fifth of a band. Flat, for the reason DotGrid.ARMS is.
+    const WINDOW_FLOOR = [0.0, 0.0, 0.12, 0.0] as Array<Float>;
+
+    //! partialHalfFor() on a particular ring: floored, but still zero where
+    //! the level has no partial band, so a level on a band edge stays exact.
+    function partialHalfOn(level as Number, ring as Number) as Float {
+        var window = partialHalfFor(level);
+        var floor = WINDOW_FLOOR[ring];
+        return (window > 0.0 && window < floor) ? floor : window;
+    }
+
     //! Which hour block a position falls in.
     //!
     //! Positions run 0.0 up to but not including 1.0, so this cannot exceed
@@ -280,6 +302,37 @@ module HourBands {
         var at = position * HOURS;
         var into = at - at.toNumber();
         return into >= LEAD && into < TRAIL;
+    }
+
+    //! What DotGrid.blockAt stores for a dot at this position: its block, or
+    //! GUTTER when it sits in the gap either side of one. Fixed geometry —
+    //! LEAD and TRAIL are constants — which is what lets it be cached per dot.
+    const GUTTER = HOURS;
+
+    function blockCodeOf(position as Float) as Number {
+        return insideBlock(position) ? blockOf(position) : GUTTER;
+    }
+
+    //! litAt(), written against the cached block code instead of the
+    //! position alone. This is the shape MatrixRenderer inlines now: the
+    //! block and the gutter come from DotGrid.blockAt, and only a dot inside
+    //! the partial band's radius works out how far into its block it sits.
+    //! theCachedBlockCodeLightsWhatLitAtDoes holds the two to each other.
+    function litInBlock(code as Number, position as Float, radiusSq as Number,
+                        fullEdges as Array<Number>, partEdges as Array<Number>,
+                        partLo as Array<Float>,
+                        partHi as Array<Float>) as Boolean {
+        if (code == GUTTER) {
+            return false;
+        }
+        if (radiusSq <= fullEdges[code]) {
+            return true;
+        }
+        if (radiusSq > partEdges[code]) {
+            return false;
+        }
+        var into = position * HOURS - code;
+        return into > partLo[code] && into < partHi[code];
     }
 
     //! Is a dot lit, given the per-block tables the renderer precomputes?
