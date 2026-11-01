@@ -1,4 +1,4 @@
-# Crossover Face
+# Cross Matrix
 
 A Connect IQ watch face for the **Garmin Instinct Crossover AMOLED and Epix 2 family** — a
 dot-matrix field where the data *is* the background. Four concentric rings of dots carry
@@ -306,7 +306,7 @@ The Crossover reports `0x5246` in MTP mode; an Epix Pro 51 mm reports `0x50DA`.
 Current firmware connects in MTP by default without asking; older firmware asks *Use
 MTP?*, and the answer is **yes**. The first probe after plugging in can fail on its own,
 so the installer retries once before saying the watch is not exposing MTP.
-Then on the watch hold **MENU → Watch Face → Crossover Face**. The
+Then on the watch hold **MENU → Watch Face → Cross Matrix**. The
 `.prg.debug.xml` beside the `.prg` stays on your Mac; it symbolicates crash logs
 pulled from `GARMIN/Apps/LOGS/`.
 
