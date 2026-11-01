@@ -72,14 +72,37 @@ class Schema:
     def defaults(self) -> "OrderedDict[str, int]":
         return OrderedDict((key, self.default(key)) for key in self._entries)
 
-    def validate(self, key: str, value: int) -> None:
+    def is_text(self, key: str) -> bool:
+        entry = self._entries.get(key)
+        return entry is not None and entry["valueType"] == "string"
+
+    def coerce(self, key: str, raw: str) -> "int | str":
+        """A command-line value as the type the setting stores."""
+        if self.is_text(key):
+            return raw
+        try:
+            return int(raw)
+        except ValueError:
+            raise SettingsError(f"{key}={raw!r}: value must be a whole number") from None
+
+    def validate(self, key: str, value: "int | str") -> None:
         entry = self._entries.get(key)
         if entry is None:
             raise SettingsError(f"unknown setting {key!r}; known: {', '.join(self.keys)}")
+        if entry["valueType"] == "string":
+            if not isinstance(value, str):
+                raise SettingsError(f"{key} is text; got {value!r}")
+            limit = entry.get("configMaxLength")
+            if limit is not None and len(value) > limit:
+                raise SettingsError(f"{key} is {len(value)} characters; the limit is {limit}")
+            return
         if entry["valueType"] != "number":
             raise SettingsError(
-                f"{key} is a {entry['valueType']}; only whole-number settings are supported"
+                f"{key} is a {entry['valueType']}; only whole-number and text settings "
+                f"are supported"
             )
+        if not isinstance(value, int) or isinstance(value, bool):
+            raise SettingsError(f"{key} is a whole number; got {value!r}")
         options = entry.get("configOptions")
         if options:
             allowed = [option["value"] for option in options]
@@ -180,12 +203,15 @@ def reset(root: Path, prg: str = DEFAULT_PRG) -> bool:
     return True
 
 
-def _parse_assignment(text: str) -> tuple[str, int]:
+def _parse_assignment(text: str, schema: "Schema | None" = None) -> tuple[str, "int | str"]:
     if "=" not in text:
         raise SettingsError(f"expected key=value, got {text!r}")
     key, _, raw = text.partition("=")
+    key = key.strip()
+    if schema is not None:
+        return key, schema.coerce(key, raw)
     try:
-        return key.strip(), int(raw)
+        return key, int(raw)
     except ValueError:
         raise SettingsError(f"{text!r}: value must be a whole number") from None
 
@@ -217,7 +243,7 @@ def main(argv: list[str] | None = None) -> int:
 
         schema = Schema.load(prg=args.prg)
         if args.command == "set":
-            updates = dict(_parse_assignment(text) for text in args.assignments)
+            updates = dict(_parse_assignment(text, schema) for text in args.assignments)
             write(root, updates, schema, args.prg)
 
         rows = describe(root, schema, args.prg)

@@ -22,10 +22,15 @@ section      ``u8 key type`` + ``u32 offset into the key table`` +
 Keys are referenced by *byte offset* into the table rather than by index, which is why
 encoding has to lay the table out before it can write any entry.
 
-Only whole-number properties are handled, because that is all a Connect IQ *list*
-setting can be and all seven of this face's properties are lists. An unknown type code
-raises rather than being skipped: a settings file that silently loses a key would be
-worse than one that fails loudly, since the value it falls back to is invisible.
+The "key table" is really the file's string table. A **string value** is type ``0x03``
+and its ``i32`` is a byte offset into that same table, where the simulator writes it
+straight after its own key - recovered from a simulator-written file carrying the
+``configCode`` property, ``tools/testdata/CROSSOVERFACE-string.SET``, and confirmed by
+re-serialising it byte for byte. Whole numbers are ``0x01`` and store the value itself.
+
+Those are the only two value types handled. An unknown type code raises rather than
+being skipped: a settings file that silently loses a key would be worse than one that
+fails loudly, since the value it falls back to is invisible.
 """
 
 from __future__ import annotations
@@ -54,7 +59,10 @@ def _need(data: bytes, offset: int, count: int, what: str) -> None:
         )
 
 
-def decode(data: bytes) -> "OrderedDict[str, int]":
+Value = "int | str"
+
+
+def decode(data: bytes) -> "OrderedDict[str, int | str]":
     """Return the properties in file order, so re-encoding reproduces the bytes."""
     _need(data, 0, 8, "header")
     if data[:4] != MAGIC_KEYS:
@@ -87,7 +95,7 @@ def decode(data: bytes) -> "OrderedDict[str, int]":
         raise SetFileError(f"expected a dictionary (0x0b), found type 0x{container:02x}")
     (count,) = struct.unpack_from(">I", data, cursor + 9)
 
-    values: "OrderedDict[str, int]" = OrderedDict()
+    values: "OrderedDict[str, int | str]" = OrderedDict()
     entry = cursor + 13
     for index in range(count):
         _need(data, entry, 10, f"entry {index}")
@@ -97,36 +105,60 @@ def decode(data: bytes) -> "OrderedDict[str, int]":
         (value,) = struct.unpack_from(">i", data, entry + 6)
         if key_type != TYPE_STRING:
             raise SetFileError(f"entry {index} has key type 0x{key_type:02x}, expected 0x03")
-        if value_type != TYPE_NUMBER:
-            raise SetFileError(
-                f"entry {index} ({names.get(key_offset, '?')}) has value type "
-                f"0x{value_type:02x}; only whole numbers (0x01) are supported"
-            )
         if key_offset not in names:
             raise SetFileError(f"entry {index} points at key offset {key_offset}, which is not a key")
-        values[names[key_offset]] = value
+        if value_type == TYPE_NUMBER:
+            values[names[key_offset]] = value
+        elif value_type == TYPE_STRING:
+            if value not in names:
+                raise SetFileError(
+                    f"entry {index} ({names[key_offset]}) points at string offset "
+                    f"{value}, which is not a string in the table"
+                )
+            values[names[key_offset]] = names[value]
+        else:
+            raise SetFileError(
+                f"entry {index} ({names[key_offset]}) has value type "
+                f"0x{value_type:02x}; only whole numbers (0x01) and strings (0x03) "
+                f"are supported"
+            )
         entry += 10
 
     return values
 
 
-def encode(values: "OrderedDict[str, int] | dict[str, int]") -> bytes:
-    """Serialise properties. Key order is preserved, so decode/encode is byte-exact."""
+def _table_entry(text: str) -> bytes:
+    encoded = text.encode("utf-8") + b"\0"
+    return struct.pack(">H", len(encoded)) + encoded
+
+
+def encode(values: "OrderedDict[str, int | str] | dict[str, int | str]") -> bytes:
+    """Serialise properties. Key order is preserved, so decode/encode is byte-exact.
+
+    Each key goes into the string table followed directly by its value when that
+    value is a string - the order the simulator itself writes.
+    """
     table = b""
-    offsets: dict[str, int] = {}
-    for name in values:
-        offsets[name] = len(table)
-        encoded = name.encode("utf-8") + b"\0"
-        table += struct.pack(">H", len(encoded)) + encoded
+    entries = []
+    for name, value in values.items():
+        if isinstance(value, bool) or not isinstance(value, (int, str)):
+            raise SetFileError(
+                f"{name}={value!r}: only whole numbers and strings can be stored"
+            )
+        key_offset = len(table)
+        table += _table_entry(name)
+        if isinstance(value, str):
+            entries.append((key_offset, TYPE_STRING, len(table)))
+            table += _table_entry(value)
+        else:
+            entries.append((key_offset, TYPE_NUMBER, value))
 
     body = bytes([TYPE_DICTIONARY]) + struct.pack(">I", len(values))
-    for name, value in values.items():
-        if not isinstance(value, int) or isinstance(value, bool):
-            raise SetFileError(f"{name}={value!r}: only whole numbers can be stored")
+    for key_offset, value_type, value in entries:
         body += (
             bytes([TYPE_STRING])
-            + struct.pack(">I", offsets[name])
-            + bytes([TYPE_NUMBER])
+            + struct.pack(">I", key_offset)
+            + bytes([value_type])
             + struct.pack(">i", value)
         )
 
