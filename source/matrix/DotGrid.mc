@@ -186,7 +186,7 @@ module DotGrid {
     var sunAt as Array<Number> = [] as Array<Number>;
 
     //! Where across its ring each sun dot sits, as the squared radius the
-    //! search closes on. Sunrise takes the **outer** edge and sunset the
+    //! search closes on. Sunset takes the **outer** edge and sunrise the
     //! **inner**, with the temperature mark between them in the middle.
     //!
     //! Opposite edges, not one, because on a twelve-hour dial the two times
@@ -452,8 +452,8 @@ module DotGrid {
         var outer = (ring == 0) ? RADIUS.toFloat()
                                 : Math.sqrt(ringEdge[ring - 1]).toFloat();
         var dot = (at >= 0.0)
-            ? nearDot(ring, at, (slot == 0) ? SUN_OUTWARD : SUN_INWARD,
-                      (slot == 0) ? outer : ringInner[ring].toFloat())
+            ? nearDot(ring, at, (slot == 1) ? SUN_OUTWARD : SUN_INWARD,
+                      (slot == 1) ? outer : ringInner[ring].toFloat())
             : -1;
         sunFor[key] = at;
         sunAt[key] = dot;

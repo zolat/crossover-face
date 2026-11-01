@@ -6408,7 +6408,7 @@ module MatrixTest {
         return true;
     }
 
-    //! Sunrise closes on the ring's outer edge and sunset on its inner one, so
+    //! Sunset closes on the ring's outer edge and sunrise on its inner one, so
     //! the two never land on one dot — and on a twelve-hour dial they are
     //! routinely at the same *position*, which is the case walked here: both
     //! at every position at once.
@@ -6436,9 +6436,9 @@ module MatrixTest {
                 var riseSq = radiusSqOf(rise);
                 var setSq = radiusSqOf(set);
                 var markSq = radiusSqOf(mark);
-                Test.assertMessage(riseSq >= markSq && markSq >= setSq,
+                Test.assertMessage(setSq >= markSq && markSq >= riseSq,
                     "ring " + ring + " at " + at + " must read outward " +
-                    "sunset, mark, sunrise");
+                    "sunrise, mark, sunset");
                 if (mark == rise || mark == set) {
                     withMark++;
                 }
