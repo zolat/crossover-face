@@ -11,6 +11,7 @@
     <string id="ThemeActivity">Activity</string>
     <string id="ThemeBeacon">Beacon</string>
     <string id="ThemePulse">Pulse</string>
+    <string id="ThemeCustom">Custom</string>
     <string id="BackingTitle">Behind hands</string>
     <string id="BackingPrompt">Clears the dots under the hands while the watch is awake</string>
     <string id="AlwaysOnFillTitle">Always-on data</string>
@@ -62,5 +63,7 @@
     <string id="TempAheadHighTitle">Temp ahead: full at</string>
     <string id="TempAheadHighPrompt">Degrees C at which an hour of the temperature-ahead ring is full</string>
     <string id="TempAheadRangeError">Enter a whole number from -20 to 50</string>
+    <string id="ConfigCodeTitle">Config code</string>
+    <string id="ConfigCodePrompt">Paste a code from the web configurator to apply it. This field always shows the watch's current setup, so you can copy it back out.</string>
 
 </strings>

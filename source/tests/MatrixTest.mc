@@ -963,10 +963,15 @@ module MatrixTest {
         Test.assertEqualMessage(StatMap.THEME_NEXT_ID, 9,
             "the next production theme must use ID 9");
 
-        Properties.setValue(StatMap.PROPERTY_THEME, 99);
+        // 99 is Custom (ConfigCodeTest); one past it is out of range.
+        Properties.setValue(StatMap.PROPERTY_THEME, StatMap.THEME_CUSTOM + 1);
         Config.reload();
         Test.assertEqualMessage(StatMap.theme, StatMap.THEME_TERRAIN,
             "an out-of-range value must fall back to Terrain");
+        Properties.setValue(StatMap.PROPERTY_THEME, StatMap.THEME_NEXT_ID);
+        Config.reload();
+        Test.assertEqualMessage(StatMap.theme, StatMap.THEME_TERRAIN,
+            "an unassigned ID below Custom must fall back to Terrain");
 
         for (var retired = StatMap.THEME_RETIRED_FIRST;
              retired <= StatMap.THEME_RETIRED_LAST; retired++) {

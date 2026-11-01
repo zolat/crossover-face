@@ -5,6 +5,7 @@
             <listEntry value="1">@Strings.ThemeActivity</listEntry>
             <listEntry value="7">@Strings.ThemeBeacon</listEntry>
             <listEntry value="8">@Strings.ThemePulse</listEntry>
+            <listEntry value="99">@Strings.ThemeCustom</listEntry>
         </settingConfig>
     </setting>
     <setting propertyKey="@Properties.handBacking" title="@Strings.BackingTitle" prompt="@Strings.BackingPrompt">
@@ -104,5 +105,8 @@
     </setting>
     <setting propertyKey="@Properties.tempAheadHigh" title="@Strings.TempAheadHighTitle" prompt="@Strings.TempAheadHighPrompt">
         <settingConfig type="numeric" min="-20" max="50" errorMessage="@Strings.TempAheadRangeError" />
+    </setting>
+    <setting propertyKey="@Properties.configCode" title="@Strings.ConfigCodeTitle" prompt="@Strings.ConfigCodePrompt">
+        <settingConfig type="alphaNumeric" maxLength="255" />
     </setting>
 </settings>

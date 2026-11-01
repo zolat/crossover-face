@@ -292,13 +292,45 @@ module Palette {
     var rampActive as Array<Number> = [] as Array<Number>;
     var rampAlwaysOn as Array<Number> = [] as Array<Number>;
 
+    //! The theme in force as four colours and three ramp stops, whichever
+    //! table it came from. build() is the only thing that fills it and the only
+    //! thing that reads THEMES or RAMP_STOPS, so a custom theme is a choice of
+    //! *source* here and nothing downstream can tell the difference.
+    var colours as Array<Number> = [] as Array<Number>;
+    var stops as Array<Number> = [] as Array<Number>;
+
     //! One colour of the theme in force, by its index within that theme.
     function themeColour(index as Number) as Number {
-        return THEMES[(StatMap.themeIndex(StatMap.theme) * THEME_COLOURS) +
-                      (index % THEME_COLOURS)];
+        return colours[index % THEME_COLOURS];
+    }
+
+    //! Fill colours and stops from the theme StatMap loaded.
+    function selectTheme() as Void {
+        var chosen = new [THEME_COLOURS] as Array<Number>;
+        var ramp = new [RAMP_POINTS] as Array<Number>;
+        if (StatMap.theme == StatMap.THEME_CUSTOM) {
+            var custom = StatMap.customTheme;
+            for (var i = 0; i < THEME_COLOURS; i++) {
+                chosen[i] = custom[i];
+            }
+            for (var i = 0; i < RAMP_POINTS; i++) {
+                ramp[i] = custom[THEME_COLOURS + i];
+            }
+        } else {
+            var slot = StatMap.themeIndex(StatMap.theme);
+            for (var i = 0; i < THEME_COLOURS; i++) {
+                chosen[i] = THEMES[slot * THEME_COLOURS + i];
+            }
+            for (var i = 0; i < RAMP_POINTS; i++) {
+                ramp[i] = RAMP_STOPS[slot * RAMP_POINTS + i];
+            }
+        }
+        colours = chosen;
+        stops = ramp;
     }
 
     function build() as Void {
+        selectTheme();
         var awake = [] as Array<Number>;
         var asleep = [] as Array<Number>;
         var held = [] as Array<Number>;
@@ -342,10 +374,9 @@ module Palette {
         var rampLifted = [] as Array<Number>;
         // Hoisted: the stops are fixed for the whole ramp, so looking them up
         // per step would pay for the indirection 32 times over for nothing.
-        var stops = StatMap.themeIndex(StatMap.theme) * RAMP_POINTS;
-        var cold = themeColour(RAMP_STOPS[stops]);
-        var mid = themeColour(RAMP_STOPS[stops + 1]);
-        var hot = themeColour(RAMP_STOPS[stops + 2]);
+        var cold = themeColour(stops[0]);
+        var mid = themeColour(stops[1]);
+        var hot = themeColour(stops[2]);
         for (var step = 0; step < RAMP_STEPS; step++) {
             var along = step.toFloat() / (RAMP_STEPS - 1);
             var colour = (along <= 0.5)
