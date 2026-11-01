@@ -359,8 +359,10 @@ module MatrixRenderer {
         var ringStart = DotGrid.ringStart;
         var rings = StatMap.rings;
         var rampTop = Palette.RAMP_STEPS - 1;
-        var markerColour = Palette.markerOf;
-        var overColour = Palette.overOf;
+        // Palette.markerOf and Palette.overOf are read where they are used,
+        // once a ring, rather than hoisted: drawAt()'s frame sits at the test
+        // runner's stack limit whenever build() runs inside it, and those two
+        // slots buy nothing per dot — the dot counter below needs one.
         var dimColour = Palette.dimOf;
         var bandEdge = DotGrid.bandEdge;
         // Which hour block each dot sits in, cached by DotGrid.build(); only
@@ -436,7 +438,10 @@ module MatrixRenderer {
         var half = DotGrid.DOT / 2;
         var lastColour = -1;
         erased = 0;
-        painted = 0;
+        // Counted in a local and published once after the dot loops: the
+        // increment runs on every dot drawn, and a module variable costs a
+        // lookup each time that a local does not.
+        var drew = 0;
         recorded = 0;
         sunsDrawn = 0;
         for (var ring = 0; ring < StatMap.RINGS; ring++) {
@@ -474,7 +479,7 @@ module MatrixRenderer {
             // "not yet in the overflow" is exactly "goal met".
             if (overs[ring]) {
                 weak = strong;
-                strong = overColour[ring];
+                strong = Palette.overOf[ring];
             }
             // The hands, narrowed to this ring. A hand that cannot reach the
             // ring's inner edge never touches it — the hour hand falls short of
@@ -751,7 +756,7 @@ module MatrixRenderer {
                     }
                     dc.drawLine(x - ax, y - ay, x + ax, y + ay);
                     dc.drawLine(x - bx, y - by, x + bx, y + by);
-                    painted++;
+                    drew++;
                 }
                 continue;
             }
@@ -882,9 +887,10 @@ module MatrixRenderer {
                 }
                 dc.drawLine(x - ax, y - ay, x + ax, y + ay);
                 dc.drawLine(x - bx, y - by, x + bx, y + by);
-                painted++;
+                drew++;
             }
         }
+        painted = drew;
 
         drawSuns(dc, dirty, centreX, centreY, hasBacking ? axes : null);
 
@@ -915,7 +921,7 @@ module MatrixRenderer {
                 continue;
             }
             // A waterline keeps the bright mix; a reading takes the soft one.
-            dc.setColor(overs[ring] ? markerColour[ring]
+            dc.setColor(overs[ring] ? Palette.markerOf[ring]
                                     : Palette.softMarkOf[ring],
                         Graphics.COLOR_TRANSPARENT);
             dc.fillRectangle(centreX + dx - half, centreY + dy - half,
