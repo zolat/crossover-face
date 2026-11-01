@@ -4,6 +4,7 @@ import { type Config, encode, THEME_CUSTOM, tryDecode } from "../codec/configCod
 import { type Device, type Lattice, loadLattice } from "../face/lattice";
 import { alwaysOnWorst, BUDGET, relativeLuminance } from "../face/luminance";
 import { build, fromHex, hex, themeColours } from "../face/palette";
+import { randomTheme } from "../face/randomTheme";
 import { type Mode, render } from "../face/render";
 import { schema, setting } from "../face/schema";
 import { themeWarnings } from "../face/warnings";
@@ -217,6 +218,10 @@ export function mountApp(root: HTMLElement, store: Store, devices: Device[]) {
       choices("Watch", devices.map((entry) => ({ value: entry.id, label: DEVICE_NAMES[entry.id] ?? entry.id })),
         state.device, (value) => store.set({ device: String(value) })),
       choices("Colours", themeOptions, config.theme, (value) => set({ theme: Number(value) })),
+      h("button", { class: "quiet randomise", type: "button", "data-key": "randomise", onclick: () => {
+        const theme = randomTheme();
+        set({ theme: THEME_CUSTOM, customColours: theme.colours, customRamp: theme.ramp });
+      } }, "Randomise colours"),
       config.theme === THEME_CUSTOM ? builder(config) : null,
       h("h2", {}, "Rings, outside in"),
       h("div", { class: "rings" }, ...RING_KEYS.map((key, ring) =>

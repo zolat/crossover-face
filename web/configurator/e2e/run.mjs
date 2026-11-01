@@ -141,6 +141,18 @@ try {
     (await code()) === python({ ...PAGE_START, theme: 99, ring2: 7, customColours: colours, customRamp: [1, 0, 3] }), await code());
   await page.screenshot({ path: join(shots, "desktop-custom.png") });
 
+  const beforeRandom = await code();
+  await page.click(".randomise");
+  const randomised = await code();
+  const decodedRandom = JSON.parse(execFileSync("python3", ["-m", "simctl.configcode", "decode", randomised], {
+    cwd: repo, env: { ...process.env, PYTHONPATH: join(repo, "tools") }, encoding: "utf8" }));
+  check("Randomise colours gives a new custom theme", randomised !== beforeRandom && decodedRandom.theme === 99, randomised);
+  check("…that nothing warns about", (await page.$$(".warnings p")).length === 0);
+  check("…and keeps focus on the button", await page.evaluate(() => document.activeElement?.classList.contains("randomise")));
+  check("…and changes nothing but the colours", randomised !== beforeRandom &&
+    python({ ...decodedRandom, customColours: colours, customRamp: [1, 0, 3] }) === beforeRandom);
+  await page.screenshot({ path: join(shots, "desktop-random.png") });
+
   await page.click(".actions .primary");
   await new Promise((r) => setTimeout(r, 200));
   check("Copy code puts the code on the clipboard",

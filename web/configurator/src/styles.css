@@ -94,6 +94,7 @@ button { font: 600 15px "Hanken Grotesk", sans-serif; cursor: pointer; }
 .primary { background: var(--text); color: #000; border: 0; border-radius: 999px; padding: 9px 18px; }
 .quiet { background: none; color: var(--quiet); border: 0; padding: 4px 0; text-decoration: underline; text-underline-offset: 3px; font-weight: 500; }
 .quiet:hover { color: var(--text); }
+.randomise { margin-top: 14px; }
 .status { color: var(--quiet); font-size: 14px; }
 .paste { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 14px; }
 .paste label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
