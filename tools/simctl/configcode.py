@@ -235,11 +235,40 @@ def sync_monkeyc(check: bool = False) -> bool:
     return False
 
 
+# --- pushing a code to a simulator --------------------------------------------
+
+
+def push(code: str, instance: str | None, device: str) -> dict:
+    """Put a code in a simulator's ``configCode`` and restart the face to apply it.
+
+    Only the code is written, not the settings it carries: the face applies it at start
+    through ConfigCode.sync(), so this exercises the same path a code pasted into Garmin
+    Connect does. The canonical spelling is written, after it has decoded here.
+    """
+    from simctl import instance as instances
+    from simctl import settings as settings_module
+    from simctl.runner import Runner
+
+    canonical = encode(decode(code))
+    runner = Runner(instances.resolve(instance), device=device)
+    schema = settings_module.Schema.load(prg=runner.prg)
+    written = runner.write_settings({"configCode": canonical}, schema)
+    if not written["ok"]:
+        return written
+    loaded = runner.load(build=False)
+    return {"ok": loaded.get("ok", False), "code": canonical, "load": loaded}
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("decode").add_argument("code")
     sub.add_parser("encode").add_argument("config", help="JSON object, or - for stdin")
+    pusher = sub.add_parser("push", help="apply a code on a simulator (build first)")
+    pusher.add_argument("code")
+    pusher.add_argument("--instance", default="shared",
+                        help="'shared' (default, takes the simulator lock) or a private name")
+    pusher.add_argument("--device", default="instinctcrossoveramoled")
     mc = sub.add_parser("vectors-mc", help="write the vectors into ConfigCodeTest.mc")
     mc.add_argument("--check", action="store_true", help="only report whether it is current")
     args = parser.parse_args(argv)
@@ -251,6 +280,10 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         return 0
     try:
+        if args.command == "push":
+            result = push(args.code, args.instance, args.device)
+            print(json.dumps(result, indent=2, default=str))
+            return 0 if result.get("ok") else 1
         if args.command == "decode":
             print(json.dumps(decode(args.code), indent=2))
         else:
