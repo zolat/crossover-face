@@ -228,6 +228,21 @@ class ConfigCodeVectors(unittest.TestCase):
             configcode.decode(code[:10] + "!" + code[10:])
 
 
+class GeneratedForTheWeb(unittest.TestCase):
+    """The web configurator reads files generated from the face; they must be current."""
+
+    def _check(self, script):
+        result = subprocess.run([sys.executable, str(REPO / "tools" / script), "--check"],
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_the_exported_lattices_are_current(self):
+        self._check("geometry_export.py")
+
+    def test_the_exported_face_schema_is_current(self):
+        self._check("face_schema_export.py")
+
+
 class SchemaValidation(unittest.TestCase):
     def test_rejects_a_value_outside_the_list(self):
         with self.assertRaises(SettingsError):

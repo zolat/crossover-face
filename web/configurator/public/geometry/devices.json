@@ -1,0 +1,27 @@
+[
+  {
+    "id": "instinctcrossoveramoled",
+    "screen": 390,
+    "drawnHands": false
+  },
+  {
+    "id": "epix2pro42mm",
+    "screen": 390,
+    "drawnHands": true
+  },
+  {
+    "id": "epix2",
+    "screen": 416,
+    "drawnHands": true
+  },
+  {
+    "id": "epix2pro47mm",
+    "screen": 416,
+    "drawnHands": true
+  },
+  {
+    "id": "epix2pro51mm",
+    "screen": 454,
+    "drawnHands": true
+  }
+]
