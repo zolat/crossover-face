@@ -730,6 +730,37 @@ There is no jungle to pick a `Lattice` in a script, so `mockup.LATTICES` is one 
 field rather than composited over it, and `composite()` skips the overlay because those
 profiles carry no `analogHands`.
 
+### The config code carries every setting, and the web configurator reads them
+
+`configCode` is a text setting holding the whole configuration — every setting plus the
+custom theme — as a 38-character code; `docs/config-code.md` is the format. It is a
+**transport, not a store**: `ConfigCode.sync()` runs at start and on every phone-side
+change, applies the field when it differs from `Storage` `lastCode` (a paste), and then
+rewrites the field from `StatMap` so Garmin Connect always shows the live configuration.
+The menu republishes after each choice. Three things are easy to break:
+
+- **A new setting is a new code version.** Fields are only ever appended, and the codec
+  exists three times — `source/settings/ConfigCode.mc`, `tools/simctl/configcode.py`,
+  `web/configurator/src/codec/configCode.ts` — all held to
+  `tools/testdata/config-codes.json`. Change that file first; `python3 -m
+  simctl.configcode vectors-mc` regenerates `ConfigCodeTest.mc`'s copy, and a simctl test
+  fails while it is stale.
+- **The custom theme (ID 99) lives in `Application.Storage`, not Properties**, because it
+  has no phone-side field and a property Garmin Connect does not know about is one a
+  phone save has no reason to keep. `Palette.build()` picks a working set of four colours
+  and three stops from `THEMES` or from Storage; nothing per-frame changed.
+- **No colours can cross the always-on budget**: all-white measures 8.99% at 390 and 9.10%
+  at 454 with every mark and sun dot. `anAllWhiteCustomThemeFitsTheAlwaysOnBudget` holds
+  it, which is why the watch has no clamp. Raise the dot count or `LIFT` and that stops
+  being true.
+
+The web configurator (`web/configurator/`, `make web-test`) never carries a hand copy of
+the face: `tools/face_schema_export.py` reads settings, labels, themes and tier factors from
+the files below, and `tools/geometry_export.py` writes each lattice the way `DotGrid` builds
+it (pinned by `GeometryTest.mc`). Both refuse to be stale under `make test-simctl`, so a
+settings change means re-running them. `make push-config CODE=...` applies a code on the
+simulator through the face's own `sync()`.
+
 ### Settings live in five places that must stay in step
 
 Stored values are **list indices**, so `resources/properties.xml`, `resources/settings/settings.xml`,
@@ -818,6 +849,7 @@ branching while it constructs the ramp.
 Persisted theme IDs are deliberately sparse. Terrain remains `0`, Activity remains `1`, and
 IDs `2` through `6` are retired forever. Any watch still storing one of them falls back to
 Terrain. Beacon uses `7`, Pulse uses `8`, and the next production theme must use `9`.
+`99` is Custom — the wearer's colours from a config code — and is not a production theme.
 `StatMap.THEME_IDS` maps those sparse persisted IDs to dense Palette table slots. Never reuse a
 retired ID or index a palette table directly by the persisted ID.
 

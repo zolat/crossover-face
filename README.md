@@ -374,6 +374,23 @@ app. `AppBase.getSettingsView()` provides this (`source/settings/`); watch faces
 normally accept input, and that hook is the sanctioned exception. The same settings appear
 in Garmin Connect or Garmin Express if the face is ever installed from the store.
 
+### Config code and the web configurator
+
+**Settings → Config code** holds the whole configuration — every setting below plus a
+custom theme — as one 38-character code. Paste a code there in Garmin Connect and the
+face applies it; the field always shows the watch's current setup, so it can be copied
+back out. `web/configurator/` builds codes in a browser, with a preview drawn on the
+watch's own dot layout:
+
+```sh
+cd web/configurator && npm ci && npm run dev     # the configurator
+make push-config CODE=<code>                      # apply a code on the simulator
+make web-test                                     # unit tests + a real-browser run
+```
+
+The format is `docs/config-code.md`. A sideloaded face gets no Garmin Connect settings,
+so there the code arrives by `make push-config` (simulator) or the on-watch menu.
+
 ### Colour theme
 
 Which set of colours the rings carry. Every colour on the face comes from the theme's four —
