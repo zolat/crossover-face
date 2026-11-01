@@ -381,22 +381,19 @@ module Source {
         out[at + 1] = NO_MARKER;
     }
 
-    //! The outermost ring a block source may be assigned to.
+    //! The innermost ring a block source may be assigned to (index 0 is the
+    //! outermost, so this is "ring 3" in the menu).
     //!
-    //! It needs twelve blocks, each three sub-bands deep and a good handful of
-    //! dots wide, and only the outer two rings have them: 436 and 340 dots,
-    //! which at a 22.5-degree block is 26.7 and 20.0 dots an hour. Ring 2 has
-    //! 224 and ring 3 has 112, where a sub-band is one or two dots wide and the
-    //! hours stop being countable.
-    //!
-    //! The block *level* sharpens that on the ring where it bites hardest.
-    //! Its bottom rungs are a fraction of one band's width, and on the
-    //! innermost ring sixteen (block, level) pairs light no dot at all — the
-    //! scale is not merely cramped down there, part of it is invisible. Ring 2
-    //! draws every rung, so its exclusion rests on the dot count above and on
-    //! nothing else. onlyTheOuterTwoRingsResolveTwelveHoursInThreeBands
-    //! measures both.
-    const BLOCKS_TOP_RING = 1;
+    //! It needs twelve blocks, each three sub-bands deep and enough dots wide
+    //! to read. Rings 0 and 1 have 436 and 340 dots — 26.7 and 20.0 an hour at
+    //! a 22.5-degree block — and their thinnest sub-band holds 8 and 6. Ring 2
+    //! has 224, and its thinnest sub-band holds 4: coarser, but it draws every
+    //! rung of the level scale, so it was let in as a trade the wearer can
+    //! choose rather than kept out on a threshold. Ring 3 has 112, its thinnest
+    //! sub-band holds 2, and sixteen (block, level) pairs light no dot at all —
+    //! part of the scale is invisible there, which no choice makes readable.
+    //! blockRingsResolveTwelveHoursInThreeBands measures both.
+    const BLOCKS_TOP_RING = 2;
 
     //! Does this source draw twelve blocks rather than a span?
     //!

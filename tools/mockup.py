@@ -360,6 +360,16 @@ def partial_half_for(level: int) -> float:
     return (HOUR_FILL / 2) * (((level * HOUR_BANDS) % HOUR_LEVELS) / HOUR_LEVELS)
 
 
+# Mirrors HourBands.WINDOW_FLOOR: only ring 2 (menu ring 3) is floored.
+WINDOW_FLOOR = (0.0, 0.0, 0.12, 0.0)
+
+
+def partial_half_on(level: int, ring: int) -> float:
+    """Mirrors HourBands.partialHalfOn: floored, but zero stays zero."""
+    window = partial_half_for(level)
+    return WINDOW_FLOOR[ring] if 0.0 < window < WINDOW_FLOOR[ring] else window
+
+
 def hourly_colour(ring, position, dist_sq, levels, always_on, held_back):
     """One dot of a block ring. Mirrors MatrixRenderer's second inner loop.
 
@@ -387,7 +397,7 @@ def hourly_colour(ring, position, dist_sq, levels, always_on, held_back):
     bands = full_bands_for(level)
     if bands > 0 and dist_sq <= band_edge(ring, bands):
         return colour
-    window = partial_half_for(level)
+    window = partial_half_on(level, ring)
     if (window > 0.0 and dist_sq <= band_edge(ring, bands + 1)
             and abs(into - HOUR_CENTRE) < window):
         return colour                       # the partial band

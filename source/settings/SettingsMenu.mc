@@ -318,7 +318,7 @@ function sequential(count as Number) as Array<Number> {
 //! The labels for the sources *this ring* may be assigned to, in picker order.
 //!
 //! Per ring rather than global, because the hourly forecast needs more dots per
-//! hour than the inner two rings have. Built from Source.offeredFor() so the
+//! hour than the innermost ring has. Built from Source.offeredFor() so the
 //! labels and the values it is handed beside cannot come out of step — a picker
 //! whose two lists disagree stores the wrong source with no symptom at all.
 function offeredLabelsFor(ring as Number) as Array<ResourceId> {

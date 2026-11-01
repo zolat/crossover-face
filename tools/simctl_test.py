@@ -8,12 +8,15 @@ rather than value equality — that is what proves nothing in the format is bein
 """
 
 import importlib
+import fcntl
 import os
 import re
+import signal
 import struct
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from collections import OrderedDict
 from pathlib import Path
@@ -25,6 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from simctl import instance as instances
 from simctl import paths, setfile
 from simctl import lock as simctl_lock
+from simctl.session import LEASE_FILE, SessionInstances
 from simctl.runner import Runner, parse_tests, read_crash
 from simctl.settings import Schema, SettingsError, describe, read, reset, write
 
@@ -322,9 +326,21 @@ class LockReentrancy(unittest.TestCase):
 
 class InstanceNaming(unittest.TestCase):
     def test_client_namespace_separates_the_same_checkout(self):
-        with mock.patch.dict(os.environ, {"CROSSOVER_SIM_NAMESPACE": "codex"}):
+        with mock.patch.dict(
+            os.environ,
+            {"CROSSOVER_SIM_NAMESPACE": "codex", "CROSSOVER_SIM_SESSION": ""},
+        ):
             self.assertEqual(
                 instances.default_name(), f"codex-{paths.repo_root().name}"
+            )
+
+    def test_mcp_session_separates_parallel_agents_in_the_same_checkout(self):
+        with mock.patch.dict(
+            os.environ,
+            {"CROSSOVER_SIM_NAMESPACE": "codex", "CROSSOVER_SIM_SESSION": "31415"},
+        ):
+            self.assertEqual(
+                instances.default_name(), f"codex-{paths.repo_root().name}-31415"
             )
 
     def test_each_checkout_gets_its_own_deterministic_port(self):
@@ -349,6 +365,406 @@ class InstanceNaming(unittest.TestCase):
 
     def test_isolated_instances_have_separate_device_filesystems(self):
         self.assertNotEqual(instances.isolated("alpha").root, instances.isolated("bravo").root)
+
+
+class InstanceProcessSafety(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        base = Path(self.temporary.name)
+        self.target = instances.Instance(
+            name="safe", port=13555, home=base / "home", tmpdir=base / "tmp"
+        )
+        self.target.home.mkdir()
+
+    def _write_pid(self, pid: int = 4321):
+        self.target.pid_file.write_text(f"{pid}\0")
+
+    def test_a_recycled_pid_for_another_executable_is_rejected_and_removed(self):
+        self._write_pid()
+        with (
+            mock.patch.object(instances, "_alive", return_value=True),
+            mock.patch.object(instances, "_simulator_process", return_value=False),
+        ):
+            self.assertIsNone(self.target.pid())
+        self.assertFalse(self.target.pid_file.exists())
+
+    def test_stop_refuses_a_simulator_that_does_not_own_the_instance_port(self):
+        with (
+            mock.patch.object(self.target, "pid", return_value=4321),
+            mock.patch.object(instances, "_owns_port", return_value=False),
+            mock.patch.object(instances.os, "kill") as kill,
+        ):
+            self.assertFalse(self.target.stop())
+        kill.assert_not_called()
+
+    def test_stop_treats_an_exit_between_validation_and_signal_as_success(self):
+        with (
+            mock.patch.object(self.target, "pid", return_value=4321),
+            mock.patch.object(instances, "_owns_port", return_value=True),
+            mock.patch.object(instances.os, "kill", side_effect=ProcessLookupError),
+        ):
+            self.assertTrue(self.target.stop())
+
+    def test_stop_reaps_a_child_without_waiting_for_the_timeout(self):
+        process = mock.Mock()
+        process.pid = 4321
+        process.poll.return_value = None
+        self.target._process = process
+        self.assertTrue(self.target.stop(timeout=10))
+        process.terminate.assert_called_once_with()
+        self.assertEqual(process.wait.call_count, 1)
+        self.assertLessEqual(process.wait.call_args.kwargs["timeout"], 10)
+        self.assertIsNone(self.target._process)
+
+    def test_startup_failure_can_stop_its_child_without_a_pid_file(self):
+        process = mock.Mock()
+        process.pid = 4321
+        process.poll.return_value = None
+        self.target._process = process
+        self.assertFalse(self.target.pid_file.exists())
+        self.assertTrue(self.target.stop(timeout=1))
+        process.terminate.assert_called_once_with()
+
+
+class SessionInstanceLifecycle(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.patches = [
+            mock.patch.object(instances, "SANDBOX_HOME", Path(self.temporary.name)),
+            mock.patch.object(instances, "client_name", return_value="codex-garmin"),
+            mock.patch.object(instances, "default_name", return_value="codex-garmin-123"),
+            mock.patch.object(instances, "_listening", return_value=False),
+        ]
+        for patcher in self.patches:
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def test_default_is_reused_and_named_instances_are_session_scoped(self):
+        session = SessionInstances()
+        default = session.resolve(None)
+        self.assertIs(default, session.resolve(None))
+        self.assertEqual(default.name, "codex-garmin-123")
+        named = session.resolve("comparison")
+        self.assertEqual(named.name, "codex-garmin-123-comparison")
+        self.assertIs(named, session.resolve(named.name))
+        session.forget(default)
+        session.forget(named)
+
+    def test_forget_removes_the_lease_after_release(self):
+        session = SessionInstances()
+        target = session.resolve(None)
+        marker = target.home.parent / LEASE_FILE
+        self.assertTrue(marker.exists())
+        session.forget(target)
+        self.assertFalse(marker.exists())
+        self.assertEqual(session.tracked(), [])
+
+    def test_shutdown_can_discard_a_session_scoped_sandbox(self):
+        session = SessionInstances()
+        target = session.resolve(None)
+        target.prepare()
+        base = target.home.parent
+        self.assertTrue(base.exists())
+        session.forget(target, remove_sandbox=True)
+        self.assertFalse(base.exists())
+
+    def test_a_duplicate_session_cannot_claim_the_same_instance(self):
+        first = SessionInstances()
+        target = first.resolve(None)
+        second = SessionInstances()
+        with self.assertRaisesRegex(RuntimeError, "owned by another MCP session"):
+            second.resolve(None)
+        first.forget(target)
+
+    def test_shared_usage_is_tracked_for_shutdown_without_an_instance_lease(self):
+        session = SessionInstances()
+        target = session.resolve("shared")
+        self.assertEqual(session.tracked(), [target])
+        self.assertFalse(target.isolated)
+        session.forget(target)
+        self.assertEqual(session.tracked(), [])
+
+    def test_complete_operations_on_one_instance_are_serialized(self):
+        session = SessionInstances()
+        first_entered = threading.Event()
+        release_first = threading.Event()
+        second_entered = threading.Event()
+
+        def first_operation():
+            with session.use(None):
+                first_entered.set()
+                release_first.wait(timeout=2)
+
+        def second_operation():
+            first_entered.wait(timeout=2)
+            with session.use(None):
+                second_entered.set()
+
+        first_thread = threading.Thread(target=first_operation)
+        second_thread = threading.Thread(target=second_operation)
+        first_thread.start()
+        second_thread.start()
+        self.assertTrue(first_entered.wait(timeout=2))
+        self.assertFalse(second_entered.wait(timeout=0.05))
+        release_first.set()
+        self.assertTrue(second_entered.wait(timeout=2))
+        first_thread.join(timeout=2)
+        second_thread.join(timeout=2)
+        session.forget(session.resolve(None))
+
+    def test_hash_collisions_reserve_different_ports_across_sessions(self):
+        with (
+            mock.patch.object(instances, "_port_for", return_value=13000),
+            mock.patch.object(instances, "default_name", return_value="codex-garmin-101"),
+        ):
+            first = SessionInstances()
+            first_target = first.resolve(None)
+        with (
+            mock.patch.object(instances, "_port_for", return_value=13000),
+            mock.patch.object(instances, "default_name", return_value="codex-garmin-202"),
+        ):
+            second = SessionInstances()
+            second_target = second.resolve(None)
+        self.assertEqual(first_target.port, 13000)
+        self.assertEqual(second_target.port, 13001)
+        first.forget(first_target)
+        second.forget(second_target)
+
+    def test_a_dead_servers_unlocked_instance_is_reaped(self):
+        base = Path(self.temporary.name) / "codex-garmin-99"
+        base.mkdir()
+        marker = base / LEASE_FILE
+        marker.write_text("99\n")
+        (base / "port").write_text("13000\n")
+        with (
+            mock.patch.object(instances.Instance, "stop", return_value=True) as stop,
+            mock.patch.object(instances.Instance, "is_running", return_value=False),
+        ):
+            session = SessionInstances()
+        self.assertEqual(session.reaped, ["codex-garmin-99"])
+        stop.assert_called_once()
+        self.assertFalse(base.exists())
+
+    def test_a_live_servers_locked_instance_is_left_alone(self):
+        base = Path(self.temporary.name) / "codex-garmin-99"
+        base.mkdir()
+        marker = base / LEASE_FILE
+        with marker.open("a+b") as live_lease:
+            fcntl.flock(live_lease.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            with mock.patch.object(instances.Instance, "stop") as stop:
+                session = SessionInstances()
+            stop.assert_not_called()
+        self.assertEqual(session.reaped, [])
+        self.assertTrue(marker.exists())
+
+    def test_one_reap_failure_does_not_block_the_remaining_instances(self):
+        for name in ("codex-garmin-10", "codex-garmin-20"):
+            base = Path(self.temporary.name) / name
+            base.mkdir()
+            (base / LEASE_FILE).write_text("old\n")
+            (base / "port").write_text("13000\n")
+        with mock.patch.object(
+            instances.Instance, "stop", side_effect=[OSError("denied"), True]
+        ):
+            session = SessionInstances()
+        self.assertEqual(len(session.reap_errors), 1)
+        self.assertIn("codex-garmin-10", session.reap_errors[0])
+        self.assertEqual(session.reaped, ["codex-garmin-20"])
+
+    def test_reaper_does_not_touch_a_port_reserved_by_a_new_owner(self):
+        base = Path(self.temporary.name) / "codex-garmin-99"
+        base.mkdir()
+        (base / LEASE_FILE).write_text("old\n")
+        (base / "port").write_text("13000\n")
+        port_dir = Path(self.temporary.name) / instances.PORT_LOCK_DIR
+        port_dir.mkdir()
+        with (port_dir / "13000.lock").open("a+b") as current_owner:
+            fcntl.flock(current_owner.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            with mock.patch.object(instances.Instance, "stop") as stop:
+                session = SessionInstances()
+            stop.assert_not_called()
+        self.assertEqual(session.reaped, [])
+        self.assertTrue(base.exists())
+
+    def test_unsafe_instance_name_is_rejected(self):
+        session = SessionInstances()
+        with self.assertRaises(ValueError):
+            session.resolve("../another-checkout")
+
+    def test_a_collision_adjusted_port_is_persisted_for_reuse(self):
+        with (
+            mock.patch.object(instances, "_port_for", return_value=13000),
+            mock.patch.object(
+                instances, "_listening", side_effect=lambda port: port == 13000
+            ),
+        ):
+            first = instances.isolated("codex-garmin-123-collision")
+            first.prepare()
+            again = instances.isolated("codex-garmin-123-collision")
+        self.assertEqual(first.port, 13001)
+        self.assertEqual(again.port, 13001)
+
+
+class RunnerLifecycle(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+
+    def _target(self, isolated: bool = True):
+        target = mock.Mock(spec=instances.Instance)
+        target.name = "session"
+        target.isolated = isolated
+        target.state_dir = Path(self.temporary.name)
+        target.stop.return_value = True
+        target._sideload_process = None
+        return target
+
+    def test_release_stops_an_isolated_simulator(self):
+        target = self._target()
+        result = Runner(target, prg="face.prg").release()
+        target.stop.assert_called_once_with()
+        self.assertTrue(result["simulator_stopped"])
+
+    def test_release_never_signals_a_recycled_sideload_pid(self):
+        target = self._target()
+        runner = Runner(target, prg="face.prg")
+        runner._child_pid_file.write_text("4321\n")
+        with mock.patch("simctl.runner.os.killpg") as kill_group:
+            result = runner.release()
+        kill_group.assert_not_called()
+        self.assertFalse(result["stopped"])
+        self.assertFalse(runner._child_pid_file.exists())
+
+    def test_release_stops_a_retained_sideload_child(self):
+        target = self._target()
+        process = mock.Mock()
+        process.pid = 4321
+        process.poll.return_value = None
+        target._sideload_process = process
+        runner = Runner(target, prg="face.prg")
+        runner._child_pid_file.write_text("4321\n")
+        with (
+            mock.patch("simctl.runner.os.getpgid", return_value=4321),
+            mock.patch("simctl.runner.os.killpg") as kill_group,
+        ):
+            result = runner.release()
+        kill_group.assert_called_once_with(4321, signal.SIGTERM)
+        process.wait.assert_called_once_with(timeout=2.0)
+        self.assertTrue(result["stopped"])
+
+    def test_shared_release_leaves_a_foreign_sideload_alone(self):
+        target = self._target(isolated=False)
+        process = mock.Mock()
+        process.pid = 4321
+        process.poll.return_value = None
+        target._sideload_process = process
+        runner = Runner(target, prg="face.prg")
+        runner._child_pid_file.write_text("4321\n")
+        runner.lock = mock.Mock()
+        runner.lock.held_by_us.return_value = False
+        with mock.patch("simctl.runner.os.killpg") as kill_group:
+            result = runner.release()
+        kill_group.assert_not_called()
+        self.assertFalse(result["stopped"])
+        self.assertTrue(runner._child_pid_file.exists())
+
+    def test_sideload_stop_failure_still_stops_simulator_and_releases_lock(self):
+        target = self._target()
+        runner = Runner(target, prg="face.prg")
+        runner.lock = mock.Mock()
+        runner.lock.held_by_us.return_value = True
+        with mock.patch.object(
+            runner, "_stop_sideload", side_effect=PermissionError("denied")
+        ):
+            result = runner.release()
+        target.stop.assert_called_once_with()
+        runner.lock.release.assert_called_once_with()
+        self.assertEqual(result["cleanup_errors"], ["could not stop sideload: denied"])
+
+    def test_release_never_stops_the_shared_simulator(self):
+        target = self._target(isolated=False)
+        runner = Runner(target, prg="face.prg")
+        runner.lock = None
+        result = runner.release()
+        target.stop.assert_not_called()
+        self.assertFalse(result["simulator_stopped"])
+
+    def test_a_failed_private_load_releases_the_simulator(self):
+        target = self._target()
+        target.prepare.return_value = None
+        target.start.side_effect = RuntimeError("launch failed")
+        runner = Runner(target, prg="face.prg")
+        with self.assertRaisesRegex(RuntimeError, "launch failed"):
+            runner.load(build=False)
+        target.stop.assert_called_once_with()
+
+    def test_a_failed_shared_load_releases_its_lock(self):
+        target = self._target(isolated=False)
+        target.prepare.return_value = None
+        target.start.side_effect = RuntimeError("launch failed")
+        runner = Runner(target, prg="face.prg")
+        runner.lock = mock.Mock()
+        runner.lock.acquire.return_value = True
+        runner.lock.held_by_us.return_value = True
+        with self.assertRaisesRegex(RuntimeError, "launch failed"):
+            runner.load(build=False)
+        runner.lock.release.assert_called_once_with()
+
+    def test_a_test_only_simulator_is_stopped_after_the_suite(self):
+        target = self._target()
+        target.is_running.return_value = False
+        target.root = Path(self.temporary.name)
+        runner = Runner(target, prg="face.prg")
+        completed = subprocess.CompletedProcess(
+            args=["make", "test"], returncode=0,
+            stdout="Ran 1 test\nPASSED (passed=1, failed=0, errors=0)\n", stderr="",
+        )
+        with (
+            mock.patch.object(runner, "_make_overrides", return_value=[]),
+            mock.patch.object(runner, "_make_environment", return_value={}),
+            mock.patch("simctl.runner.subprocess.run", return_value=completed),
+        ):
+            report = runner.run_tests()
+        self.assertTrue(report.ok)
+        target.stop.assert_called_once_with()
+
+    def test_tests_reuse_an_already_running_simulator(self):
+        target = self._target()
+        target.is_running.return_value = True
+        target.root = Path(self.temporary.name)
+        runner = Runner(target, prg="face.prg")
+        completed = subprocess.CompletedProcess(
+            args=["make", "test"], returncode=0,
+            stdout="Ran 1 test\nPASSED (passed=1, failed=0, errors=0)\n", stderr="",
+        )
+        with (
+            mock.patch.object(runner, "_make_overrides", return_value=[]),
+            mock.patch.object(runner, "_make_environment", return_value={}),
+            mock.patch("simctl.runner.subprocess.run", return_value=completed),
+        ):
+            report = runner.run_tests()
+        self.assertTrue(report.ok)
+        target.stop.assert_not_called()
+
+    def test_an_mcp_owned_test_simulator_is_kept_for_the_session(self):
+        target = self._target()
+        target.is_running.return_value = False
+        target.root = Path(self.temporary.name)
+        runner = Runner(target, prg="face.prg")
+        completed = subprocess.CompletedProcess(
+            args=["make", "test"], returncode=0,
+            stdout="Ran 1 test\nPASSED (passed=1, failed=0, errors=0)\n", stderr="",
+        )
+        with (
+            mock.patch.object(runner, "_make_overrides", return_value=[]),
+            mock.patch.object(runner, "_make_environment", return_value={}),
+            mock.patch("simctl.runner.subprocess.run", return_value=completed),
+        ):
+            report = runner.run_tests(keep_running=True)
+        self.assertTrue(report.ok)
+        target.stop.assert_not_called()
 
 
 class SharedModeLocking(unittest.TestCase):
@@ -414,6 +830,7 @@ class SharedModeLocking(unittest.TestCase):
     def test_an_isolated_run_never_touches_the_shared_lock(self):
         overrides = Runner(instances.isolated("alpha"))._make_overrides()
         self.assertIn("SIM_LOCK=true", overrides)
+        self.assertTrue(any(value.startswith("SIM_PORT=") for value in overrides))
         self.assertIsNone(Runner(instances.isolated("alpha")).lock)
 
     def test_shared_mode_has_a_lock_and_isolated_does_not(self):

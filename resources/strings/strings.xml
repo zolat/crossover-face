@@ -1,7 +1,7 @@
 <strings xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://developer.garmin.com/downloads/connect-iq/resources.xsd">
-    <string id="AppName">Crossover Face</string>
+    <string id="AppName">Cross Matrix</string>
 
-    <string id="SettingsTitle">Crossover Face</string>
+    <string id="SettingsTitle">Cross Matrix</string>
     <string id="InUse">In use</string>
     <string id="VersionTitle">Version</string>
 

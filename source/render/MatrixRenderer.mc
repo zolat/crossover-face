@@ -359,10 +359,15 @@ module MatrixRenderer {
         var ringStart = DotGrid.ringStart;
         var rings = StatMap.rings;
         var rampTop = Palette.RAMP_STEPS - 1;
-        var markerColour = Palette.markerOf;
-        var overColour = Palette.overOf;
+        // Palette.markerOf and Palette.overOf are read where they are used,
+        // once a ring, rather than hoisted: drawAt()'s frame sits at the test
+        // runner's stack limit whenever build() runs inside it, and those two
+        // slots buy nothing per dot — the dot counter below needs one.
         var dimColour = Palette.dimOf;
         var bandEdge = DotGrid.bandEdge;
+        // Which hour block each dot sits in, cached by DotGrid.build(); only
+        // the block loop reads it.
+        var blockAt = DotGrid.blockAt;
 
         // Unpack the hand axes once. With the hands on, handAt() is the only
         // call left in the dot loop; reading its four floats out of an array
@@ -433,7 +438,10 @@ module MatrixRenderer {
         var half = DotGrid.DOT / 2;
         var lastColour = -1;
         erased = 0;
-        painted = 0;
+        // Counted in a local and published once after the dot loops: the
+        // increment runs on every dot drawn, and a module variable costs a
+        // lookup each time that a local does not.
+        var drew = 0;
         recorded = 0;
         sunsDrawn = 0;
         for (var ring = 0; ring < StatMap.RINGS; ring++) {
@@ -471,7 +479,7 @@ module MatrixRenderer {
             // "not yet in the overflow" is exactly "goal met".
             if (overs[ring]) {
                 weak = strong;
-                strong = overColour[ring];
+                strong = Palette.overOf[ring];
             }
             // The hands, narrowed to this ring. A hand that cannot reach the
             // ring's inner edge never touches it — the hour hand falls short of
@@ -555,7 +563,7 @@ module MatrixRenderer {
                         continue;
                     }
                     var full = HourBands.fullBandsFor(level);
-                    var window = HourBands.partialHalfFor(level);
+                    var window = HourBands.partialHalfOn(level, ring);
                     blockFull[b] = (full == 0) ? 0 : bandEdge[edgeBase + full - 1];
                     // A level landing exactly on a band edge has no partial
                     // band, and that is also what keeps the lookup in range:
@@ -719,26 +727,32 @@ module MatrixRenderer {
                     if (hand != NO_HAND) {
                         colour = handColour[hand];
                     } else {
-                        // HourBands.litAt()'s body, inlined — the same trade
-                        // litBetween gets, and the same obligation: HourBands
-                        // keeps the readable definition and a test pins the two
-                        // together at the block edge, the gutter, every band
-                        // edge and both sides of the partial band's window.
-                        var at = positionOf[i] * HourBands.HOURS;
-                        var block = at.toNumber();
-                        var into = at - block;
-                        var radiusSq = dx * dx + dy * dy;
-                        if (into < HourBands.LEAD ||
-                                into >= HourBands.TRAIL) {
+                        // HourBands.litInBlock()'s body, inlined — the same
+                        // trade litBetween gets, and the same obligation:
+                        // HourBands keeps the readable definition and
+                        // theCachedBlockCodeLightsWhatLitAtDoes pins it to
+                        // litAt() on every dot. The block and the gutter are
+                        // read from DotGrid.blockAt rather than worked out per
+                        // dot, which was a multiply, a toNumber() and two
+                        // comparisons on every dot of every block ring; only a
+                        // dot inside the partial band's radius still pays for
+                        // how far into its block it sits.
+                        var block = blockAt[i];
+                        if (block == HourBands.GUTTER) {
                             colour = weak;              //! a gutter, either side
-                        } else if (radiusSq <= blockFull[block]) {
-                            colour = strong;
-                        } else if (radiusSq <= blockPart[block] &&
-                                   into > blockLo[block] &&
-                                   into < blockHi[block]) {
-                            colour = strong;            //! the partial band
                         } else {
-                            colour = blockUnlit[block];
+                            var radiusSq = dx * dx + dy * dy;
+                            if (radiusSq <= blockFull[block]) {
+                                colour = strong;
+                            } else if (radiusSq <= blockPart[block]) {
+                                var into = position * HourBands.HOURS - block;
+                                colour = (into > blockLo[block] &&
+                                          into < blockHi[block])
+                                    ? strong            //! the partial band
+                                    : blockUnlit[block];
+                            } else {
+                                colour = blockUnlit[block];
+                            }
                         }
                     }
                     if (colour != lastColour) {
@@ -764,7 +778,7 @@ module MatrixRenderer {
                     }
                     dc.drawLine(x - ax, y - ay, x + ax, y + ay);
                     dc.drawLine(x - bx, y - by, x + bx, y + by);
-                    painted++;
+                    drew++;
                 }
                 continue;
             }
@@ -895,9 +909,10 @@ module MatrixRenderer {
                 }
                 dc.drawLine(x - ax, y - ay, x + ax, y + ay);
                 dc.drawLine(x - bx, y - by, x + bx, y + by);
-                painted++;
+                drew++;
             }
         }
+        painted = drew;
 
         drawSuns(dc, dirty, centreX, centreY, hasBacking ? axes : null);
 
@@ -928,7 +943,7 @@ module MatrixRenderer {
                 continue;
             }
             // A waterline keeps the bright mix; a reading takes the soft one.
-            dc.setColor(overs[ring] ? markerColour[ring]
+            dc.setColor(overs[ring] ? Palette.markerOf[ring]
                                     : Palette.softMarkOf[ring],
                         Graphics.COLOR_TRANSPARENT);
             dc.fillRectangle(centreX + dx - half, centreY + dy - half,
