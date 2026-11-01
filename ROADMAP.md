@@ -37,7 +37,11 @@ source of truth. `docs/config-code.md` is the format.
   and phone-side entries, all-white budget proof
 - [x] Phase 3 — configurator: geometry and schema exports, `web/configurator/` ("Lit field"),
   preview, settings, theme builder, code in/out, `#c=` link
+- [x] Phase 3.1 — preview: the date's outline, a real-size view calibrated with a bank
+  card, whole-number scaling, Randomise colours
 - [x] Phase 4 — `make push-config` to the simulator, end-to-end
+- [x] Phase 5 — saved configs: a named library in the browser (load, rename, delete with
+  undo), exported and imported as a JSON file; nothing reaches the watch
 - [ ] Phase 0 — on the wrist, **needs the user** ← current: a private beta build shows the
   watch-written code in Garmin Connect and applies a pasted one; the custom theme survives
   a phone-side save. Then decide whether `push-config` gets a watch target — a pushed

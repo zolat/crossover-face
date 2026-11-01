@@ -5,7 +5,7 @@
 // agree on what the page produced. Run with `npm run e2e`; screenshots land in
 // E2E_SHOTS (default: e2e/shots, gitignored).
 import { execFileSync, spawn } from "node:child_process";
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import puppeteer from "puppeteer-core";
@@ -46,8 +46,10 @@ try {
   page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
   page.on("response", (response) => { if (response.status() >= 400) errors.push(`${response.status()} ${response.url()}`); });
   await page.setViewport({ width: 1440, height: 1000, deviceScaleFactor: 2 });
-  await page.evaluateOnNewDocument(() => localStorage.clear());
+  // Start from an empty browser once; reloads below must keep what the page saved.
   await page.goto(origin + "/", { waitUntil: "networkidle0" });
+  await page.evaluate(() => localStorage.clear());
+  await page.reload({ waitUntil: "networkidle0" });
 
   const code = () => page.$eval(".code output", (el) => el.textContent);
   const pickLabel = async (text) => {
@@ -159,20 +161,98 @@ try {
     (await page.evaluate(() => navigator.clipboard.readText())) === (await code()));
 
   const vector = "AWMCAQEAAgkKDQcARv___wAAABI0VqvN7wcDSQ";
-  const buttons = await page.$$(".actions .quiet");
-  await buttons[1].click();
+  const loadCode = async () => {
+    for (const button of await page.$$(".actions button")) {
+      if ((await button.evaluate((el) => el.textContent.trim())) === "Load a code") return button;
+    }
+    throw new Error("no Load a code button");
+  };
+  await (await loadCode()).click();
   await page.type("#paste", "AWMCAQEAAgkKDQcARv///wAAABI0VqvN7wcDSQ==");
   await page.click(".paste button");
   check("a pasted code loads, spelled either way", (await code()) === vector, await code());
   check("…and closes the paste box", (await page.$("#paste")) === null);
 
   const before = await code();
-  await (await page.$$(".actions .quiet"))[1].click();
+  await (await loadCode()).click();
   await page.type("#paste", vector.slice(0, -1) + "x");
   await page.click(".paste button");
   const error = await page.$eval(".error", (el) => el.textContent).catch(() => "");
   check("a damaged code is refused with a reason", error.includes("checksum"), error);
   check("…and changes nothing", (await code()) === before);
+
+  // --- saved configs ---------------------------------------------------------
+  const savedNames = () => page.$$eval(".saved .entry .name", (els) => els.map((el) => el.textContent));
+  const savedCode = await code();
+  await page.click('[data-key="save"]');
+  await page.$eval("#save-name", (input) => { input.value = ""; });
+  await page.type("#save-name", "Mine");
+  await page.keyboard.press("Enter");
+  check("Save keeps the config in the list", JSON.stringify(await savedNames()) === '["Mine"]', JSON.stringify(await savedNames()));
+  await page.reload({ waitUntil: "networkidle0" });
+  check("…and it is still there after a reload", JSON.stringify(await savedNames()) === '["Mine"]');
+  await pickLabel("Activity");
+  await page.select(".rings .ring:nth-child(1) select", "4");
+  check("…while the page has moved on", (await code()) !== savedCode);
+  await page.click(".saved .entry .load");
+  check("Load restores the exact code", (await code()) === savedCode, await code());
+  check("…marks the row as showing", (await page.$$(".saved .entry.showing")).length === 1);
+
+  await page.click('.saved [data-key^="rename-btn-"]');
+  await page.$eval(".rename input", (input) => { input.value = ""; });
+  await page.type(".rename input", "Renamed");
+  await page.keyboard.press("Enter");
+  check("Rename renames", JSON.stringify(await savedNames()) === '["Renamed"]', JSON.stringify(await savedNames()));
+  await page.click('.saved [data-key^="delete-"]');
+  check("Delete removes it", (await savedNames()).length === 0);
+  await page.click('.saved [data-key="undo"]');
+  check("…and Undo puts it back", JSON.stringify(await savedNames()) === '["Renamed"]');
+
+  // A second entry, on another watch, so the file carries more than one.
+  await page.goto(`${origin}/#c=${vector}&w=epix2pro51mm`, { waitUntil: "networkidle0" });
+  await page.reload({ waitUntil: "networkidle0" });
+  await page.click('[data-key="save"]');
+  await page.keyboard.press("Enter");
+  const library = await page.evaluate(() => JSON.parse(localStorage.getItem("crossover-face-library")));
+  check("a second save lands on top, with its watch", library.length === 2 && library[0].device === "epix2pro51mm" && library[0].code === vector);
+
+  const downloads = join(shots, "downloads");
+  rmSync(downloads, { recursive: true, force: true });
+  mkdirSync(downloads, { recursive: true });
+  const cdp = await page.createCDPSession();
+  await cdp.send("Browser.setDownloadBehavior", { behavior: "allow", downloadPath: downloads });
+  await page.click('.saved [data-key="export"]');
+  const exported = join(downloads, "crossover-face-configs.json");
+  for (let i = 0; i < 50 && !existsSync(exported); i++) await new Promise((r) => setTimeout(r, 100));
+  const file = existsSync(exported) ? JSON.parse(readFileSync(exported, "utf8")) : null;
+  check("Export all downloads the library as a file", file?.format === "crossover-face-library" && file.configs.length === 2);
+  const pythonAgrees = file?.configs.every((entry) => {
+    const config = JSON.parse(execFileSync("python3", ["-m", "simctl.configcode", "decode", entry.code], {
+      cwd: repo, env: { ...process.env, PYTHONPATH: join(repo, "tools") }, encoding: "utf8" }));
+    return python(config) === entry.code;
+  });
+  check("…whose codes the Python codec reads back exactly", pythonAgrees === true);
+
+  const fresh = await browser.createBrowserContext();
+  const other = await fresh.newPage();
+  other.on("pageerror", (error) => errors.push(String(error)));
+  await other.goto(origin + "/", { waitUntil: "networkidle0" });
+  check("a fresh browser starts with nothing saved", (await other.$$(".saved .entry")).length === 0);
+  await (await other.$("#import-file")).uploadFile(exported);
+  await other.waitForSelector(".saved .entry:nth-child(2)", { timeout: 3000 }).catch(() => {});
+  const imported = await other.evaluate(() => JSON.parse(localStorage.getItem("crossover-face-library") ?? "[]"));
+  check("Import restores every entry, codes identical",
+    JSON.stringify(imported.map(({ name, code, device }) => [name, code, device])) ===
+    JSON.stringify(file?.configs.map(({ name, code, device }) => [name, code, device])), JSON.stringify(imported));
+  const status = await other.$eval(".saved .status", (el) => el.textContent);
+  check("…and says what it did", status === "Added 2 configs.", status);
+  await (await other.$("#import-file")).uploadFile(exported);
+  await new Promise((r) => setTimeout(r, 300));
+  check("importing again skips what is already saved",
+    (await other.$eval(".saved .status", (el) => el.textContent)).includes("2 were already saved") &&
+    (await other.$$(".saved .entry")).length === 2);
+  await other.screenshot({ path: join(shots, "desktop-saved.png"), fullPage: true });
+  await fresh.close();
 
   await page.goto(`${origin}/#c=${vector}&w=epix2pro51mm`, { waitUntil: "networkidle0" });
   await page.reload({ waitUntil: "networkidle0" });
@@ -197,6 +277,8 @@ try {
   check("the face fills the phone's width", faceBox[0] >= 15.5 && faceBox[1] <= 374.5 && faceBox[1] - faceBox[0] > 340, `${faceBox}`);
   await phone.screenshot({ path: join(shots, "phone-top.png") });
   await phone.screenshot({ path: join(shots, "phone-full.png"), fullPage: true });
+  const savedFits = await phone.$$eval(".saved .entry", (rows) => rows.length > 0 && rows.every((row) => row.getBoundingClientRect().right <= 390 - 16 + 0.5));
+  check("saved configs fit at phone width", savedFits);
 
   check("no console errors", errors.length === 0, errors.join(" | "));
 } finally {

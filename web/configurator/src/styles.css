@@ -95,6 +95,25 @@ button { font: 600 15px "Hanken Grotesk", sans-serif; cursor: pointer; }
 .quiet { background: none; color: var(--quiet); border: 0; padding: 4px 0; text-decoration: underline; text-underline-offset: 3px; font-weight: 500; }
 .quiet:hover { color: var(--text); }
 .randomise { margin-top: 14px; }
+
+/* Saved configs: a plain list, the same quiet register as the rings. */
+.saved { margin-top: 48px; }
+.entries { list-style: none; margin: 0; padding: 0; }
+.entry { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--rule); }
+.entry .what { display: grid; min-width: 0; }
+.entry .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.entry .sub { color: var(--quiet); font-size: 13px; }
+.entry.showing .name { font-weight: 600; }
+.row-actions { display: flex; gap: 14px; align-items: center; }
+.load { background: none; color: var(--text); border: 1px solid var(--rule); border-radius: 999px; padding: 5px 14px; }
+.load:hover { border-color: var(--text); }
+.rename { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.rename input { flex: 1 1 160px; min-width: 0; background: #000; color: var(--text); border: 1px solid var(--rule); border-radius: 8px; padding: 6px 10px; font: inherit; font-size: 15px; }
+.rename button[type=submit] { background: none; color: var(--text); border: 1px solid var(--text); border-radius: 999px; padding: 5px 14px; }
+.library-actions { display: flex; gap: 20px; margin-top: 14px; }
+.library-actions button:disabled { opacity: .4; cursor: default; }
+.saved .status { min-height: 1.5em; margin: 10px 0 0; }
+.saved .status .quiet { color: var(--text); }
 .status { color: var(--quiet); font-size: 14px; }
 .paste { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 14px; }
 .paste label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
@@ -114,5 +133,7 @@ button { font: 600 15px "Hanken Grotesk", sans-serif; cursor: pointer; }
   .code output { font-size: 17px; }
   h1 { font-size: 34px; }
   .colours { grid-template-columns: 1fr; }
+  .entry { grid-template-columns: auto minmax(0, 1fr); }
+  .row-actions { grid-column: 2; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }

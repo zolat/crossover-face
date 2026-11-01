@@ -8,9 +8,11 @@ import { randomTheme } from "../face/randomTheme";
 import { type Mode, render } from "../face/render";
 import { schema, setting } from "../face/schema";
 import { themeWarnings } from "../face/warnings";
+import { createLibrary, localBacking } from "../library";
 import { remembered, type State, type Store, writeHash } from "../state";
 import { choices, select } from "./controls";
 import { h } from "./dom";
+import { savedSection, suggestedName } from "./library";
 import { CARD_MM, calibration, estimatedPxPerMm, faceSize, type View } from "./size";
 
 const DEVICE_NAMES: Record<string, string> = {
@@ -42,6 +44,9 @@ export function mountApp(root: HTMLElement, store: Store, devices: Device[]) {
   const panel = h("section", { class: "panel" });
   const codeBar = h("footer", { class: "code" });
   root.replaceChildren(h("div", { class: "app" }, stage, panel), codeBar);
+
+  const library = createLibrary(localBacking);
+  const saved = savedSection(library, store, (id) => DEVICE_NAMES[id] ?? id);
 
   let lattice: Lattice | null = null;
   let latticeScreen = 0;
@@ -131,6 +136,7 @@ export function mountApp(root: HTMLElement, store: Store, devices: Device[]) {
   // --- the code ------------------------------------------------------------
 
   let pasting = false;
+  let saving = false;
   let pasteError = "";
   let copied = "";
 
@@ -170,19 +176,40 @@ export function mountApp(root: HTMLElement, store: Store, devices: Device[]) {
     }, h("label", { for: "paste" }, "Code to load"), input, h("button", { type: "submit" }, "Load code"),
       pasteError ? h("p", { id: "paste-error", class: "error" }, pasteError) : null);
 
+    const themeName = schema.themes.find((theme) => theme.id === state.config.theme)?.name ?? "My colours";
+    const nameInput = h("input", { id: "save-name", type: "text", autocomplete: "off", maxlength: 60,
+      value: suggestedName(themeName) });
+    const saveForm = h("form", {
+      class: "paste",
+      onsubmit: (event: Event) => {
+        event.preventDefault();
+        const entry = library.add(nameInput.value, code, state.device);
+        saving = false;
+        copied = `Saved as ${entry.name}`;
+        drawCode(store.get());
+        saved.draw(store.get());
+        window.setTimeout(() => { copied = ""; drawCode(store.get()); }, 2500);
+      },
+    }, h("label", { for: "save-name" }, "Name"), nameInput, h("button", { type: "submit" }, "Save"));
+
     codeBar.replaceChildren(
       h("p", {}, "Your code"),
       h("output", { "aria-label": "Config code" }, code),
       h("div", { class: "actions" },
         h("button", { class: "primary", type: "button", onclick: () => copy(code, "Code") }, "Copy code"),
         h("button", { class: "quiet", type: "button", onclick: () => copy(location.href, "Link") }, "Copy link"),
+        h("button", { class: "quiet", type: "button", "aria-expanded": String(saving), "data-key": "save",
+          onclick: () => { saving = !saving; pasting = false; drawCode(store.get());
+            if (saving) { const input = document.getElementById("save-name") as HTMLInputElement | null; input?.focus(); input?.select(); } } },
+          saving ? "Close" : "Save"),
         h("button", { class: "quiet", type: "button", "aria-expanded": String(pasting),
-          onclick: () => { pasting = !pasting; pasteError = ""; drawCode(store.get());
+          onclick: () => { pasting = !pasting; saving = false; pasteError = ""; drawCode(store.get());
             if (pasting) (document.getElementById("paste") as HTMLInputElement | null)?.focus(); } },
           pasting ? "Close" : "Load a code"),
         status),
     );
     if (pasting) codeBar.append(pasteForm);
+    if (saving) codeBar.append(saveForm);
   }
 
   // --- the settings --------------------------------------------------------
@@ -240,7 +267,8 @@ export function mountApp(root: HTMLElement, store: Store, devices: Device[]) {
         ? "The preview shows typical readings, with the hands hidden. Every ring fills clockwise from twelve."
         : "The preview shows typical readings, under where the watch's own hands sit. Every ring fills clockwise from twelve."),
     ];
-    panel.replaceChildren(...sections.filter((node): node is Node => node !== null));
+    panel.replaceChildren(...sections.filter((node): node is Node => node !== null), saved.element);
+    saved.draw(state);
     drawWarnings(state);
   }
 
