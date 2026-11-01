@@ -367,7 +367,9 @@ good enough to see the face by and not good enough to measure.
   claim the USB interface; `make push` quits OpenMTP for you. USB product IDs are
   model-specific — measured `0x5246` on the Crossover and `0x50DA` on an Epix Pro 51 mm —
   so `make install` asks the MTP engine whether the device is usable instead of matching
-  one ID. Answer **yes** to *Use MTP?* on the watch.
+  one ID. Current firmware is in MTP by default and no longer asks *Use MTP?* on
+  connection. The first probe after plugging in can fail on its own, so `make install`
+  retries once; run `python3 tools/mtp_push.py --info` to see the real error.
 - **`luminance.py` wants a raw 390×390 face render**, not the contact sheets in `build/mockups/`
   — a sheet measures meaninglessly high. `mockup.py` prints per-face figures itself.
 

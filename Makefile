@@ -148,9 +148,13 @@ install: build
 		exit 1; \
 	fi; \
 	if ! python3 $(PUSH) --info >/dev/null 2>&1; then \
-		echo "The Garmin is on USB but is not available over MTP."; \
-		echo "Unplug it, plug it back in, and answer YES to \"Use MTP?\"."; \
-		exit 1; \
+		/bin/sleep 3; \
+		if ! python3 $(PUSH) --info >/dev/null 2>&1; then \
+			echo "The Garmin is on USB but did not answer over MTP (tried twice)."; \
+			echo "Quit anything holding it (OpenMTP, Android File Transfer), then replug."; \
+			echo "Probe it by hand to see why: python3 $(PUSH) --info"; \
+			exit 1; \
+		fi; \
 	fi; \
 	$(MAKE) -s push-built || { \
 		echo; echo "Direct push failed — falling back to the manual drag."; \
