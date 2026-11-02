@@ -1,8 +1,7 @@
 # Roadmap
 
-**Current:** Epix 2 family support is integrated with UV ahead and Body Battery history,
-including drawn dot hands and a touch-and-hold data peek. Temperature ahead has joined the
-block sources since.
+**Current:** Epix time ring, Phase 4 — the overlap's colours from the theme. The Epix tells
+the time in its outer ring and no longer draws hands; the Crossover is unchanged.
 
 ## Out-of-band features
 
@@ -19,9 +18,11 @@ block sources since.
   watch's own Sunrise/Sunset complications. Mark and sun dots are now placed by `nearDot()`,
   a few-cell search that agrees with the ring walk, because three walks on one frame tripped
   the 416 watchdog.
-  - [ ] Temperature range + drawn hands on the 454 Epix trips the watchdog — on `main` too,
-    plain range included. Measured, not yet diagnosed. The headroom probe since shows the
-    454 trips on *default* rings with drawn hands, temperature or not.
+  - [x] Temperature range + drawn hands on the 454 Epix trips the watchdog — closed by
+    removing the drawn hands (Epix time ring, Phase 2). A 454 build with temperature range,
+    range + sun and seconds on rings 2–4, the date on and the overlap time ring ran two
+    minutes on the simulator with no trip. Not a headroom probe: the 454's margin is
+    unmeasured since the hands went.
 - [x] Block sources on ring 3 — rain, UV, temperature and Body Battery, next/last 12h, now
   offered on the third ring, with a window floor so its coarser blocks still draw every rung.
   - [x] Three block rings inside the watchdog — each dot's hour block is cached
@@ -98,8 +99,10 @@ untouched.
   `CrossoverDelegate` and the peek are gone; the date shows whenever it is on. The Hands row
   is Crossover-only, and `SettingsMenu.onShow()` refreshes by id rather than by row.
   `resources-no-hands/` keeps only the 60x60 icon. 174/174 on all five.
-- [ ] Phase 3 — docs ← current
-- [ ] Phase 4 — the overlap's colours from the theme. The ring's own configured colour is
+- [x] Phase 3 — docs. CLAUDE.md: the hand-backing section is the Crossover's, a new *The
+  Epix tells the time in its outer ring*, `resources-no-hands/`, the 454 watchdog note, the
+  device table. README: devices, the time ring, Hands as Crossover-only, the layout.
+- [ ] Phase 4 ← current — the overlap's colours from the theme. The ring's own configured colour is
   the overlap ("both have passed"), and the hour and minute are two distinct colours that
   read as combining into it — e.g. its hue split either side, as blue and red make purple —
   instead of the fixed blue/red/purple. Mockup every theme first (Custom included); check the

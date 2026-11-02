@@ -4,7 +4,7 @@ A Connect IQ watch face for the **Garmin Instinct Crossover AMOLED and Epix 2 fa
 dot-matrix field where the data *is* the background. Four concentric rings of dots carry
 their stats' colours and fill clockwise from twelve; the field saturates through the day
 without restructuring itself. The Crossover's physical hands sweep above it. Epix watches
-have no physical hands, so the face cuts hour and minute silhouettes through the same dots.
+have no physical hands, so their outer ring tells the time.
 
 ## Quick start
 
@@ -101,9 +101,9 @@ C compiler fails on them, which bites people whose iCloud folder is named
 | Product IDs | Screen | Input | Hands | Dots |
 |---|---:|---|---|---:|
 | `instinctcrossoveramoled` | 390 × 390px | buttons | physical | 1,112 |
-| `epix2pro42mm` | 390 × 390px | touch + buttons | drawn | 1,112 |
-| `epix2`, `epix2pro47mm` | 416 × 416px | touch + buttons | drawn | 1,272 |
-| `epix2pro51mm` | 454 × 454px | touch + buttons | drawn | 1,380 |
+| `epix2pro42mm` | 390 × 390px | touch + buttons | time ring | 1,112 |
+| `epix2`, `epix2pro47mm` | 416 × 416px | touch + buttons | time ring | 1,272 |
+| `epix2pro51mm` | 454 × 454px | touch + buttons | time ring | 1,380 |
 
 All targets are round AMOLED watches. Reference data lives under
 `~/.Garmin/ConnectIQ/Devices/<product-id>/`; the SDK also provides a page under
@@ -131,12 +131,19 @@ their geometry matters and the simulator draws them. From its `simulator.json`:
 The grey minute hand is the one real constraint on the palette: mid-grey elements crossing
 mid-grey dots would disappear.
 
-The Epix family has no physical hands. `HandStyle` therefore draws hour and minute hands
-from lattice dots, using dark silhouettes by default; White and grey and Off remain settings.
-The hands stay visible in always-on mode because they are the only time display. There is no
-second hand—the optional seconds ring carries that reading without forcing a redraw each
-second. Touch and hold the live Epix face to hide its hands until the face sleeps; hold again
-to restore them immediately. Physical buttons remain system controls and are not intercepted.
+The Epix family has no physical hands, so the outermost ring tells the time: two fills
+clockwise from twelve, the hour's and the minute's, whose ends are where the hands would
+point. Ring 1's setting picks the style, and offers nothing else:
+
+- **Time: overlap** (the default) — each fill covers the whole ring: the hour blue, the
+  minute red, purple where both have passed, grey where neither has. The colour sticking out
+  past the purple is the one ahead.
+- **Time: split** — the hour fills the ring's inner third and the minute its outer two, in
+  white.
+
+The ring stays lit in always-on and when the fills are held back, because it is the only
+time display. There is no second hand — the optional seconds ring carries that reading
+without forcing a redraw each second.
 
 ## The startup watchdog
 
@@ -598,10 +605,7 @@ lights the same nine pixels, so the luminance is identical: the mockup measures 
 
 On by default, on either rotation. The day of the month is drawn by joining the numeral's own
 dots with faint lines, and only while the watch is awake: always-on shows the plain field, and
-each wake draws the outline in. On Epix, the date appears while the drawn hands are
-hidden—either with Hands set to Off or during a touch-and-hold peek, which draws it in the same
-way. The time view keeps the hands and defers the date so the largest merged render remains
-inside its watchdog. Watches that had `Upright + date` selected read it as `Upright` with the
+each wake draws the outline in. Watches that had `Upright + date` selected read it as `Upright` with the
 date on.
 
 `Date outline` sets how bright the connecting lines are: 50%, 65% (the default) or 80% of the
@@ -609,14 +613,8 @@ dots they join — the three levels the default was chosen between on the watch.
 
 ### Hands
 
-The stored choices stay `Off`, `White`, and `Dark` on every device. On the Crossover this
-controls the backing dots beneath the physical hands and defaults to Off; backing is awake
-only. On Epix it controls the hands drawn into the field and defaults to Dark; drawn hands
-remain visible in always-on because they carry the time.
-
-Touch and hold an Epix face to toggle a temporary unobstructed-data peek. The persistent hand
-setting is unchanged, and entering sleep restores the hands automatically. This is a touch
-gesture supplied by `WatchFaceDelegate`; watch-face apps do not receive ordinary button keys.
+Crossover only. `Off`, `White` or `Dark` backing dots beneath the physical hands, Off by
+default and awake only. The Epix has no hands, so it neither shows nor reads the setting.
 
 Two things make it work:
 
@@ -641,8 +639,8 @@ python3 tools/mockup.py [outdir] [device]  # defaults: build/mockups, Crossover
 ```
 
 Renders at the selected device's native resolution and composites into its Garmin artwork.
-Physical hands are overlaid for the Crossover; Epix hands are rendered in the field. Device
-placement comes from the installed profile, while lattice and drawn-hand values mirror the
+Physical hands are overlaid for the Crossover; the Epix sheets show the time ring (`14*`).
+Device placement comes from the installed profile, while lattice and hand values mirror the
 compile-time modules and are pinned by tests.
 
 Iterating on colour through a compile-and-sideload loop costs about a minute a go; this
@@ -655,7 +653,6 @@ manifest.xml          app id, target product, min API level
 monkey.jungle         build config (strict type checking is on)
 source/
   CrossoverApp.mc     app lifecycle
-  CrossoverDelegate.mc  Epix touch-and-hold peek
   CrossoverView.mc    picks a renderer based on power mode — no drawing
   data/WatchData.mc   device state, formatted. Pure queries, no drawing
   data/BodyBatteryData.mc  current value and counter-clockwise 12h history
@@ -670,6 +667,7 @@ source/
   settings/           on-device settings menu
   render/Palette.mc   four hues, two tiers, two power modes
   render/MatrixRenderer.mc  draws the field with a given palette
+  render/TimeRing.mc  the Epix's time ring, in either style
   tests/              geometry, mapping and luminance-budget tests
 resources/
   drawables/          launcher icon
@@ -681,8 +679,8 @@ tools/
   luminance.py        always-on luminance budget measurement
   mtp_push.py         push the .prg to the watch over MTP, no GUI
 source-lattice/       per-screen lattice and hand geometry
-source-hands/         physical-hand versus drawn-hand behavior
-resources-drawn-hands/ Epix defaults, labels and launcher icon
+source-hands/         physical hands, or none and a time ring
+resources-no-hands/   the Epix launcher icon
 ```
 
 The signing key is deliberately outside the repo, and `.gitignore` covers `*.der` / `*.pem`

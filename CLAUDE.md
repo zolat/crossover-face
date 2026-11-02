@@ -9,7 +9,7 @@ ring is assigned to.
 
 The two halves of that list differ in one hardware fact with consequences everywhere: the
 Crossover has **physical** analogue hands over the glass, and the Epix has none, so there the
-face draws the hands out of its own dots. See *One face, five watches* below.
+outermost ring tells the time instead. See *One face, five watches* below.
 
 `README.md` is the authority on toolchain setup, MTP sideloading and design rationale. This file
 covers the working knowledge that spans files and is easy to break.
@@ -36,7 +36,7 @@ sideload a 390 face onto a 454 screen and look merely wrong rather than broken. 
 *stem* is deliberately unchanged, so `CROSSOVERFACE.SET` stays where every tool expects it.
 
 ```sh
-make test DEVICE=epix2pro51mm    # the 454 lattice, drawn hands
+make test DEVICE=epix2pro51mm    # the 454 lattice, the time ring
 make build DEVICE=epix2          # 416
 make package                     # passes no -d: builds every manifest product
 ```
@@ -65,7 +65,7 @@ python3 tools/luminance.py <face.png>   # measure against the 10% AMOLED budget
 small modules are what differ, and exactly one copy of each reaches any build:
 
     source-lattice/{crossover,epix416,epix454}/Lattice.mc   the screen
-    source-hands/{physical,drawn}/HandStyle.mc              what the hands are
+    source-hands/{physical,none}/HandStyle.mc               what the hands are
 
     screen  COLS  RADIUS  HUB  dots   devices
     390       38     190   21  1112   instinctcrossoveramoled, epix2pro42mm
@@ -98,31 +98,26 @@ so a fourth screen size should measure it rather than assume it.
 ### The 454 lattice is smaller than the screen allows, and the watchdog is why
 
 A native 454 fill wants `COLS 44` — 1512 dots, a 12px unlit rim matching the Crossover's own
-10px. **It trips the watchdog with the hands on and will not load.** Bisected on the
-simulator, hands on: 1388 dots runs, 1444 does not. 1380 is what ships, at a 22px rim.
+10px. **It tripped the watchdog with the Epix's drawn hands on and would not load.** Bisected
+on the simulator, hands on: 1388 dots ran, 1444 did not. 1380 is what ships, at a 22px rim.
 
-The dots alone are not the problem — 1544 renders fine with the hands off. It is the hand
-test on top of them, and the ceiling is genuinely close: the Crossover at 1112 is one
-dot-count bump from its own cliff.
+The dots alone were not the problem — 1544 rendered fine with the hands off. It was the hand
+test on top of them. **The Epix no longer draws hands** (see *The Epix tells the time in its
+outer ring*), so that test never runs there and `COLS 44` may now fit — unmeasured. Measure it
+with the headroom probe before raising the count; the Crossover at 1112 is still one
+dot-count bump from its own cliff, with its backing test on.
 
 If this is ever revisited, the lever is `PITCH`, and `PITCH` drags `DOT`, `DotGrid.ARMS`,
 `Drift`'s offsets and the whole Python mirror with it. That is a phase, not an edit.
 
-### The hands are dots, and the bar test cannot be afforded per dot
+### Hand backing is the Crossover's, and its bar test cannot be afforded per dot
 
-`HandBacking.handAt()` answers *which* hand covers a dot — `NONE`, `HOUR` or `MINUTE` — and
-the renderer indexes a three-slot colour table from `HandStyle.coloursFor()`. The Crossover
-points both slots at its one backing colour, so its picture is unchanged; the Epix gives the
-hour and minute the Crossover's own white and `0x808080`. **Minute is tested first**, so it
-wins where they cross, which is the physical stack.
-
-That is the whole mechanism. There is no polygon and **not one line of `FrameGate` changed**:
-the minute already sits in the field print whenever the hands are on, so hand motion was
-already a whole-field invalidation — one clear-and-redraw a minute. A drawn *polygon* hand
-would need erase-and-restore of two corridors across all four rings, in both buffers, every
-frame. It would also cost 5.03% of screen at 390 against a worst-theme field of 5.73%, over
-the 10% cliff on its own; dot hands measure **+0.05 to +0.16 points**, because they recolour
-dots already lit rather than adding lit area.
+`HandBacking.handAt()` answers *which* brass hand covers a dot — `NONE`, `HOUR` or `MINUTE` —
+and the renderer indexes a three-slot colour table from `HandBacking.coloursFor()`, both slots
+the one backing colour. **Minute is tested first**, so it wins where they cross, which is the
+physical stack. The minute sits in the field print whenever backing is on, so hand motion is a
+whole-field invalidation — one clear-and-redraw a minute. Backing is awake-only: in always-on
+it would cost light for a detail nobody is looking at, and the brass keeps telling the time.
 
 **The bar test is gated by an angular window, and that gate is not optional.** Eight float
 multiplies on every dot tripped the watchdog outright at 1544 dots — the face refused to
@@ -146,42 +141,68 @@ fall out and both matter:
 > window by `Angle.MAX_TURN_ERROR`, and `theGatedHandTestAgreesWithHandBacking` is what
 > caught it — on its first run.
 
-**Where the hands are the face's, they survive always-on.** That is the one Crossover
-decision the Epix inverts: there, backing is suppressed in low power to save light and the
-brass keeps telling the time; here it is the only thing on the glass that does.
-`HandStyle.ALWAYS_ON` is the switch and
-`handsSurviveAlwaysOnExactlyWhenTheFaceDrawsThem` ties it to `DRAWN`.
+### The Epix tells the time in its outer ring
 
-### Touch-and-hold peeks behind drawn hands
+The Epix has no hands, and the face used to draw a pair out of its own dots. They were its
+most expensive feature — the per-dot hand test held the 454 lattice below its natural size,
+and hands + date + a busy ring crossed the 416/454 watchdog — and they hid the data they were
+drawn over, which a touch-and-hold peek existed to undo. They are gone, and with them the
+peek, `CrossoverDelegate` and the date's deferral. **`HandStyle.HANDS` is false on the
+Epix** (`source-hands/none`), so `CrossoverView.backingColour()` is always null there,
+whatever `handBacking` stores — and an Epix that wore the drawn hands stores Dark. The Hands
+row is Crossover-only.
 
-The live watch face cannot intercept Epix button keys; those remain system controls.
-`WatchFaceDelegate.onPress()` is different: Garmin defines it as touch-and-hold and supports
-it on the Epix 2 family. `CrossoverDelegate` uses that event to toggle `CrossoverView`'s
-transient peek. A peek removes drawn hands without changing `handBacking`, and `onEnterSleep`
-restores them so always-on never loses the time. Physical-hand builds return false and leave
-the gesture to the system.
+The time is a ring instead, two fills clockwise from twelve — the hour's, continuous like an
+hour hand, and the minute's, empty on the hour — whose ends are where the hands would point.
+Two styles, chosen on the ring 1 row:
 
-The date is also a peek detail on drawn-hand watches. Hands + date + a busy ring
-crossed the 416/454 watchdog after the two branches merged; each feature alone was safe.
-`showsDate()` therefore defers the date while Epix hands are visible and reveals it when a
-peek or Hands: Off makes the field unobstructed — a peek draws the outline in, as a wake
-does. Crossover keeps the date normally because its hardware hands cost the renderer
-nothing.
+- **Overlap** (`SOURCE_TIME_OVERLAP = 15`, the default): each fill covers the whole ring, the
+  hour blue, the minute red, purple where both have passed, grey where neither has.
+  Whichever colour sticks out past the purple is the one ahead.
+- **Split** (`SOURCE_TIME = 14`): the hour fills the innermost sub-band and the minute the
+  outer two, in white over the ring's `dimOf` tier.
+
+Things that are load-bearing:
+
+- **The time rides the ring's span** as `[hourEnd, minuteEnd]` (`ClockData.fillTime`), not a
+  channel of its own, so the ring print, the gate and held-back always-on carry it with no new
+  slot. A minute moves only that ring's print; with no hands, nothing puts the minute in the
+  field print, so the Epix no longer clears the screen every minute.
+- **Placed, not offered.** Neither style is in `Source.OFFERED` or `settings.xml`.
+  `StatMap.load()` puts a time style on `StatMap.TIME_RING` (0) whenever `HandStyle.TIME_RING`,
+  keeping a stored style and giving anything else — Steps, most likely — the default, and
+  `Source.offeredFor(TIME_RING)` offers the two styles and nothing else, so the face can be
+  restyled but never left without the time. Anywhere else, and on the Crossover, a stored
+  14 or 15 reads as Off. `simctl.settings` refuses `ring1=15` for that reason: it validates
+  against `settings.xml`.
+- **`TimeRing` walks the ring, called from `drawAt()`.** Each dot falls into one of four
+  slots — neither, hour, minute, both — and the style is two radius bounds and a four-colour
+  table settled before the walk, so there is no per-dot style test. `slotOf()` is the readable
+  definition the tests pin. It records numeral colours for the date like the other loops, and
+  it **returns** its dot count for `drawAt()` to add to its local `drew`: `painted` is published
+  once a draw, so an increment from outside is overwritten. `drawAt()` takes no new local for
+  any of this — its frame is at the stack's limit — so it asks `Source.isTime()` three times.
+- **It opts out of the delta**, like a block ring, and is repainted whole when its print
+  moves: once a minute.
+- **The time survives always-on and the held-back mode** — `StatMap.fillNoSpans()` keeps a
+  time ring's live span. Overlap at 11:59 measures 4.22% always-on on the 454; the split's
+  white is the brighter, and `theTimeRingFitsTheAlwaysOnBudget` prices the brightest colour
+  either style draws against every theme.
+- **Mockup pins sit at 10:29 and 4:29, not 10:09.** `positionOf` is `Angle`'s approximation
+  and the mockup's is exact `atan2`; at 10:09 a ring-0 dot sat 0.00025 of a turn from an end,
+  inside `Angle.MAX_TURN_ERROR`, and landed on different sides on two screens. Choose a new
+  pinned time by its clearance from every dot.
 
 ### Per-device resources go in one shared folder, not four
 
-`resources-drawn-hands/` carries what the four hands-drawn watches override — `handBacking`
-defaulting to **on** rather than off, the labels that would otherwise describe brass hands,
-and a 60x60 launcher icon against the Crossover's 38x38 — and `monkey.jungle` appends it to
-each of their `resourcePath`s.
+`resources-no-hands/` carries what the four Epix watches override — today only a 60x60
+launcher icon against the Crossover's 38x38 — and `monkey.jungle` appends it to each of their
+`resourcePath`s. It used to carry the drawn hands' labels and an on-by-default `handBacking`;
+those went with the hands.
 
 It cannot be a qualified folder. `resources-<device>` would need four copies, and the family
 qualifier is worse: `epix2pro42mm` is `round-390x390`, which is the **Crossover's** family
 too, so a family folder would reach the one watch these overrides are wrong for.
-
-The on-device menu needs no change for the labels — `SettingsMenu` already goes through
-`Rez.Strings.*`. `simctl.settings` does not follow the override, though: it reads the base
-`resources/strings/strings.xml`, so a label it prints for an Epix build is the Crossover's.
 
 ## Work happens in a worktree, never on main
 
@@ -685,8 +706,9 @@ frame: default rings ~3600, two block rings ~2300, three ~1300–1400 with tempe
 on a wrist the hourly history read adds cost the simulator never shows. Every combination of
 three held for 75s of forced worst-case frames. **The Epix screens do not fit two**: the 416
 with drawn hands holds one block ring (on any offered ring) and trips with two, and the 454
-trips on default rings — both on `main` before ring 3 was offered. Re-run the probe whenever
-per-dot or first-frame work grows.
+trips on default rings — both on `main` before ring 3 was offered, and both measured with
+the drawn hands the Epix no longer has, so its headroom is unmeasured since. Re-run the probe
+whenever per-dot or first-frame work grows.
 
 ### Past the goal, a lapped dot changes shape rather than colour
 
@@ -799,9 +821,9 @@ the luminance tests pin the two implementations together so they cannot drift si
 
 There is no jungle to pick a `Lattice` in a script, so `mockup.LATTICES` is one row per
 `Lattice.mc` and `use_device()` rebinds the module's globals. `python3 tools/mockup.py
-<outdir> <device>` renders any of the five; on a hands-drawn watch the hands appear *in* the
-field rather than composited over it, and `composite()` skips the overlay because those
-profiles carry no `analogHands`.
+<outdir> <device>` renders any of the five; the last column of a row says whether the watch
+has hands (`HANDS`), and on one without, no backing is drawn and `composite()` skips the
+overlay because those profiles carry no `analogHands`. Sheets `14*` are the time ring.
 
 ### The config code carries every setting, and the web configurator reads them
 
@@ -868,9 +890,10 @@ A `ChoiceMenu` is given how many values it offers as well as its labels. Adding 
 without moving that count leaves the new row unreachable with no other symptom, which is
 what `rotationSettingIsClamped` now walks every value to catch.
 
-**The indices are the same on every watch, deliberately.** `resources-drawn-hands/` overrides
-only `handBacking`'s *default* and some labels; forking the schema per device would multiply
-this rule by five for nothing, and a setting would stop meaning the same thing across them.
+**The indices are the same on every watch, deliberately.** The Epix ignores `handBacking`
+and stores a time style in `ring1`, but the schema is one; forking it per device would
+multiply this rule by five for nothing, and a setting would stop meaning the same thing
+across them.
 
 **A new source is appended after `SOURCE_OFF`, not before it.** That looks wrong and is the
 only safe place: the stored value is an index, so inserting below Off renumbers Off and
@@ -970,8 +993,8 @@ learns what a digit is.
 
 **Awake only.** Always-on draws no date, and waking draws it in: `CrossoverView` steps the
 outline in over ~0.8s on a high-power timer (`REVEAL_STEPS` ticks of `REVEAL_TICK_MS`),
-growing round each loop of the numeral from its top-left dot. Show and an Epix peek start
-the same reveal. A watch face gets timers only while awake, which is the only time there
+growing round each loop of the numeral from its top-left dot. Show starts the same
+reveal. A watch face gets timers only while awake, which is the only time there
 is an outline to draw.
 
 Everything here was settled on the wrist, after the mockups had been wrong once. Don't
@@ -1011,8 +1034,8 @@ Five things are load-bearing and none is obvious:
   partial redraw and the outline stays lit through always-on at twice any dot's duty.
 - **The trace never runs in `onUpdate`.** `DateGlyph.trace()` is cheap on its own and
   still tripped the watchdog in the simulator when it ran inside the same callback as the
-  full redraw a new day always is. `startReveal()` calls `ensureTraced()` from the wake,
-  show and peek callbacks, each with its own budget. The honest cost: **a date that rolls
+  full redraw a new day always is. `startReveal()` calls `ensureTraced()` from the wake
+  and show callbacks, each with its own budget. The honest cost: **a date that rolls
   over while the face is awake draws its dots but no outline until the next wake.**
 - **The renderer records each numeral dot's colour as it draws it** (`DateGlyph.colours`),
   and the outline is inked in those colours after the renderer, into the same buffer. That
@@ -1049,8 +1072,9 @@ about +0.15 points on the default field, on both rotations.
 Garmin blanks an always-on face that exceeds 10% of screen luminance. Current design sits at
 ~4.8% active / ~4.6% always-on, ~5.7% worst case on Terrain, and lower on every other theme —
 **and those figures hold on every screen size**, because `PITCH` and `DOT` do not move with
-the screen (see *One face, five watches*). Drawn hands add 0.05-0.16 points on top, taking
-the worst theme to 6.16%.
+the screen (see *One face, five watches*). The Epix's time ring prices its brightest colour
+on ring 0: the split's white takes the worst theme to 7.06% always-on, the overlap 4.22% on
+the 454 at 11:59.
 `everyThemeFitsTheAlwaysOnBudget` is what checks the others, since
 `alwaysOnWorstCaseFitsBudget` only ever measures the persisted one. It asserts it in the
 test suite; `tools/luminance.py` and the simulator's **File → View Screen Heat Map** measure it.
@@ -1082,14 +1106,13 @@ and the same 240,000-count watchdog. What differs:
 
     device                    screen   touch  hands     launcher icon
     instinctcrossoveramoled   390      no     physical  38x38
-    epix2pro42mm              390      yes    drawn     60x60
-    epix2 / epix2pro47mm      416      yes    drawn     60x60
-    epix2pro51mm              454      yes    drawn     60x60
+    epix2pro42mm              390      yes    none      60x60
+    epix2 / epix2pro47mm      416      yes    none      60x60
+    epix2pro51mm              454      yes    none      60x60
 
 The Crossover's 21px hub and two analogue hands (hour 131px, minute 176px reach, 28px wide,
 minute hand mid-grey `0x808080`) sit over the glass — **the grey minute hand is the real
-palette constraint**, and it is why the drawn hands reuse that exact pair rather than
-choosing: every theme was designed to survive it. Hand and display geometry comes from
+palette constraint**: every theme was designed to survive it. Hand and display geometry comes from
 `~/.Garmin/ConnectIQ/Devices/<device>/simulator.json`; keep it sourced from there rather than
 hard-coding new numbers, and note the Epix profiles carry **no `analogHands` block at all**.
 
