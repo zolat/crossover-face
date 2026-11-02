@@ -6,6 +6,7 @@ import { alwaysOnWorst, BUDGET, relativeLuminance } from "../face/luminance";
 import { build, fromHex, hex, themeColours } from "../face/palette";
 import { randomTheme } from "../face/randomTheme";
 import { type Mode, render } from "../face/render";
+import { effectiveRings, tellsTime } from "../face/rings";
 import { schema, setting } from "../face/schema";
 import { themeWarnings } from "../face/warnings";
 import { createLibrary, localBacking } from "../library";
@@ -65,14 +66,17 @@ export function mountApp(root: HTMLElement, store: Store, devices: Device[]) {
     source.width = source.height = lattice.screen;
     const context = source.getContext("2d")!;
     const image = context.createImageData(lattice.screen, lattice.screen);
-    render(image, lattice, palette, state.config, state.mode, new Date().getDate());
+    render(image, lattice, palette, state.config, state.mode, new Date().getDate(), device.drawnHands);
     context.putImageData(image, 0, 0);
     drawn = true;
     fitFace(state);
     canvas.setAttribute("aria-label",
       `${DEVICE_NAMES[device.id] ?? device.id} face, ${state.mode === "alwaysOn" ? "always-on" : "awake"}`);
 
-    const worst = alwaysOnWorst(lattice, palette).total;
+    const timeStyle = tellsTime(device.drawnHands)
+      ? effectiveRings(state.config, device.drawnHands)[schema.timeRing.ring]
+      : undefined;
+    const worst = alwaysOnWorst(lattice, palette, timeStyle).total;
     meterText.textContent = `Always-on, brightest case ${(worst * 100).toFixed(1)}%`;
     meterFill.style.width = `${Math.min(100, (worst / BUDGET) * 100)}%`;
   }
@@ -233,6 +237,11 @@ export function mountApp(root: HTMLElement, store: Store, devices: Device[]) {
     const options = (key: string) =>
       (setting(key).options ?? []).map((option) => ({ value: option.value, label: drawn ? option.labelDrawn : option.label }));
     const set = (patch: Partial<Config>) => store.setConfig(patch);
+    // What each ring shows on this watch, which is not always what is stored: see rings.ts.
+    const rings = effectiveRings(config, drawn);
+    const timed = tellsTime(drawn);
+    const ringOptions = (ring: number) =>
+      timed && ring === schema.timeRing.ring ? schema.timeRing.styles : options(RING_KEYS[ring]);
 
     const themeOptions = [
       ...schema.themes.map((theme) => ({ value: theme.id, label: theme.name, swatch: theme.colours })),
@@ -240,7 +249,7 @@ export function mountApp(root: HTMLElement, store: Store, devices: Device[]) {
     ];
 
     const sections: (Node | null)[] = [
-      h("h1", {}, "Crossover Face"),
+      h("h1", {}, "Cross Matrix"),
       h("p", { class: "lede" }, "Set up your face here, then paste the code into Garmin Connect."),
       choices("Watch", devices.map((entry) => ({ value: entry.id, label: DEVICE_NAMES[entry.id] ?? entry.id })),
         state.device, (value) => store.set({ device: String(value) })),
@@ -252,9 +261,10 @@ export function mountApp(root: HTMLElement, store: Store, devices: Device[]) {
       config.theme === THEME_CUSTOM ? builder(config) : null,
       h("h2", {}, "Rings, outside in"),
       h("div", { class: "rings" }, ...RING_KEYS.map((key, ring) =>
-        select(RING_NAMES[ring], options(key), config[key], (value) => set({ [key]: value }),
+        select(RING_NAMES[ring], ringOptions(ring), rings[ring], (value) => set({ [key]: value }),
           h("span", { class: "sw", style: `background:var(--r${ring + 1})`, "aria-hidden": "true" })))),
-      RING_KEYS.some((key) => config[key] === TEMP_HOURS) ? tempAhead(config) : null,
+      timed ? h("p", { class: "note" }, "This watch tells the time in its outer ring. The preview shows ten past ten.") : null,
+      rings.some((source) => source === TEMP_HOURS) ? tempAhead(config) : null,
       h("h2", {}, "Details"),
       choices(label("handBacking"), options("handBacking"), config.handBacking, (value) => set({ handBacking: Number(value) })),
       choices(label("alwaysOnFill"), options("alwaysOnFill"), config.alwaysOnFill, (value) => set({ alwaysOnFill: Number(value) })),

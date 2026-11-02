@@ -572,7 +572,9 @@
       "SOURCE_UV_HOURS": 10,
       "SOURCE_BODY_BATTERY_HOURS": 11,
       "SOURCE_TEMP_HOURS": 12,
-      "SOURCE_TEMP_SUN": 13
+      "SOURCE_TEMP_SUN": 13,
+      "SOURCE_TIME": 14,
+      "SOURCE_TIME_OVERLAP": 15
     },
     "blocks": [
       9,
@@ -591,5 +593,29 @@
       0.12,
       0.0
     ]
+  },
+  "timeRing": {
+    "ring": 0,
+    "drawn": true,
+    "physical": false,
+    "styles": [
+      {
+        "value": 15,
+        "label": "Time: overlap"
+      },
+      {
+        "value": 14,
+        "label": "Time: split"
+      }
+    ],
+    "default": 15,
+    "split": 14,
+    "colours": {
+      "lit": 16777215,
+      "hour": 2068478,
+      "minute": 16664134,
+      "both": 10181887,
+      "unlit": 3815994
+    }
   }
 }

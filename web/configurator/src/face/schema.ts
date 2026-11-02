@@ -61,6 +61,18 @@ export interface FaceSchema {
     /** HourBands.WINDOW_FLOOR: the narrowest partial window per ring, in hour wedges. */
     blockWindowFloor: number[];
   };
+  /** The ring a watch with drawn hands tells the time on, and how it draws it. */
+  timeRing: {
+    ring: number;
+    /** HandStyle.TIME_RING, for each kind of hands. */
+    drawn: boolean;
+    physical: boolean;
+    /** In picker order. */
+    styles: { value: number; label: string }[];
+    default: number;
+    split: number;
+    colours: { lit: number; hour: number; minute: number; both: number; unlit: number };
+  };
 }
 
 export const schema = raw as unknown as FaceSchema;

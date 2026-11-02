@@ -149,6 +149,64 @@
         ]
       },
       "code": "AQcAAAABAQAIAgMgIOh5-bjWS3_U__9rWwBfYg"
+    },
+    {
+      "name": "drawn-hands-time-ring",
+      "config": {
+        "theme": 0,
+        "handBacking": 1,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 15,
+        "ring2": 8,
+        "ring3": 2,
+        "ring4": 3,
+        "tempAheadLow": 0,
+        "tempAheadHigh": 45,
+        "customColours": [
+          15235577,
+          12113483,
+          8377599,
+          16739163
+        ],
+        "customRamp": [
+          2,
+          0,
+          3
+        ]
+      },
+      "code": "AQABAAABAQ8IAgMUQeh5-bjWS3_U__9rWzKZQQ"
+    },
+    {
+      "name": "time-styles-anywhere-are-in-range",
+      "config": {
+        "theme": 0,
+        "handBacking": 0,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 14,
+        "ring2": 13,
+        "ring3": 2,
+        "ring4": 15,
+        "tempAheadLow": 0,
+        "tempAheadHigh": 45,
+        "customColours": [
+          15235577,
+          12113483,
+          8377599,
+          16739163
+        ],
+        "customRamp": [
+          2,
+          0,
+          3
+        ]
+      },
+      "code": "AQAAAAABAQ4NAg8UQeh5-bjWS3_U__9rWzLhnA"
     }
   ],
   "aliases": [
@@ -201,8 +259,8 @@
     },
     {
       "name": "source-out-of-range",
-      "code": "AQAAAAABAQ4IAgMUQeh5-bjWS3_U__9rWzJwXQ",
-      "why": "ring1=14 is outside 0..13"
+      "code": "AQAAAAABARAIAgMUQeh5-bjWS3_U__9rWzI0Pg",
+      "why": "ring1=16 is outside 0..15"
     },
     {
       "name": "temperature-above-50",

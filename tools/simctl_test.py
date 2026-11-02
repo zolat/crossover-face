@@ -223,6 +223,13 @@ class ConfigCodeVectors(unittest.TestCase):
         with self.assertRaises(configcode.ConfigCodeError):
             configcode.encode(config)
 
+    def test_the_top_source_is_the_faces_last_kind(self):
+        # Source.COUNT - 1, read off Source.mc: a new source the codec has not been
+        # widened for would make a watch publish a code no decoder accepts.
+        source = (Path(__file__).resolve().parent.parent / "source" / "data" / "Source.mc").read_text()
+        count = int(re.search(r"\bconst COUNT = (\d+);", source).group(1))
+        self.assertEqual(configcode.SOURCE_MAX, count - 1)
+
     def test_the_monkey_c_copy_of_the_vectors_is_current(self):
         self.assertTrue(configcode.sync_monkeyc(check=True),
                         "run `PYTHONPATH=tools python3 -m simctl.configcode vectors-mc`")

@@ -25,6 +25,12 @@ function python(config) {
   }).trim();
 }
 
+function decoded(code) {
+  return JSON.parse(execFileSync("python3", ["-m", "simctl.configcode", "decode", code], {
+    cwd: repo, env: { ...process.env, PYTHONPATH: join(repo, "tools") }, encoding: "utf8",
+  }));
+}
+
 let failures = 0;
 function check(name, ok, detail = "") {
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${ok || !detail ? "" : `  (${detail})`}`);
@@ -259,6 +265,37 @@ try {
   check("a link opens on its code", (await code()) === vector);
   check("…and its watch", (await page.$eval("canvas.face", (c) => c.width % 454 === 0)));
   check("…with the drawn-hands labels", (await page.content()).includes("White and grey"));
+
+  // The Epix tells the time in its outer ring: placed, not chosen, and in the code as
+  // the watch itself publishes it.
+  const epixContext = await browser.createBrowserContext();
+  const epix = await epixContext.newPage();
+  epix.on("pageerror", (error) => errors.push(String(error)));
+  await epix.goto(`${origin}/#w=epix2`, { waitUntil: "networkidle0" });
+  const epixCode = () => epix.$eval(".code output", (el) => el.textContent);
+  check("a fresh Epix starts on the overlap time style", decoded(await epixCode()).ring1 === 15, await epixCode());
+  const timeOptions = await epix.$$eval(".rings .ring:nth-child(1) option", (options) => options.map((o) => o.textContent));
+  check("its outer ring offers the time styles and nothing else",
+    JSON.stringify(timeOptions) === JSON.stringify(["Time: overlap", "Time: split"]), JSON.stringify(timeOptions));
+  // A ring-0 dot just past twelve: inside both fills at ten past ten.
+  const grid416 = JSON.parse(readFileSync(resolve(here, "../public/geometry/416.json"), "utf8"));
+  const [tdx, tdy] = grid416.dots.filter(([, , ring, , turn]) => ring === 0 && turn > 0.02 && turn < 0.1)[0];
+  const epixPixel = () => epix.$eval("canvas.face", (canvas, x, y) => {
+    const k = canvas.width / 416;
+    const [r, g, b] = canvas.getContext("2d").getImageData((208 + x) * k, (208 + y) * k, 1, 1).data;
+    return (r << 16) | (g << 8) | b;
+  }, tdx, tdy);
+  check("the preview draws the time: purple where hour and minute have both passed", (await epixPixel()) === 0x9b5cff, (await epixPixel()).toString(16));
+  await epix.select(".rings .ring:nth-child(1) select", "14");
+  check("choosing split puts 14 in the code", decoded(await epixCode()).ring1 === 14);
+  check("…and draws it white", (await epixPixel()) === 0xffffff, (await epixPixel()).toString(16));
+  await epix.screenshot({ path: join(shots, "desktop-epix-time.png") });
+  await epix.select(".rings .ring:nth-child(1) select", "15");
+  await epix.$$eval("label", (labels) => labels.find((l) => l.textContent.trim().startsWith("Instinct"))?.click());
+  await new Promise((r) => setTimeout(r, 200));
+  check("on the Crossover a stored time style shows as Off, as the watch reads it",
+    (await epix.$eval(".rings .ring:nth-child(1) select", (el) => el.value)) === "8");
+  await epixContext.close();
 
   const phone = await browser.newPage();
   await phone.setViewport({ width: 390, height: 844, deviceScaleFactor: 3, isMobile: true, hasTouch: true });

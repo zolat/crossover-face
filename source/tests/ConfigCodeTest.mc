@@ -19,7 +19,9 @@ module ConfigCodeTest {
         "AWMCAQEAAgkKDQcARv___wAAABI0VqvN7wcDSQ",
         "AQgAAAABAQwLBQRGAOh5-bjWS3_U__9rWzKyZw",
         "AQEAAAABAQABAgkUQeh5-bjWS3_U__9rWzIRZQ",
-        "AQcAAAABAQAIAgMgIOh5-bjWS3_U__9rWwBfYg"
+        "AQcAAAABAQAIAgMgIOh5-bjWS3_U__9rWwBfYg",
+        "AQABAAABAQ8IAgMUQeh5-bjWS3_U__9rWzKZQQ",
+        "AQAAAAABAQ4NAg8UQeh5-bjWS3_U__9rWzLhnA"
     ] as Array<String>;
     //! ConfigCode.FIELDS numbers per code, in VALID_CODES order.
     const VALID_CONFIGS = [
@@ -27,7 +29,9 @@ module ConfigCodeTest {
         99, 2, 1, 1, 0, 2, 9, 10, 13, 7, -20, 50, 16777215, 0, 1193046, 11259375, 3, 1, 0,
         8, 0, 0, 0, 1, 1, 12, 11, 5, 4, 50, -20, 15235577, 12113483, 8377599, 16739163, 2, 0, 3,
         1, 0, 0, 0, 1, 1, 0, 1, 2, 9, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3,
-        7, 0, 0, 0, 1, 1, 0, 8, 2, 3, 12, 12, 15235577, 12113483, 8377599, 16739163, 0, 0, 0
+        7, 0, 0, 0, 1, 1, 0, 8, 2, 3, 12, 12, 15235577, 12113483, 8377599, 16739163, 0, 0, 0,
+        0, 1, 0, 0, 1, 1, 15, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3,
+        0, 0, 0, 0, 1, 1, 14, 13, 2, 15, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3
     ] as Array<Number>;
     const ALIAS_CODES = [
         "AWMCAQEAAgkKDQcARv///wAAABI0VqvN7wcDSQ==",
@@ -43,7 +47,7 @@ module ConfigCodeTest {
         "AQUAAAABAQAIAgMUQeh5-bjWS3_U__9rWzJHJg",
         "AQADAAABAQAIAgMUQeh5-bjWS3_U__9rWzJdZg",
         "AQAAAAIBAQAIAgMUQeh5-bjWS3_U__9rWzLf0w",
-        "AQAAAAABAQ4IAgMUQeh5-bjWS3_U__9rWzJwXQ",
+        "AQAAAAABARAIAgMUQeh5-bjWS3_U__9rWzI0Pg",
         "AQAAAAABAQAIAgMUR-h5-bjWS3_U__9rWzIPBA",
         "AQAAAAABAQAIAgMUQeh5-bjWS3_U__9rW3JMpw",
         "",

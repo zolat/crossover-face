@@ -54,6 +54,11 @@ source of truth. `docs/config-code.md` is the format.
 - [x] Phase 4 — `make push-config` to the simulator, end-to-end
 - [x] Phase 5 — saved configs: a named library in the browser (load, rename, delete with
   undo), exported and imported as a JSON file; nothing reaches the watch
+- [x] Phase 5.1 — the Epix time ring, on merging it from `main`: codes carry sources up to
+  15, so a drawn-hands watch's published `ring1` (a time style) decodes everywhere; the
+  outer ring offers only the two styles there and reads a stored one as Off on the
+  Crossover, as `StatMap.load()` does; the preview draws it at ten past ten, pinned to
+  `TimeRingTest`'s 10:29 dot counts; the brightness figure prices its brightest fill
 - [x] Phase 0 — on the wrist, over the cable, on an Instinct Crossover AMOLED (2026-11-01):
   after a menu change the watch's own `.SET` carried a canonical code agreeing with every
   value beside it, and a `.SET` pushed with a new `configCode` applied in full the moment

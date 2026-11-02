@@ -3,6 +3,8 @@
 // because the face itself already knows which watch it is on.
 import { type Config, DEFAULT_CONFIG, tryDecode } from "./codec/configCode";
 import type { Mode } from "./face/render";
+import { tellsTime } from "./face/rings";
+import { schema } from "./face/schema";
 import type { View } from "./ui/size";
 
 export interface State {
@@ -63,6 +65,9 @@ export function initialConfig(drawnHands: boolean, drawnDefaults: Record<string,
   // starts it on StatMap's own fallback for that ring.
   config.ring2 = 6;
   if (drawnHands && typeof drawnDefaults.handBacking === "number") config.handBacking = drawnDefaults.handBacking;
+  // The time ring's style is what such a watch loads and publishes as ring1, so the
+  // first code matches the watch's own.
+  if (tellsTime(drawnHands)) config[(["ring1", "ring2", "ring3", "ring4"] as const)[schema.timeRing.ring]] = schema.timeRing.default;
   return config;
 }
 

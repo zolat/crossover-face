@@ -42,7 +42,7 @@ module ConfigCode {
     const ENUM_KEYS = ["handBacking", "alwaysOnFill", "dotRotation", "showDate",
                        "dateOutline", "ring1", "ring2", "ring3", "ring4"]
                       as Array<String>;
-    const ENUM_MAX = [2, 1, 1, 1, 2, 13, 13, 13, 13] as Array<Number>;
+    const ENUM_MAX = [2, 1, 1, 1, 2, 15, 15, 15, 15] as Array<Number>;
 
     const ALPHABET =
         "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";

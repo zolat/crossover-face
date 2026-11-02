@@ -4,6 +4,8 @@
 // pi * RADIUS^2. Pinned to MatrixTest's logged figures by luminance.test.ts.
 import type { Lattice } from "./lattice";
 import { type BuiltPalette, channel } from "./palette";
+import { timeColours } from "./rings";
+import { schema } from "./schema";
 
 export const BUDGET = 0.1;
 
@@ -21,13 +23,22 @@ export interface AlwaysOnFigure {
   total: number;
 }
 
-export function alwaysOnWorst(lattice: Lattice, palette: BuiltPalette): AlwaysOnFigure {
+/**
+ * `timeStyle` is the time ring's source on a watch that carries one. That ring is priced
+ * at its brightest fill — the time is drawn in every power mode, and just before twelve
+ * it fills the whole ring — instead of at its theme band.
+ */
+export function alwaysOnWorst(lattice: Lattice, palette: BuiltPalette, timeStyle?: number): AlwaysOnFigure {
   const area = Math.PI * lattice.radius * lattice.radius;
   const lit = 2 * lattice.dot - 1;
   const solid = lattice.dot * lattice.dot;
   let field = 0;
   lattice.ringCounts.forEach((count, ring) => {
-    field += count * lit * relativeLuminance(palette.rings[ring].bandAlwaysOn);
+    const timed = timeStyle !== undefined && ring === schema.timeRing.ring;
+    const brightest = timed
+      ? Math.max(...timeColours(timeStyle, palette.rings[ring].dim).slice(1).map(relativeLuminance))
+      : relativeLuminance(palette.rings[ring].bandAlwaysOn);
+    field += count * lit * brightest;
   });
   field /= area;
   const dimmest = Math.min(...palette.rings.map((tiers) => relativeLuminance(tiers.bandAlwaysOn)));

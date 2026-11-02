@@ -13,7 +13,8 @@ export const THEME_CUSTOM = 99;
 export const THEME_IDS = [0, 1, 7, 8, THEME_CUSTOM] as const;
 export const TEMP_MIN = -20;
 export const TEMP_MAX = 50;
-export const SOURCE_MAX = 13;
+/** Source.COUNT - 1. The two time styles, 14 and 15, are the top. */
+export const SOURCE_MAX = 15;
 
 export interface Config {
   theme: number;

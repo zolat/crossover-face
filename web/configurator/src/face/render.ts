@@ -6,13 +6,15 @@
 //
 // What it draws: every dot in its tier for the chosen sources (sample readings), the
 // temperature ramp, the current-temperature mark, sun dots, forecast blocks and, awake,
-// the date's outline. What it does not: hands or a lap past the goal.
+// the date's outline, and the time ring a watch with drawn hands carries, at a sample
+// time. What it does not: hands or a lap past the goal.
 import type { Config } from "../codec/configCode";
 import { cellLit, cellOf, dimmed, gap, GLYPH_COLS, LINE_PERCENTS, origin, outline } from "./date";
 import type { Lattice } from "./lattice";
 import type { BuiltPalette } from "./palette";
 import { inSpan, readingFor } from "./samples";
-import { isBlockSource, isTemperatureRange, schema } from "./schema";
+import { effectiveRings, isTime, SAMPLE_TIME, timeColours, timeFractions, timeSlot } from "./rings";
+import { isTemperatureRange, schema } from "./schema";
 
 export type Mode = "awake" | "alwaysOn";
 
@@ -21,14 +23,6 @@ const BAND_COUNT = 3;
 const LEVELS = 15;
 const BLOCK = 22.5 / 360;
 const LEAD = (30 / 360 - BLOCK) / 2;
-
-function ringSources(config: Config): number[] {
-  return [config.ring1, config.ring2, config.ring3, config.ring4].map((source, ring) => {
-    if (source === schema.sources.kinds.SOURCE_RETIRED) return schema.sources.kinds.SOURCE_OFF;
-    if (isBlockSource(source) && ring > schema.sources.blocksTopRing) return schema.sources.kinds.SOURCE_OFF;
-    return source;
-  });
-}
 
 /** Inner and outer radius of a ring, from the exported integer edges. */
 function ringRadii(lattice: Lattice, ring: number): [number, number] {
@@ -68,9 +62,12 @@ interface Solid {
   colour: number;
 }
 
-/** `day` is the day of the month the date shows; the setting decides whether it does. */
+/**
+ * `day` is the day of the month the date shows; the setting decides whether it does.
+ * `drawnHands` is the watch's: one with drawn hands tells the time in a ring.
+ */
 export function render(image: ImageData, lattice: Lattice, palette: BuiltPalette, config: Config, mode: Mode,
-                       day: number | null = null): void {
+                       day: number | null = null, drawnHands = false): void {
   const { data, width } = image;
   data.fill(0);
   for (let i = 3; i < data.length; i += 4) data[i] = 255;
@@ -93,8 +90,15 @@ export function render(image: ImageData, lattice: Lattice, palette: BuiltPalette
 
   const alwaysOn = mode === "alwaysOn";
   const heldBack = alwaysOn && config.alwaysOnFill === 1;
-  const sources = ringSources(config);
+  const sources = effectiveRings(config, drawnHands);
   const readings = sources.map((source) => readingFor(source, alwaysOn));
+  const [hourEnd, minuteEnd] = timeFractions(SAMPLE_TIME.hour, SAMPLE_TIME.minute);
+  // TimeRing's split edge: the innermost sub-band's outer edge, integer like DotGrid's.
+  const timeEdgeSq = sources.map((_, ring) => {
+    const [inner, outer] = ringRadii(lattice, ring);
+    const edge = inner + Math.trunc((outer - inner) / BAND_COUNT);
+    return edge * edge;
+  });
   const solids: Solid[] = [];
   // Awake only, as on the watch: always-on carries no date.
   const dating = day !== null && !alwaysOn && config.showDate === 1;
@@ -106,7 +110,10 @@ export function render(image: ImageData, lattice: Lattice, palette: BuiltPalette
     const reading = readings[ring];
     const source = sources[ring];
     let colour: number;
-    if (heldBack) {
+    if (isTime(source)) {
+      // In every power mode, held back or not: the time is not data.
+      colour = timeColours(source, tiers.dim)[timeSlot(source, dx * dx + dy * dy, timeEdgeSq[ring], turn, hourEnd, minuteEnd)];
+    } else if (heldBack) {
       colour = tiers.weakHeldBack;
     } else if (reading.blocks) {
       const tier = blockTier(lattice, ring, dx, dy, turn, reading.blocks);

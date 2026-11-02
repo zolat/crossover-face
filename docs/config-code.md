@@ -25,10 +25,10 @@ The format is also the payload a later background sync would carry, unchanged.
     4     dotRotation        list index                     0..1
     5     showDate           list index                     0..1
     6     dateOutline        list index                     0..2
-    7     ring1              Source.Kind                    0..13
-    8     ring2              Source.Kind                    0..13
-    9     ring3              Source.Kind                    0..13
-    10    ring4              Source.Kind                    0..13
+    7     ring1              Source.Kind                    0..15
+    8     ring2              Source.Kind                    0..15
+    9     ring3              Source.Kind                    0..15
+    10    ring4              Source.Kind                    0..15
     11    tempAheadLow       degrees C + 20                 0..70
     12    tempAheadHigh      degrees C + 20                 0..70
     13    custom colour 1    R, G, B (outermost ring)       any
@@ -57,7 +57,9 @@ A ramp stop is an index into the theme's four colours, exactly as `Palette.RAMP_
   pasted.
 - Ring sources are range-checked only. Which ring may carry which source, and the retired
   source reading as Off, stay `StatMap.load()`'s business, as they are for every other way
-  a value arrives.
+  a value arrives. That includes the two time styles, 14 and 15: a watch with drawn hands
+  publishes one as `ring1`, because its outermost ring tells the time whatever `ring1`
+  stores, and a watch with physical hands reads either as Off.
 - A temperature pair is not normalised here either; `StatMap.loadTempAheadScale()` swaps
   and widens it like any other.
 

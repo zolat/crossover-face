@@ -15,6 +15,11 @@ the settings have to be kept in step. So it is read from them:
   factor.
 - ``source/data/Source.mc``: which sources draw blocks and which a temperature range.
 - ``source/matrix/HourBands.mc``: the narrowest partial block window each ring draws.
+- ``source-hands/*/HandStyle.mc``, ``StatMap.TIME_RING`` and ``Palette.TIME_*``: which
+  watches tell the time in a ring, which ring, its styles and their colours. The styles
+  are in no settings list, because ``StatMap.load()`` places them rather than offering
+  them beside the other sources, so their labels come from the source names in
+  ``strings.xml``.
 
 Usage::
 
@@ -142,6 +147,33 @@ def sources() -> dict:
     }
 
 
+def _camel(kind: str) -> str:
+    """SOURCE_TIME_OVERLAP -> SourceTimeOverlap, the string id SettingsMenu names it by."""
+    return "Source" + "".join(word.capitalize() for word in kind.removeprefix("SOURCE_").split("_"))
+
+
+def time_ring(kinds: dict[str, int], drawn: dict[str, str]) -> dict:
+    source = (REPO / "source" / "data" / "Source.mc").read_text()
+    statmap = (REPO / "source" / "matrix" / "StatMap.mc").read_text()
+    paint = (REPO / "source" / "render" / "Palette.mc").read_text()
+
+    def hands(kind: str) -> bool:
+        text = (REPO / "source-hands" / kind / "HandStyle.mc").read_text()
+        return _const(text, "TIME_RING") == "true"
+
+    styles = re.findall(r"SOURCE_[A-Z_]+", _const(source, "TIME_STYLES").split(" as ")[0])
+    return {
+        "ring": int(_number(statmap, "TIME_RING")),
+        "drawn": hands("drawn"),
+        "physical": hands("physical"),
+        "styles": [{"value": kinds[name], "label": drawn[_camel(name)]} for name in styles],
+        "default": kinds[_const(source, "TIME_DEFAULT")],
+        "split": kinds["SOURCE_TIME"],
+        "colours": {name.lower(): int(_number(paint, f"TIME_{name}"))
+                    for name in ("LIT", "HOUR", "MINUTE", "BOTH", "UNLIT")},
+    }
+
+
 def themes(entries: list[dict], paint: dict) -> list[dict]:
     statmap = (REPO / "source" / "matrix" / "StatMap.mc").read_text()
     ids = _array(statmap, "THEME_IDS")
@@ -178,6 +210,7 @@ def build() -> dict:
         "themeCustom": int(_number(statmap, "THEME_CUSTOM")),
         "palette": paint["factors"],
         "sources": sources(),
+        "timeRing": time_ring(sources()["kinds"], drawn),
     }
 
 

@@ -31,7 +31,7 @@ THEME_CUSTOM = 99
 THEME_IDS = (0, 1, 7, 8, THEME_CUSTOM)
 TEMP_OFFSET = 20
 TEMP_MIN, TEMP_MAX = -20, 50
-SOURCE_MAX = 13
+SOURCE_MAX = 15  # Source.COUNT - 1: the two time styles are 14 and 15
 
 #: The single-byte settings, in byte order, with their inclusive upper bound. Byte 1
 #: (theme) and the two temperatures are checked separately.
