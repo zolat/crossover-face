@@ -13,6 +13,7 @@ Usage:  python3 tools/mockup.py [outdir] [device]
 
 from __future__ import annotations
 
+import colorsys
 import json
 import math
 import os
@@ -420,12 +421,36 @@ TIME_LIT = (0xFF, 0xFF, 0xFF)
 #: 0.25 is what made the split readable. Mirrors Palette.TIME_UNLIT.
 TIME_UNLIT = 0.25
 
-#: The overlapping style's hour, minute, both and unfilled. Mirrors
-#: Palette.TIME_HOUR / TIME_MINUTE / TIME_BOTH / TIME_UNLIT.
-TIME_HOUR = (0x1F, 0x8F, 0xFE)
-TIME_MINUTE = (0xFE, 0x46, 0x46)
-TIME_BOTH = (0x9B, 0x5C, 0xFF)
+#: The overlapping style: where both have passed is the ring's own theme
+#: colour, and the hour and minute are its hue turned TIME_SPLIT_DEGREES either
+#: way, saturation floored at TIME_SPLIT_SATURATION. Mirrors Palette.TIME_* and
+#: HueSplit.pair; unfilled is a neutral grey.
+TIME_SPLIT_DEGREES = 60.0
+TIME_SPLIT_SATURATION = 0.6
 TIME_OVERLAP_UNLIT = (0x3A, 0x3A, 0x3A)
+
+
+def _byte(x: float) -> int:
+    """Rounded half up, as HueSplit.toByte: Python's round() is banker's."""
+    return max(0, min(255, math.floor(x * 255.0 + 0.5)))
+
+
+def hue_split(colour, degrees=TIME_SPLIT_DEGREES, floor=TIME_SPLIT_SATURATION):
+    """[turned back, turned on] for an RGB colour. Mirrors HueSplit.pair."""
+    h, s, v = colorsys.rgb_to_hsv(*(c / 255.0 for c in colour))
+    s = max(s, floor)
+    out = []
+    for d in (-degrees, degrees):
+        rgb = colorsys.hsv_to_rgb((h + d / 360.0) % 1.0, s, v)
+        out.append(tuple(_byte(c) for c in rgb))
+    return out
+
+
+def time_overlap_colours(ring):
+    """(hour, minute, both) for the overlapping ring. Mirrors Palette.timeOverlap."""
+    both = THEME[ring % len(THEME)]
+    hour, minute = hue_split(both)
+    return hour, minute, both
 
 
 def time_colour(ring, position, dist_sq, time, always_on, held_back,
@@ -440,12 +465,13 @@ def time_colour(ring, position, dist_sq, time, always_on, held_back,
     if style == SOURCE_TIME_OVERLAP:
         # Each fills the whole ring; the colour says which have passed.
         hour, minute = position < hour_end, position < minute_end
+        hour_colour, minute_colour, both = time_overlap_colours(ring)
         if hour and minute:
-            return TIME_BOTH
+            return both
         if hour:
-            return TIME_HOUR
+            return hour_colour
         if minute:
-            return TIME_MINUTE
+            return minute_colour
         return TIME_OVERLAP_UNLIT
     end = hour_end if dist_sq <= band_edge(ring, 1) else minute_end
     if position < end:
@@ -1246,8 +1272,8 @@ def main(outdir: str = "build/mockups", device: str = DEFAULT_DEVICE) -> int:
                    time=time_fractions(11, 59))
     panels.append((f"ALWAYS-ON 11:59   lum {measure(worst) * 100:.2f}%", worst))
     path = os.path.join(outdir, "14d-time-overlap.png")
-    sheet(panels, "Time ring, overlapping - hour blue, minute red, "
-                  "both purple").save(path)
+    sheet(panels, "Time ring, overlapping - the ring's colour where both have "
+                  "passed, its hue split for hour and minute").save(path)
     written.append(path)
 
     # 11. Burn-in drift: how long any one pixel stays lit over a full cycle.

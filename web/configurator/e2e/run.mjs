@@ -286,7 +286,8 @@ try {
     const [r, g, b] = canvas.getContext("2d").getImageData((208 + x) * k, (208 + y) * k, 1, 1).data;
     return (r << 16) | (g << 8) | b;
   }, tdx, tdy);
-  check("the preview draws the time: purple where hour and minute have both passed", (await epixPixel()) === 0x9b5cff, (await epixPixel()).toString(16));
+  check("the preview draws the time: the ring's own colour where hour and minute have both passed",
+    (await epixPixel()) === 0xe879f9, (await epixPixel()).toString(16));
   await epix.select(".rings .ring:nth-child(1) select", "14");
   check("choosing split puts 14 in the code", decoded(await epixCode()).ring1 === 14);
   check("…and draws it white", (await epixPixel()) === 0xffffff, (await epixPixel()).toString(16));

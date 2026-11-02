@@ -112,7 +112,7 @@ export function render(image: ImageData, lattice: Lattice, palette: BuiltPalette
     let colour: number;
     if (isTime(source)) {
       // In every power mode, held back or not: the time is not data.
-      colour = timeColours(source, tiers.dim)[timeSlot(source, dx * dx + dy * dy, timeEdgeSq[ring], turn, hourEnd, minuteEnd)];
+      colour = timeColours(source, tiers)[timeSlot(source, dx * dx + dy * dy, timeEdgeSq[ring], turn, hourEnd, minuteEnd)];
     } else if (heldBack) {
       colour = tiers.weakHeldBack;
     } else if (reading.blocks) {

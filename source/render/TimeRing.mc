@@ -7,8 +7,9 @@ import Toybox.Lang;
 //!
 //!   - **split** (SOURCE_TIME): the hour fills the innermost sub-band and the
 //!     minute the outer two, both white over the ring's dim tier;
-//!   - **overlap** (SOURCE_TIME_OVERLAP): each fills the whole thickness, the
-//!     hour blue, the minute red, and purple where both have passed, over a
+//!   - **overlap** (SOURCE_TIME_OVERLAP): each fills the whole thickness;
+//!     where both have passed is the ring's own theme colour, and the hour
+//!     and minute are its hue split either way (Palette.timeOverlap), over a
 //!     neutral grey.
 //!
 //! So a dot is in one of four slots — neither, hour, minute, both — and the
@@ -109,8 +110,7 @@ module TimeRing {
     //! What each slot is painted, for this style.
     function coloursFor(source as Number, dim as Number) as Array<Number> {
         if (source == Source.SOURCE_TIME_OVERLAP) {
-            return [Palette.TIME_UNLIT, Palette.TIME_HOUR, Palette.TIME_MINUTE,
-                    Palette.TIME_BOTH] as Array<Number>;
+            return Palette.timeOverlap;
         }
         return [dim, Palette.TIME_LIT, Palette.TIME_LIT, Palette.TIME_LIT]
                as Array<Number>;

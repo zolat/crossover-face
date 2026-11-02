@@ -84,9 +84,11 @@ module Source {
         //! ring print, and so in the gate, for free.
         SOURCE_TIME = 14,
         //! The time again, overlapping: hour and minute each fill the *whole*
-        //! ring from twelve, the hour blue, the minute red, and purple where
-        //! both have passed. Whichever colour sticks out past the purple is the
-        //! one ahead. The same span as SOURCE_TIME; only the drawing differs.
+        //! ring from twelve. Where both have passed is the ring's own theme
+        //! colour, and the hour and minute are its hue split either way, as
+        //! blue and red make purple; whichever sticks out past the ring's
+        //! colour is the one ahead. The same span as SOURCE_TIME; only the
+        //! drawing differs.
         SOURCE_TIME_OVERLAP = 15
     }
 
@@ -142,7 +144,7 @@ module Source {
         0xFFAA00,   // temperature, next 12h
         0xFFAA00,   // temperature range with sunrise and sunset
         0xFFFFFF,   // time, split (drawn from Palette; this is the fallback)
-        0x9B5CFF    // time, overlap (likewise)
+        0x9B5CFF    // time, overlap (drawn from the theme; likewise)
     ] as Array<Number>;
 
     function hue(source as Number) as Number {

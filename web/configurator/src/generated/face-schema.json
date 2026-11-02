@@ -623,10 +623,9 @@
     "split": 14,
     "colours": {
       "lit": 16777215,
-      "hour": 2068478,
-      "minute": 16664134,
-      "both": 10181887,
       "unlit": 3815994
-    }
+    },
+    "splitDegrees": 60.0,
+    "splitSaturation": 0.6
   }
 }

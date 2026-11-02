@@ -2,6 +2,7 @@
 // ring's own drawing (TimeRing.mc). The stored values are not always what a ring shows:
 // the retired source and a misplaced block read as Off, and a watch with drawn hands
 // tells the time in its outermost ring whatever ring1 stores.
+import { hueSplit } from "./hueSplit";
 import type { Config } from "../codec/configCode";
 import { isBlockSource, schema, SOURCE } from "./schema";
 
@@ -53,8 +54,14 @@ export function timeSlot(source: number, radiusSq: number, edgeSq: number, turn:
   return slot;
 }
 
-/** TimeRing.coloursFor(): what each slot is painted. `dim` is the ring's unknown tier. */
-export function timeColours(source: number, dim: number): [number, number, number, number] {
-  const { lit, hour, minute, both, unlit } = schema.timeRing.colours;
-  return source === schema.timeRing.split ? [dim, lit, lit, lit] : [unlit, hour, minute, both];
+/**
+ * TimeRing.coloursFor(): what each slot is painted. Split, white over the ring's unknown
+ * tier; overlapping, the ring's own colour where both have passed and its hue split for
+ * the hour and minute (Palette.timeOverlap), over a neutral grey.
+ */
+export function timeColours(source: number, tiers: { band: number; dim: number }): [number, number, number, number] {
+  const { colours, splitDegrees, splitSaturation } = schema.timeRing;
+  if (source === schema.timeRing.split) return [tiers.dim, colours.lit, colours.lit, colours.lit];
+  const [hour, minute] = hueSplit(tiers.band, splitDegrees, splitSaturation);
+  return [colours.unlit, hour, minute, tiers.band];
 }

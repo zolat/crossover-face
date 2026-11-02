@@ -36,7 +36,7 @@ export function alwaysOnWorst(lattice: Lattice, palette: BuiltPalette, timeStyle
   lattice.ringCounts.forEach((count, ring) => {
     const timed = timeStyle !== undefined && ring === schema.timeRing.ring;
     const brightest = timed
-      ? Math.max(...timeColours(timeStyle, palette.rings[ring].dim).slice(1).map(relativeLuminance))
+      ? Math.max(...timeColours(timeStyle, palette.rings[ring]).slice(1).map(relativeLuminance))
       : relativeLuminance(palette.rings[ring].bandAlwaysOn);
     field += count * lit * brightest;
   });

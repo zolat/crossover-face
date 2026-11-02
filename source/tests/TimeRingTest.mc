@@ -263,20 +263,86 @@ module TimeRingTest {
                     "the overlapping ring has drifted from tools/mockup.py");
             }
         }
-        var colours = TimeRing.coloursFor(Source.SOURCE_TIME_OVERLAP, 0);
-        Test.assertEqualMessage(colours[TimeRing.BOTH], Palette.TIME_BOTH,
-            "where both have passed must be purple");
-        Test.assertEqualMessage(colours[TimeRing.HOUR], Palette.TIME_HOUR,
-            "the hour alone must be blue");
-        Test.assertEqualMessage(colours[TimeRing.MINUTE], Palette.TIME_MINUTE,
-            "the minute alone must be red");
         return true;
     }
 
-    //! Whichever colour either time style draws is brightest.
+    //! The overlapping ring's hour and minute for each shipping theme, in
+    //! StatMap.THEME_IDS order, as tools/mockup.py's hue_split() gives them:
+    //! the outer ring's colour turned 60 degrees back and on.
+    const SPLIT_PINS = [
+        0x6477F9, 0xF96477,     // Terrain: orchid -> blue, pink-red
+        0xFE46FE, 0xFEFE46,     // Activity: red -> magenta, yellow
+        0x5CF073, 0x735CF0,     // Beacon: cyan -> green, indigo
+        0xFE46FE, 0xFEFE46      // Pulse: red -> magenta, yellow
+    ] as Array<Number>;
+
+    function near255(a as Number, b as Number) as Boolean {
+        for (var shift = 0; shift <= 16; shift += 8) {
+            if ((((a >> shift) & 0xFF) - ((b >> shift) & 0xFF)).abs() > 1) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    //! Overlapping, the ring's own theme colour is "both", and the hour and
+    //! minute are its hue split either way — on every theme, matching the
+    //! mockup to a unit per channel, distinct from each other and from both.
+    (:test)
+    function theOverlapTakesItsColoursFromTheTheme(logger as Logger)
+            as Boolean {
+        for (var t = 0; t < StatMap.THEME_IDS.size(); t++) {
+            Properties.setValue(StatMap.PROPERTY_THEME, StatMap.THEME_IDS[t]);
+            Config.reload();
+            var colours = TimeRing.coloursFor(Source.SOURCE_TIME_OVERLAP, 0);
+            var ring = Palette.themeColour(StatMap.TIME_RING);
+            logger.debug("theme " + StatMap.THEME_IDS[t] + ": hour " +
+                         colours[TimeRing.HOUR].format("%06X") + ", minute " +
+                         colours[TimeRing.MINUTE].format("%06X") + ", both " +
+                         colours[TimeRing.BOTH].format("%06X"));
+            Test.assertEqualMessage(colours[TimeRing.BOTH], ring,
+                "where both have passed must be the ring's own colour");
+            Test.assertEqualMessage(colours[TimeRing.NEITHER],
+                Palette.TIME_UNLIT, "unfilled must be the neutral grey");
+            Test.assertMessage(near255(colours[TimeRing.HOUR], SPLIT_PINS[t * 2]),
+                "the hour has drifted from tools/mockup.py");
+            Test.assertMessage(
+                near255(colours[TimeRing.MINUTE], SPLIT_PINS[t * 2 + 1]),
+                "the minute has drifted from tools/mockup.py");
+            Test.assertMessage(colours[TimeRing.HOUR] != colours[TimeRing.MINUTE] &&
+                               colours[TimeRing.HOUR] != ring &&
+                               colours[TimeRing.MINUTE] != ring,
+                "hour, minute and both must be three colours");
+        }
+        Properties.setValue(StatMap.PROPERTY_THEME, StatMap.THEME_TERRAIN);
+        Config.reload();
+        return true;
+    }
+
+    //! A grey has no hue to turn; the saturation floor still splits it into
+    //! two colours rather than two greys.
+    (:test)
+    function aPaleRingStillSplitsIntoTwoColours(logger as Logger) as Boolean {
+        var grey = 0x9AA8C0;
+        var pair = HueSplit.pair(grey, Palette.TIME_SPLIT_DEGREES,
+                                 Palette.TIME_SPLIT_SATURATION);
+        logger.debug("pale " + grey.format("%06X") + " -> " +
+                     pair[0].format("%06X") + ", " + pair[1].format("%06X"));
+        Test.assertMessage(near255(pair[0], 0x4DC096) && near255(pair[1], 0x964DC0),
+            "the pale split has drifted from tools/mockup.py");
+        var flat = HueSplit.pair(0x808080, Palette.TIME_SPLIT_DEGREES,
+                                 Palette.TIME_SPLIT_SATURATION);
+        Test.assertMessage(flat[0] != flat[1],
+            "even a pure grey must split into two colours");
+        return true;
+    }
+
+    //! Whichever colour either time style draws is brightest, on the theme in
+    //! force.
     function brightestTimeColour() as Number {
-        var all = [Palette.TIME_LIT, Palette.TIME_HOUR, Palette.TIME_MINUTE,
-                   Palette.TIME_BOTH, Palette.TIME_UNLIT] as Array<Number>;
+        var overlap = Palette.timeOverlap;
+        var all = [Palette.TIME_LIT, overlap[0], overlap[1], overlap[2],
+                   overlap[3]] as Array<Number>;
         var best = all[0];
         for (var i = 1; i < all.size(); i++) {
             if (MatrixTest.relativeLuminance(all[i]) >

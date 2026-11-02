@@ -169,7 +169,9 @@ def time_ring(kinds: dict[str, int], drawn: dict[str, str]) -> dict:
         "default": kinds[_const(source, "TIME_DEFAULT")],
         "split": kinds["SOURCE_TIME"],
         "colours": {name.lower(): int(_number(paint, f"TIME_{name}"))
-                    for name in ("LIT", "HOUR", "MINUTE", "BOTH", "UNLIT")},
+                    for name in ("LIT", "UNLIT")},
+        "splitDegrees": _number(paint, "TIME_SPLIT_DEGREES"),
+        "splitSaturation": _number(paint, "TIME_SPLIT_SATURATION"),
     }
 
 

@@ -78,7 +78,7 @@ describe("the time ring", () => {
     const config = { ...DEFAULT_CONFIG, alwaysOnFill: 1 };
     const image = { data: new Uint8ClampedArray(416 * 416 * 4), width: 416, height: 416 } as ImageData;
     render(image, grid, palette, config, "alwaysOn", null, true);
-    const colours = new Set(timeColours(overlap, palette.rings[0].dim));
+    const colours = new Set(timeColours(overlap, palette.rings[0]));
     const at = (dx: number, dy: number) => {
       const i = ((208 + dy) * 416 + 208 + dx) * 4;
       return (image.data[i] << 16) | (image.data[i + 1] << 8) | image.data[i + 2];
@@ -91,7 +91,7 @@ describe("the time ring", () => {
       }
     }
     // Ten past ten: unlit, hour only and both, and no minute-only dot past the hour.
-    expect(seen).toEqual(new Set(timeColours(overlap, 0).filter((_, slot) => slot !== 2)));
+    expect(seen).toEqual(new Set(timeColours(overlap, palette.rings[0]).filter((_, slot) => slot !== 2)));
   });
 
   // theTimeRingFitsTheAlwaysOnBudget: priced at its brightest fill, under the budget.

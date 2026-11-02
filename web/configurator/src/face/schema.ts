@@ -70,7 +70,10 @@ export interface FaceSchema {
     styles: { value: number; label: string }[];
     default: number;
     split: number;
-    colours: { lit: number; hour: number; minute: number; both: number; unlit: number };
+    colours: { lit: number; unlit: number };
+    /** Palette.TIME_SPLIT_*: how the overlap's hour and minute split from the ring's colour. */
+    splitDegrees: number;
+    splitSaturation: number;
   };
 }
 

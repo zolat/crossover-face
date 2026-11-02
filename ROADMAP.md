@@ -1,7 +1,7 @@
 # Roadmap
 
-**Current:** Epix time ring, Phase 4 — the overlap's colours from the theme. The Epix tells
-the time in its outer ring and no longer draws hands; the Crossover is unchanged.
+**Current:** Epix time ring complete through Phase 4. The Epix tells the time in its outer
+ring, in its theme's colours, and no longer draws hands; the Crossover is unchanged.
 
 ## Out-of-band features
 
@@ -102,12 +102,13 @@ untouched.
 - [x] Phase 3 — docs. CLAUDE.md: the hand-backing section is the Crossover's, a new *The
   Epix tells the time in its outer ring*, `resources-no-hands/`, the 454 watchdog note, the
   device table. README: devices, the time ring, Hands as Crossover-only, the layout.
-- [ ] Phase 4 ← current — the overlap's colours from the theme. The ring's own configured colour is
-  the overlap ("both have passed"), and the hour and minute are two distinct colours that
-  read as combining into it — e.g. its hue split either side, as blue and red make purple —
-  instead of the fixed blue/red/purple. Mockup every theme first (Custom included); check the
-  pair stays distinct from each other, from the overlap and from the grey, and re-price the
-  always-on budget per theme.
+- [x] Phase 4 — the overlap's colours from the theme. The ring's own colour is "both";
+  the hour and minute are its hue turned 60° back and on in HSV, saturation floored at 0.6
+  (`HueSplit`, built once in `Palette.timeOverlap`). Chosen on the mockups over 45°, with a
+  fixed rule rather than steering clear of the other rings. Terrain splits orchid into
+  blue / pink-red; Activity and Pulse red into magenta / yellow; Beacon cyan into green /
+  indigo. Mirrored in `tools/mockup.py` and the web configurator, pinned per theme to a unit
+  per channel. 191/191 on all five; `make web-test` green.
 
 ## Epix 2 family
 
