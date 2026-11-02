@@ -9,32 +9,34 @@ import Toybox.Test;
 //! MatrixTest, whose shared helpers it borrows rather than copies.
 module TimeRingTest {
 
-    //! Lit dots on ring 0 at 10:29, and how many of those are the hour's, as
+    //! Lit dots on ring 0 at 10:27, and how many of those are the hour's, as
     //! tools/mockup.py counts them (`time_colour`), keyed by the lattice's
-    //! column count. The two implementations are written separately; this is
-    //! what stops them drifting.
+    //! column count, on the watches that carry a time ring — so 38 columns is
+    //! the 42mm Epix, whose rings are measured from the centre. The two
+    //! implementations are written separately; this is what stops them
+    //! drifting.
     //!
-    //! **10:29 because no dot sits near either end.** `positionOf` is
+    //! **10:27 because no dot sits near either end.** `positionOf` is
     //! `Angle`'s approximation and the mockup's is exact `atan2`, so a dot
     //! within `Angle.MAX_TURN_ERROR` of an end can land either side of it.
-    //! 10:09 had one 0.00025 of a turn from an end and failed on two screens;
-    //! every ring-0 dot clears 10:29's ends by 0.0013 on all three lattices.
+    //! 10:09 had one 0.00025 of a turn from an end; so did 10:29 once the
+    //! rings were measured from the centre. Every ring-0 dot clears 10:27's
+    //! and 4:27's ends by 0.0012 on all three lattices.
     const MOCKUP_HOUR = 10;
-    const MOCKUP_MINUTE = 29;
+    const MOCKUP_MINUTE = 27;
     const MOCKUP_COLS = [38, 40, 42] as Array<Number>;
-    const MOCKUP_LIT = [261, 299, 336] as Array<Number>;
-    const MOCKUP_HOUR_LIT = [115, 129, 150] as Array<Number>;
+    const MOCKUP_LIT = [280, 323, 301] as Array<Number>;
+    const MOCKUP_HOUR_LIT = [129, 150, 143] as Array<Number>;
 
     //! The overlapping style on ring 0, as tools/mockup.py counts it: dots in
-    //! each slot at 10:29, where the hour is ahead, and at 4:29, where the
-    //! minute is. Both times clear every dot by 0.0013 of a turn, as above.
-    //! Per row: hour-only, minute-only, both, neither.
-    const OVERLAP_AHEAD_HOUR = [170, 0, 210, 56,
-                                194, 0, 242, 64,
-                                217, 0, 268, 71] as Array<Number>;
-    const OVERLAP_AHEAD_MINUTE = [0, 48, 162, 226,
-                                  0, 56, 186, 258,
-                                  0, 61, 207, 288] as Array<Number>;
+    //! each slot at 10:27, where the hour is ahead, and at 4:27, where the
+    //! minute is. Per row: hour-only, minute-only, both, neither.
+    const OVERLAP_AHEAD_HOUR = [205, 0, 217, 62,
+                                235, 0, 250, 71,
+                                217, 0, 233, 66] as Array<Number>;
+    const OVERLAP_AHEAD_MINUTE = [0, 37, 180, 267,
+                                  0, 43, 207, 306,
+                                  0, 41, 192, 283] as Array<Number>;
 
     function fractions(hour as Number, minute as Number) as Array<Float> {
         var out = [0.0, 0.0] as Array<Float>;
@@ -120,6 +122,11 @@ module TimeRingTest {
     //! The Monkey C and the mockup light the same dots at a pinned time.
     (:test)
     function theTimeRingMatchesTheMockup(logger as Logger) as Boolean {
+        // Pinned on the watches that draw a time ring; the Crossover never
+        // does, and its rings are measured from the hub, not the centre.
+        if (!HandStyle.TIME_RING) {
+            return true;
+        }
         DotGrid.ensureBuilt();
         var at = fractions(MOCKUP_HOUR, MOCKUP_MINUTE);
         var split = DotGrid.bandEdge[0];
@@ -225,11 +232,16 @@ module TimeRingTest {
     (:test)
     function theOverlapPaintsEachFillWholeAndTheirMeetingPurple(
             logger as Logger) as Boolean {
+        // Pinned on the watches that draw a time ring; the Crossover never
+        // does, and its rings are measured from the hub, not the centre.
+        if (!HandStyle.TIME_RING) {
+            return true;
+        }
         DotGrid.ensureBuilt();
         var row = MOCKUP_COLS.indexOf(DotGrid.COLS);
         Test.assertMessage(row >= 0,
             "no mockup pin for a " + DotGrid.COLS + "-column lattice");
-        var times = [[10, 29], [4, 29]] as Array<Array<Number> >;
+        var times = [[10, 27], [4, 27]] as Array<Array<Number> >;
         var pins = [OVERLAP_AHEAD_HOUR, OVERLAP_AHEAD_MINUTE]
                    as Array<Array<Number> >;
         for (var t = 0; t < times.size(); t++) {

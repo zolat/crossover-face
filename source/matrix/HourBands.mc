@@ -272,7 +272,9 @@ module HourBands {
     //! same in 4 of 12 blocks, unfloored or floored); 0.15 merges them in all
     //! twelve. It only ever raises the windows of levels 1, 6 and 11, whose
     //! partial band is a fifth of a band. Flat, for the reason DotGrid.ARMS is.
-    const WINDOW_FLOOR = [0.0, 0.0, 0.12, 0.0] as Array<Float>;
+    //! One entry per ring any watch has, five; rings past BLOCKS_TOP_RING never
+    //! draw blocks, so their floors are never read in production.
+    const WINDOW_FLOOR = [0.0, 0.0, 0.12, 0.0, 0.0] as Array<Float>;
 
     //! partialHalfFor() on a particular ring: floored, but still zero where
     //! the level has no partial band, so a level on a band edge stays exact.

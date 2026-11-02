@@ -31,7 +31,9 @@ export const DARKEST_BAND = 0.06;
 
 export function themeWarnings(palette: BuiltPalette): string[] {
   const out: string[] = [];
-  const name = (ring: number) => (ring === 0 ? "the outer ring" : ring === 3 ? "the inner ring" : `ring ${ring + 1}`);
+  // The innermost is the last ring the palette carries: the fifth on the 51mm.
+  const inner = palette.rings.length - 1;
+  const name = (ring: number) => (ring === 0 ? "the outer ring" : ring === inner ? "the inner ring" : `ring ${ring + 1}`);
   palette.rings.forEach((tiers, ring) => {
     if (relativeLuminance(tiers.bandAlwaysOn) < DARKEST_BAND) {
       out.push(`The colour for ${name(ring)} is very dark, so it will barely show.`);

@@ -41,14 +41,17 @@ export function alwaysOnWorst(lattice: Lattice, palette: BuiltPalette, timeStyle
     field += count * lit * brightest;
   });
   field /= area;
-  const dimmest = Math.min(...palette.rings.map((tiers) => relativeLuminance(tiers.bandAlwaysOn)));
+  // Priced over the rings this lattice has: a theme carries five colours, and a
+  // four-ring watch never draws the fifth. As the watch's tests loop StatMap.RINGS.
+  const rings = lattice.ringCounts.length;
+  const drawn = palette.rings.slice(0, rings);
+  const dimmest = Math.min(...drawn.map((tiers) => relativeLuminance(tiers.bandAlwaysOn)));
   const brightestMark = Math.max(
-    ...palette.rings.flatMap((tiers) => [relativeLuminance(tiers.marker), relativeLuminance(tiers.softMark)]),
+    ...drawn.flatMap((tiers) => [relativeLuminance(tiers.marker), relativeLuminance(tiers.softMark)]),
   );
   const brightestSun = Math.max(
-    ...palette.rings.flatMap((tiers) => [relativeLuminance(tiers.sunrise), relativeLuminance(tiers.sunset)]),
+    ...drawn.flatMap((tiers) => [relativeLuminance(tiers.sunrise), relativeLuminance(tiers.sunset)]),
   );
-  const rings = palette.rings.length;
   const marks = ((brightestMark * solid - dimmest * lit) * rings) / area;
   const suns = ((brightestSun * solid - dimmest * lit) * rings * 2) / area;
   return { field, marks, suns, total: field + marks + suns };

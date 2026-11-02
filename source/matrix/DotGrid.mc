@@ -39,6 +39,14 @@ module DotGrid {
     //! hole the hands no longer fill.
     const CLEAR_SQ = HandStyle.HANDS ? HUB_SQ : 0;
 
+    //! Where the rings' thickness is measured from: the hub under hands, the
+    //! centre without them. The innermost ring's dots run to the centre there,
+    //! so counting from the hub made the centre ball a hub's width bigger than
+    //! every ring round it; counting from the centre makes its radius one ring
+    //! thickness and gives the rest back to the rings — 42px each on the
+    //! five-ring 454, the Crossover's own thickness.
+    const INNER as Number = HandStyle.HANDS ? HUB : 0;
+
     //! Both grid dimensions are even, so no dot ever sits on an axis and
     //! every dot belongs to exactly one quadrant. build() leans on that.
     const HALF = COLS / 2;
@@ -325,7 +333,7 @@ module DotGrid {
 
     //! Squared outer edge of each ring, so a ring test needs no square root.
     function ringBounds(ringCount as Number) as Array<Number> {
-        var thickness = (RADIUS - HUB) / ringCount;
+        var thickness = (RADIUS - INNER) / ringCount;
         var bounds = new [ringCount] as Array<Number>;
         for (var k = 0; k < ringCount; k++) {
             var edge = RADIUS - (k + 1) * thickness;
@@ -340,9 +348,14 @@ module DotGrid {
     //! ring is sized from the radius at its inner edge.
     function markerWidths(ringCount as Number) as Array<Float> {
         var out = new [ringCount] as Array<Float>;
-        var thickness = (RADIUS - HUB).toFloat() / ringCount;
+        var thickness = (RADIUS - INNER).toFloat() / ringCount;
         for (var k = 0; k < ringCount; k++) {
             var inner = RADIUS - (k + 1) * thickness;
+            // A centre ball's inner edge is the centre itself. Size its window
+            // half a ring out instead, where markMiddle searches for its dot.
+            if (inner < thickness / 2.0) {
+                inner = thickness / 2.0;
+            }
             out[k] = PITCH.toFloat() / (2.0 * FULL_TURN * inner);
         }
         return out;
@@ -351,7 +364,7 @@ module DotGrid {
     //! The across-the-ring middle of each ring. See markMiddle.
     function markMiddles(ringCount as Number) as Array<Number> {
         var out = new [ringCount] as Array<Number>;
-        var thickness = (RADIUS - HUB).toFloat() / ringCount;
+        var thickness = (RADIUS - INNER).toFloat() / ringCount;
         for (var k = 0; k < ringCount; k++) {
             var mid = RADIUS - (k + 0.5) * thickness;
             out[k] = (mid * mid).toNumber();
@@ -367,10 +380,14 @@ module DotGrid {
     //! that ring regardless, since it never consults bounds[lastRing]. Naming
     //! the hub keeps this an honest floor rather than one that is nearly right.
     function ringInners(ringCount as Number) as Array<Number> {
-        var thickness = (RADIUS - HUB) / ringCount;
+        var thickness = (RADIUS - INNER) / ringCount;
         var out = new [ringCount] as Array<Number>;
+        // A centre ball has no inner edge but the centre, where an inward sun
+        // dot's search would be anchored a ring's width from any dot it may
+        // take. Half a ring out is where its innermost in-window dots are.
+        var innermost = (INNER > 0) ? INNER : thickness / 2;
         for (var k = 0; k < ringCount; k++) {
-            out[k] = (k == ringCount - 1) ? HUB
+            out[k] = (k == ringCount - 1) ? innermost
                                           : RADIUS - (k + 1) * thickness;
         }
         return out;
@@ -413,7 +430,7 @@ module DotGrid {
     //! integer edges are the ring's own, so a full tier provably lights the
     //! whole block.
     function bandEdges(ringCount as Number) as Array<Number> {
-        var thickness = (RADIUS - HUB) / ringCount;
+        var thickness = (RADIUS - INNER) / ringCount;
         var step = thickness / HourBands.BANDS;
         var out = new [ringCount * HourBands.BANDS] as Array<Number>;
         for (var k = 0; k < ringCount; k++) {

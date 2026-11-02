@@ -13,14 +13,14 @@ const lattice = (key: string) =>
 
 // What MatrixTest logs for each shipping theme — everyThemeFitsTheAlwaysOnBudget,
 // theAlwaysOnMarkFitsTheBudget and theSunDotsFitTheAlwaysOnBudget — captured from the
-// suite: the Crossover's 390-hands on 2026-11-01, the 454 Epix on 2026-11-02 once its hub
-// had dots. The acceptance bar is 0.1 points; these agree to the log's six digits, so a
+// suite: the Crossover's 390-hands on 2026-11-01, the 454 Epix on 2026-11-02 with five
+// rings measured from the centre. The acceptance bar is 0.1 points; these agree to the log's six digits, so a
 // drift in the formula shows long before it matters.
 const LOGGED: Record<string, Record<number, [number, number, number]>> = {
   "390-hands": { 0: [0.060301, 0.0006, 0.001083], 1: [0.047197, 0.000583, 0.001017],
                  7: [0.05269, 0.000626, 0.001125], 8: [0.0514, 0.000635, 0.001153] },
-  "454": { 0: [0.061514, 0.000491, 0.000886], 1: [0.048365, 0.000477, 0.000833],
-           7: [0.054594, 0.000512, 0.000921], 8: [0.052809, 0.00052, 0.000944] },
+  "454": { 0: [0.061738, 0.000614, 0.001108], 1: [0.048456, 0.000597, 0.001041],
+           7: [0.054977, 0.00065, 0.00118], 8: [0.053707, 0.00065, 0.00118] },
 };
 const NO_CUSTOM = { colours: [0, 0, 0, 0], ramp: [0, 0, 0] };
 
@@ -51,7 +51,7 @@ describe("always-on luminance", () => {
 describe("palette", () => {
   it("draws Terrain's exact colours and ramp ends", () => {
     const terrain = build(themeColours(0, NO_CUSTOM));
-    expect(terrain.rings.map((tiers) => tiers.band)).toEqual([0xe879f9, 0xb8d64b, 0x7fd4ff, 0xff6b5b]);
+    expect(terrain.rings.map((tiers) => tiers.band)).toEqual([0xe879f9, 0xb8d64b, 0x7fd4ff, 0xff6b5b, 0xe5b33a]);
     expect(terrain.ramp[0]).toBe(0x7fd4ff);
     expect(terrain.ramp[schema.palette.RAMP_STEPS - 1]).toBe(0xff6b5b);
   });

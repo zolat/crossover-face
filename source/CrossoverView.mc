@@ -45,9 +45,8 @@ class CrossoverView extends WatchUi.WatchFace {
     //! Refilled in place on every accepted update. These used to account for
     //! eight short-lived arrays on an ordinary frame before the gate could even
     //! decide to skip it.
-    private var _spans as Array<Array<Float> > = [
-        [0.0, 0.0], [0.0, 0.0], [0.0, 0.0], [0.0, 0.0]
-    ] as Array<Array<Float> >;
+    private var _spans as Array<Array<Float> > =
+        new [StatMap.RINGS] as Array<Array<Float> >;
     private var _blocks as Array<Number> =
         new [StatMap.RINGS * StatMap.BLOCK_VALUES] as Array<Number>;
     private var _overs as Array<Boolean> =
@@ -60,6 +59,9 @@ class CrossoverView extends WatchUi.WatchFace {
 
     function initialize() {
         WatchFace.initialize();
+        for (var ring = 0; ring < StatMap.RINGS; ring++) {
+            _spans[ring] = [0.0, 0.0] as Array<Float>;
+        }
     }
 
     //! Build the fixed lattice and one authoritative off-screen frame. Holding

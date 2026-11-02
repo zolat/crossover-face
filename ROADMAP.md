@@ -1,6 +1,7 @@
 # Roadmap
 
-**Current:** Epix time ring complete through Phase 4.1. The Epix tells the time in its outer
+**Current:** 51mm fifth ring, Phase 6.1 — config code v2 and the configurator. Epix time
+ring complete through Phase 4.1. The Epix tells the time in its outer
 ring, in its theme's colours, and no longer draws hands; the Crossover is unchanged.
 
 ## Out-of-band features
@@ -122,6 +123,28 @@ untouched.
   export splits the 390 lattice into the Crossover's `390-hands` and the Epix's `390`.
 - [ ] Phase 4.2 — a "time colours" control in the configurator (spread, maybe lightness
   offset), as the playground had. Needs a setting and a config-code version.
+
+## 51mm fifth ring
+
+- [x] Phase 6 — five rings on the Epix 2 Pro 51mm, set from the watch.
+  - Headroom probe first: `COLS 44` tripped on its first frame with the heaviest Epix ring
+    set (two interleaved runs); `COLS 42` held ~1,500 `PAD` with four rings and ~1,200–1,300
+    with five. The 454 stays at `COLS 42`.
+  - Rings are measured from the centre on every watch without hands (the user's idea once
+    `COLS 44` failed): five 42px rings and a 42px-radius ball on the 51mm, 50px on the 416,
+    47px on the 42mm; the Crossover unchanged.
+  - `Lattice.RINGS` 4/4/5; `ring5` (default Steps) on every watch, read on the 454 alone,
+    not in `settings.xml`, set from the on-device menu. Every theme gained a fifth colour,
+    picked on the mockup: Terrain gold, Activity indigo, Beacon lime, Pulse ice; the custom
+    theme's default fifth is Terrain's gold and a stored four-colour one widens to it.
+  - The v1 config code carries four rings and four colours and no longer spills a fifth ring
+    into `tempAheadLow`.
+  - Time-ring pins moved to 10:27 / 4:27 (10:29 put a 42mm dot inside `MAX_TURN_ERROR`).
+  - 194/194 on all five; `make web-test` green with the 51mm preview drawing five rings; a
+    2-minute simulator run with blocks, temperature range, seconds and the date, no trip.
+- [ ] Phase 6.1 — config code v2 and the configurator: ring 5, a fifth custom colour,
+  3-bit ramp stops; all three decoders read v1 and v2.
+
 
 ## Epix 2 family
 

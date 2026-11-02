@@ -53,12 +53,13 @@ describe("the time ring", () => {
     expect(timeFractions(22, 30)).toEqual([10.5 / 12, 0.5]);
   });
 
-  // theTimeRingMatchesTheMockup: the same dots light at 10:29 as in the Monkey C.
-  const PINNED: Record<number, [number, number]> = { 390: [261, 115], 416: [299, 129], 454: [336, 150] };
+  // theTimeRingMatchesTheMockup: the same dots light at 10:27 as in the Monkey C, on
+  // the watches that carry a time ring (390 is the 42mm Epix).
+  const PINNED: Record<number, [number, number]> = { 390: [280, 129], 416: [323, 150], 454: [301, 143] };
   for (const [screen, [lit, hourLit]] of Object.entries(PINNED)) {
-    it(`lights what the face does at 10:29 on ${screen}`, () => {
+    it(`lights what the face does at 10:27 on ${screen}`, () => {
       const grid = lattice(Number(screen));
-      const [hourEnd, minuteEnd] = timeFractions(10, 29);
+      const [hourEnd, minuteEnd] = timeFractions(10, 27);
       let count = 0;
       let hours = 0;
       for (const [dx, dy, ring, , turn] of grid.dots) {

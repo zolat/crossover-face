@@ -34,9 +34,15 @@ The format is also the payload a later background sync would carry, unchanged.
     13    custom colour 1    R, G, B (outermost ring)       any
     16    custom colour 2    R, G, B                        any
     19    custom colour 3    R, G, B                        any
-    22    custom colour 4    R, G, B (innermost ring)       any
+    22    custom colour 4    R, G, B (ring 4)               any
     25    custom ramp        cold | mid << 2 | hot << 4     top two bits 0
     26    CRC-16             big-endian, over bytes 0..25
+
+**Version 1 does not carry the 51mm's fifth ring or any fifth theme colour.** The Epix 2
+Pro 51mm has five rings (`ring5` is its centre ball) and every theme has a fifth colour for
+it. A version-1 code leaves both as the watch holds them: `ConfigCode.CODE_RINGS` and
+`CODE_COLOURS` are 4, and `apply()` keeps the stored fifth custom colour. Version 2
+(ROADMAP, 51mm fifth ring, Phase 6.1) appends them.
 
 The CRC is CRC-16/CCITT-FALSE: polynomial `0x1021`, initial value `0xFFFF`, no reflection,
 no final XOR. `"123456789"` checks to `0x29B1`.

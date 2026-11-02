@@ -36,6 +36,12 @@ module ConfigCode {
     const FIELD_COLOURS = 12;
     const FIELD_RAMP = 16;
 
+    //! What version 1 carries: four rings and four custom colours. The 454's
+    //! fifth ring and every theme's fifth colour are outside it, so a code
+    //! leaves them as they are rather than spilling into the fields after.
+    const CODE_RINGS = 4;
+    const CODE_COLOURS = 4;
+
     //! The nine one-byte settings after the theme, and how high each may go.
     //! Literal, for the on-device const-array reason StatMap.THEME_IDS gives;
     //! configCodeKeysMatchTheSettings pins them to StatMap's own names.
@@ -73,7 +79,7 @@ module ConfigCode {
         }
         bytes[11] = config[FIELD_TEMP_LOW] + TEMP_OFFSET;
         bytes[12] = config[FIELD_TEMP_LOW + 1] + TEMP_OFFSET;
-        for (var c = 0; c < Palette.THEME_COLOURS; c++) {
+        for (var c = 0; c < CODE_COLOURS; c++) {
             var colour = config[FIELD_COLOURS + c];
             bytes[13 + c * 3] = (colour >> 16) & 0xFF;
             bytes[14 + c * 3] = (colour >> 8) & 0xFF;
@@ -118,7 +124,7 @@ module ConfigCode {
             }
             config[FIELD_TEMP_LOW + i] = celsius;
         }
-        for (var c = 0; c < Palette.THEME_COLOURS; c++) {
+        for (var c = 0; c < CODE_COLOURS; c++) {
             config[FIELD_COLOURS + c] = (bytes[13 + c * 3] << 16) |
                                         (bytes[14 + c * 3] << 8) |
                                          bytes[15 + c * 3];
@@ -228,14 +234,17 @@ module ConfigCode {
         config[3] = StatMap.rotation;
         config[4] = StatMap.date;
         config[5] = StatMap.dateOutline;
-        for (var ring = 0; ring < StatMap.RINGS; ring++) {
+        for (var ring = 0; ring < CODE_RINGS; ring++) {
             config[6 + ring] = StatMap.rings[ring];
         }
         config[FIELD_TEMP_LOW] = StatMap.tempAheadLow;
         config[FIELD_TEMP_LOW + 1] = StatMap.tempAheadHigh;
         var custom = StatMap.customTheme;
-        for (var i = 0; i < StatMap.CUSTOM_THEME_SIZE; i++) {
-            config[FIELD_COLOURS + i] = custom[i];
+        for (var c = 0; c < CODE_COLOURS; c++) {
+            config[FIELD_COLOURS + c] = custom[c];
+        }
+        for (var s = 0; s < Palette.RAMP_POINTS; s++) {
+            config[FIELD_RAMP + s] = custom[Palette.THEME_COLOURS + s];
         }
         return config;
     }
@@ -250,9 +259,13 @@ module ConfigCode {
                             config[FIELD_TEMP_LOW]);
         Properties.setValue(StatMap.PROPERTY_TEMP_AHEAD_HIGH,
                             config[FIELD_TEMP_LOW + 1]);
+        // The code's four colours and three stops, around the fifth colour
+        // the watch already holds: version 1 does not carry it.
+        var custom = config.slice(FIELD_COLOURS, FIELD_RAMP);
+        custom.add(StatMap.customTheme[Palette.THEME_COLOURS - 1]);
+        custom.addAll(config.slice(FIELD_RAMP, FIELDS));
         Storage.setValue(StatMap.STORAGE_CUSTOM_THEME,
-                         config.slice(FIELD_COLOURS, FIELDS)
-                             as Array<Application.Storage.ValueType>);
+                         custom as Array<Application.Storage.ValueType>);
     }
 
     //! Put the live configuration in the code field, and remember it as ours.

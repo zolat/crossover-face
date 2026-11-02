@@ -42,6 +42,8 @@
     <string id="Ring2Title">Ring 2</string>
     <string id="Ring3Title">Ring 3</string>
     <string id="Ring4Title">Ring 4 — inner</string>
+    <string id="Ring4MiddleTitle">Ring 4</string>
+    <string id="Ring5Title">Ring 5 — inner</string>
 
     <string id="SourceSteps">Steps</string>
     <string id="SourceRetired">Unavailable</string>

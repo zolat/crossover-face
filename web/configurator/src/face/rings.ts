@@ -11,9 +11,14 @@ export const isTime = (source: number) => schema.timeRing.styles.some((style) =>
 /** Does this watch give a ring over to the time? */
 export const tellsTime = (drawnHands: boolean) => (drawnHands ? schema.timeRing.drawn : schema.timeRing.physical);
 
-/** The four rings' sources, outermost first, as the watch loads them. */
-export function effectiveRings(config: Config, drawnHands: boolean): number[] {
-  const rings = [config.ring1, config.ring2, config.ring3, config.ring4].map((source, ring) => {
+/**
+ * Each ring's source, outermost first, as the watch loads them. `ringCount` is the
+ * lattice's: the 51mm's fifth ring, its centre ball, is not in a version-1 code, so it
+ * shows its default until the configurator can set it.
+ */
+export function effectiveRings(config: Config, drawnHands: boolean, ringCount = 4): number[] {
+  const stored = [config.ring1, config.ring2, config.ring3, config.ring4, ...schema.ringDefaults.slice(4)];
+  const rings = stored.slice(0, ringCount).map((source, ring) => {
     if (source === SOURCE.SOURCE_RETIRED) return SOURCE.SOURCE_OFF;
     if (isBlockSource(source) && ring > schema.sources.blocksTopRing) return SOURCE.SOURCE_OFF;
     // The time is placed, never chosen: a stored one anywhere else reads as Off.

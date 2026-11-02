@@ -208,6 +208,8 @@ def build() -> dict:
         "defaultsDrawn": property_defaults(REPO / "resources" / "properties.xml"),
         "themes": themes(entries, paint),
         "themeCustom": int(_number(statmap, "THEME_CUSTOM")),
+        "customFifthDefault": int(_number(statmap, "CUSTOM_FIFTH_DEFAULT")),
+        "ringDefaults": [int(n) for n in _array(statmap, "RING_DEFAULTS")],
         "palette": paint["factors"],
         "sources": sources(),
         "timeRing": time_ring(sources()["kinds"], drawn),

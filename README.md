@@ -103,10 +103,13 @@ C compiler fails on them, which bites people whose iCloud folder is named
 | `instinctcrossoveramoled` | 390 × 390px | buttons | physical | 1,112 |
 | `epix2pro42mm` | 390 × 390px | touch + buttons | time ring | 1,124 |
 | `epix2`, `epix2pro47mm` | 416 × 416px | touch + buttons | time ring | 1,288 |
-| `epix2pro51mm` | 454 × 454px | touch + buttons | time ring | 1,396 |
+| `epix2pro51mm` | 454 × 454px | touch + buttons | time ring | 1,396, five rings |
 
 With no hands to hide it, the Epix fills the hub with dots: its centre ring is a solid
-disc rather than a ring round an empty middle.
+disc rather than a ring round an empty middle, and its rings are measured from the centre so
+the disc is no bigger than a ring is thick. The 51mm has a fifth ring, that centre disc,
+showing Steps until set from the watch's own ring menu; every theme has a fifth colour for
+it.
 
 All targets are round AMOLED watches. Reference data lives under
 `~/.Garmin/ConnectIQ/Devices/<product-id>/`; the SDK also provides a page under

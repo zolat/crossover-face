@@ -50,6 +50,11 @@ module Lattice {
     //! legible.
     const HUB as Number = 23;
 
+    //! Rings on this screen, outermost first. Five on the 454 alone: the
+    //! largest screen, and since the drawn hands went the one with room in
+    //! its frame budget for a fifth (ROADMAP, 51mm fifth ring).
+    const RINGS as Number = 5;
+
     //! What DotGrid.measureRows() counts from the values above. Asserted, not
     //! trusted: it is a claim about this lattice that the suite re-derives.
     const EXPECTED_DOTS as Number = 1380;

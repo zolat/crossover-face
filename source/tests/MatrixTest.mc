@@ -325,6 +325,54 @@ module MatrixTest {
         return stored;
     }
 
+    //! The 454 has a fifth ring, its centre ball, defaulting to Steps and set
+    //! like any other; every other watch has four and never reads ring5.
+    (:test)
+    function onlyThe454HasAFifthRing(logger as Logger) as Boolean {
+        Test.assertEqualMessage(StatMap.RINGS,
+            (Lattice.SCREEN == 454) ? 5 : 4,
+            "five rings on the 454 and four everywhere else");
+        Test.assertEqualMessage(StatMap.PROPERTY_RINGS.size(), 5,
+            "every watch names five ring properties");
+        var defaults = [Source.SOURCE_STEPS, Source.SOURCE_INTENSITY_MINUTES,
+                        Source.SOURCE_BATTERY, Source.SOURCE_BODY_BATTERY,
+                        Source.SOURCE_STEPS] as Array<Number>;
+        for (var i = 0; i < defaults.size(); i++) {
+            Test.assertEqualMessage(StatMap.RING_DEFAULTS[i], defaults[i],
+                "ring " + (i + 1) + "'s default has moved off its source");
+        }
+
+        var saved = Properties.getValue(StatMap.PROPERTY_RINGS[4]);
+        Properties.setValue(StatMap.PROPERTY_RINGS[4], Source.SOURCE_BATTERY);
+        Config.reload();
+        Test.assertEqualMessage(StatMap.rings.size(), StatMap.RINGS,
+            "a reload sizes the rings to this watch");
+        if (StatMap.RINGS == 5) {
+            Test.assertEqualMessage(StatMap.rings[4], Source.SOURCE_BATTERY,
+                "the 454's centre ball shows what ring5 stores");
+        }
+        Properties.setValue(StatMap.PROPERTY_RINGS[4], saved as Number);
+        Config.reload();
+        return true;
+    }
+
+    //! Ring thickness is measured from the hub under hands and from the centre
+    //! without, so a watch with no hands has no hub-sized ball in the middle:
+    //! its innermost ring is as thick as the rest, measured to the centre.
+    (:test)
+    function ringsAreMeasuredFromTheCentreWithoutHands(logger as Logger)
+            as Boolean {
+        Test.assertEqualMessage(DotGrid.INNER,
+            HandStyle.HANDS ? DotGrid.HUB : 0,
+            "thickness must start at the hub only where hands cover it");
+        Test.assertEqualMessage(StatMap.RING_THICKNESS,
+            (DotGrid.RADIUS - DotGrid.INNER) / StatMap.RINGS,
+            "every ring is one thickness");
+        logger.debug(StatMap.RINGS + " rings of " + StatMap.RING_THICKNESS +
+                     "px from " + DotGrid.INNER);
+        return true;
+    }
+
     //! Every ring can be assigned any source, and an unassigned ring is dark.
     (:test)
     function ringsAreIndependentlyAssignable(logger as Logger) as Boolean {
@@ -1146,7 +1194,7 @@ module MatrixTest {
         Properties.setValue(StatMap.PROPERTY_THEME, StatMap.THEME_TERRAIN);
         Config.reload();
 
-        var terrain = [0xE879F9, 0xB8D64B, 0x7FD4FF, 0xFF6B5B]
+        var terrain = [0xE879F9, 0xB8D64B, 0x7FD4FF, 0xFF6B5B, 0xE5B33A]
                       as Array<Number>;
         for (var ring = 0; ring < StatMap.RINGS; ring++) {
             Test.assertEqualMessage(Palette.active[ring * 2 + 1], terrain[ring],
@@ -1179,14 +1227,14 @@ module MatrixTest {
         Properties.setValue(StatMap.PROPERTY_THEME, StatMap.THEME_ACTIVITY);
         Config.reload();
 
-        var activity = [0xFE4646, 0x6DC54F, 0x1F8FFE, 0xE59A0A]
+        var activity = [0xFE4646, 0x6DC54F, 0x1F8FFE, 0xE59A0A, 0x8E7BFF]
                        as Array<Number>;
         for (var ring = 0; ring < StatMap.RINGS; ring++) {
             Test.assertEqualMessage(Palette.active[ring * 2 + 1], activity[ring],
                 "ring " + ring + " no longer draws its Activity colour");
         }
         Test.assertEqualMessage(Palette.active[7], 0xE59A0A,
-            "Activity gold must stay on ring 4, the smallest ring");
+            "Activity gold must stay on ring 4");
 
         var stops = StatMap.themeIndex(StatMap.THEME_ACTIVITY) *
                     Palette.RAMP_POINTS;
@@ -1240,10 +1288,10 @@ module MatrixTest {
     (:test)
     function beaconAndPulseKeepTheirExactPalettes(logger as Logger) as Boolean {
         assertExactTheme(StatMap.THEME_BEACON,
-            [0x5CD9F0, 0xFE4646, 0x8E7BFF, 0xE59A0A] as Array<Number>,
+            [0x5CD9F0, 0xFE4646, 0x8E7BFF, 0xE59A0A, 0xB8D64B] as Array<Number>,
             [0, 3, 1] as Array<Number>, "Beacon");
         assertExactTheme(StatMap.THEME_PULSE,
-            [0xFE4646, 0x2FD9C5, 0xE879F9, 0xB8D64B] as Array<Number>,
+            [0xFE4646, 0x2FD9C5, 0xE879F9, 0xB8D64B, 0x7FD4FF] as Array<Number>,
             [1, 3, 0] as Array<Number>, "Pulse");
 
         Properties.setValue(StatMap.PROPERTY_THEME, StatMap.THEME_TERRAIN);
@@ -2822,7 +2870,7 @@ module MatrixTest {
 
         var view = new CrossoverView();
         var spans = everySpan(0.0, 0.34);
-        var overs = [true, true, true, true] as Array<Boolean>;
+        var overs = allOvers();
         var shown = new [StatMap.RINGS] as Array<Float>;
         var withheld = new [StatMap.RINGS] as Array<Float>;
         view.fillMarksFor(false, shown, spans, overs);
@@ -2966,6 +3014,15 @@ module MatrixTest {
 
     function allOvers() as Array<Boolean> {
         return everyOver(true);
+    }
+
+    //! Every ring on one source, however many rings this watch has.
+    function everyRing(source as Number) as Array<Number> {
+        var out = new [StatMap.RINGS] as Array<Number>;
+        for (var i = 0; i < StatMap.RINGS; i++) {
+            out[i] = source;
+        }
+        return out;
     }
 
     function everyOver(value as Boolean) as Array<Boolean> {
@@ -3667,9 +3724,7 @@ module MatrixTest {
         }
 
         var savedRings = StatMap.rings;
-        StatMap.rings = [Source.SOURCE_OFF, Source.SOURCE_OFF,
-                         Source.SOURCE_OFF, Source.SOURCE_OFF]
-                        as Array<Number>;
+        StatMap.rings = everyRing(Source.SOURCE_OFF);
         var view = new CrossoverView();
         view.onLayout(dc);
 
@@ -3714,9 +3769,7 @@ module MatrixTest {
         }
 
         var savedRings = StatMap.rings;
-        StatMap.rings = [Source.SOURCE_OFF, Source.SOURCE_OFF,
-                         Source.SOURCE_OFF, Source.SOURCE_OFF]
-                        as Array<Number>;
+        StatMap.rings = everyRing(Source.SOURCE_OFF);
         view.onLayout(dc);
 
         WatchData.forget();
@@ -6484,8 +6537,9 @@ module MatrixTest {
             Test.assertEqualMessage(suns[i], Source.NO_MARKER,
                 "held back, no ring may show a sun time");
         }
-        Test.assertEqualMessage(MatrixRenderer.NO_SUNS.size(),
-            StatMap.RINGS * Source.SUN_VALUES,
+        // At least every ring: it is sized for five, the most any watch has.
+        Test.assertMessage(MatrixRenderer.NO_SUNS.size() >=
+                               StatMap.RINGS * Source.SUN_VALUES,
             "the renderer's empty sun channel must cover every ring");
         for (var i = 0; i < MatrixRenderer.NO_SUNS.size(); i++) {
             Test.assertEqualMessage(MatrixRenderer.NO_SUNS[i], Source.NO_MARKER,

@@ -42,7 +42,11 @@ export interface BuiltPalette {
   ramp: number[];
 }
 
-/** The four colours and three stops a theme draws with, shipping or custom. */
+/**
+ * The colours and three stops a theme draws with, shipping or custom. Shipping themes
+ * have five colours; a custom theme from a version-1 code has four, and gains the
+ * watch's default fifth (StatMap.readCustomTheme) for the 51mm's centre ball.
+ */
 export interface ThemeColours {
   colours: readonly number[];
   ramp: readonly number[];
@@ -55,7 +59,8 @@ export function themeColours(theme: number, custom: ThemeColours): ThemeColours 
 }
 
 export function build(theme: ThemeColours): BuiltPalette {
-  const rings = theme.colours.map((colour): RingTiers => {
+  const colours = theme.colours.length >= 5 ? theme.colours : [...theme.colours, schema.customFifthDefault];
+  const rings = colours.map((colour): RingTiers => {
     const lifted = scale(colour, P.LIFT);
     return {
       band: colour,

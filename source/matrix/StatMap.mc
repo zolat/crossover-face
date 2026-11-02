@@ -83,16 +83,27 @@ module StatMap {
     const THEME_CUSTOM = 99;
 
     //! Where the custom theme lives: Application.Storage, as
-    //! [colour1, colour2, colour3, colour4, cold, mid, hot]. Not Properties,
+    //! [colour1 .. colour5, cold, mid, hot]. Not Properties,
     //! because it has no phone-side field, and a property Garmin Connect does
     //! not know about is one a phone-side save has no reason to preserve.
     const STORAGE_CUSTOM_THEME = "customTheme";
-    const CUSTOM_THEME_SIZE = 7;
+    const CUSTOM_THEME_SIZE = 8;
+
+    //! What a custom theme stored before themes had five colours holds: four
+    //! colours and three stops. Read with the default fifth colour slotted in.
+    const CUSTOM_THEME_SIZE_V1 = 7;
 
     //! Terrain, so a face that never received a custom theme still has a
-    //! sensible one to switch to.
-    const CUSTOM_DEFAULT = [0xE879F9, 0xB8D64B, 0x7FD4FF, 0xFF6B5B, 2, 0, 3]
-                           as Array<Number>;
+    //! sensible one to switch to. Its fifth colour is Terrain's gold, which is
+    //! also what a four-colour custom theme gains.
+    const CUSTOM_DEFAULT = [0xE879F9, 0xB8D64B, 0x7FD4FF, 0xFF6B5B, 0xE5B33A,
+                            2, 0, 3] as Array<Number>;
+    const CUSTOM_FIFTH_DEFAULT = 0xE5B33A;
+
+    //! The highest ramp stop a custom theme may name. Four, not five: the
+    //! version-1 config code packs a stop into two bits, and a stop it cannot
+    //! write would corrupt the code the watch publishes.
+    const CUSTOM_STOP_MAX = 3;
     // Literal values because Monkey C const arrays have failed on-device when
     // their initialisers refer to other consts. The tests pin these to the enum.
     const THEME_IDS = [0, 1, 7, 8] as Array<Number>;
@@ -116,11 +127,25 @@ module StatMap {
     const TEMP_AHEAD_LOW_DEFAULT = 0;
     const TEMP_AHEAD_HIGH_DEFAULT = 45;
 
-    //! Four rings, each independently assigned to a Source.
-    const RINGS = 4;
-    const PROPERTY_RINGS = ["ring1", "ring2", "ring3", "ring4"] as Array<String>;
+    //! The rings, each independently assigned to a Source: four, or five on
+    //! the 454 (Lattice.RINGS). A per-screen const, so every array and loop
+    //! sized by it still folds at compile time.
+    const RINGS as Number = Lattice.RINGS;
 
-    const RING_THICKNESS = (DotGrid.RADIUS - DotGrid.HUB) / RINGS;
+    //! One property per ring the face can have. Every watch carries ring5;
+    //! only a five-ring watch reads it, the way only the Crossover reads
+    //! handBacking. It is not in settings.xml, so Garmin Connect never offers
+    //! a ring a watch cannot draw — the on-device menu sets it.
+    const PROPERTY_RINGS = ["ring1", "ring2", "ring3", "ring4", "ring5"]
+                           as Array<String>;
+
+    //! What each ring shows until set: Steps, intensity minutes, battery, Body
+    //! Battery, and Steps again for the 454's centre ball — its outer ring
+    //! tells the time, so Steps is otherwise nowhere on a fresh face. Literal
+    //! values for the reason THEME_IDS gives; the tests pin them to the enum.
+    const RING_DEFAULTS = [0, 6, 2, 3, 0] as Array<Number>;
+
+    const RING_THICKNESS = (DotGrid.RADIUS - DotGrid.INNER) / RINGS;
 
     var theme as Number = THEME_TERRAIN;
     //! The custom theme, always loaded whichever theme is in force, so a
@@ -135,13 +160,10 @@ module StatMap {
     var tempAheadLow as Number = TEMP_AHEAD_LOW_DEFAULT;
     var tempAheadHigh as Number = TEMP_AHEAD_HIGH_DEFAULT;
 
-    //! Which source each ring shows. Index 0 is the outermost ring.
-    var rings as Array<Number> = [
-        Source.SOURCE_STEPS,
-        Source.SOURCE_INTENSITY_MINUTES,
-        Source.SOURCE_BATTERY,
-        Source.SOURCE_BODY_BATTERY
-    ] as Array<Number>;
+    //! Which source each ring shows. Index 0 is the outermost ring. Sized and
+    //! filled by load(); this placeholder only has to be long enough for any
+    //! ring a watch can have.
+    var rings as Array<Number> = [0, 6, 2, 3, 0] as Array<Number>;
 
     //! Re-read every setting. Safe at any time; anything missing or out of
     //! range falls back to its default rather than throwing.
@@ -166,12 +188,9 @@ module StatMap {
                                  OUTLINE_50, OUTLINE_80);
         loadTempAheadScale();
 
-        var defaults = [Source.SOURCE_STEPS, Source.SOURCE_INTENSITY_MINUTES,
-                        Source.SOURCE_BATTERY, Source.SOURCE_BODY_BATTERY]
-                       as Array<Number>;
         var loaded = new [RINGS] as Array<Number>;
         for (var i = 0; i < RINGS; i++) {
-            var stored = readNumber(PROPERTY_RINGS[i], defaults[i],
+            var stored = readNumber(PROPERTY_RINGS[i], RING_DEFAULTS[i],
                                     0, Source.COUNT - 1);
             // A ring still set to the retired source reads as Off. The slot is
             // kept so no *other* setting changes meaning, but a ring pointed at
@@ -252,7 +271,18 @@ module StatMap {
         } catch (ex) {
             stored = null;
         }
-        if (!(stored instanceof Array) || stored.size() != CUSTOM_THEME_SIZE) {
+        if (!(stored instanceof Array)) {
+            return CUSTOM_DEFAULT;
+        }
+        // Stored before themes had five colours: slot the default fifth in
+        // after the four, ahead of the stops.
+        if (stored.size() == CUSTOM_THEME_SIZE_V1) {
+            var widened = stored.slice(0, Palette.THEME_COLOURS - 1);
+            widened.add(CUSTOM_FIFTH_DEFAULT);
+            widened.addAll(stored.slice(Palette.THEME_COLOURS - 1, null));
+            stored = widened;
+        }
+        if (stored.size() != CUSTOM_THEME_SIZE) {
             return CUSTOM_DEFAULT;
         }
         for (var i = 0; i < CUSTOM_THEME_SIZE; i++) {
@@ -260,8 +290,7 @@ module StatMap {
             if (!(value instanceof Number)) {
                 return CUSTOM_DEFAULT;
             }
-            var high = (i < Palette.THEME_COLOURS) ? 0xFFFFFF
-                                                   : Palette.THEME_COLOURS - 1;
+            var high = (i < Palette.THEME_COLOURS) ? 0xFFFFFF : CUSTOM_STOP_MAX;
             if (value < 0 || value > high) {
                 return CUSTOM_DEFAULT;
             }

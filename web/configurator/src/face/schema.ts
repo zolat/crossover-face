@@ -51,6 +51,10 @@ export interface FaceSchema {
   defaultsDrawn: Record<string, number | string>;
   themes: Theme[];
   themeCustom: number;
+  /** StatMap.CUSTOM_FIFTH_DEFAULT: the fifth colour a four-colour custom theme gains. */
+  customFifthDefault: number;
+  /** StatMap.RING_DEFAULTS: each ring's source until set, five of them. */
+  ringDefaults: number[];
   palette: PaletteFactors;
   sources: {
     kinds: Record<string, number>;

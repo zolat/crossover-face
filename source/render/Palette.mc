@@ -55,25 +55,35 @@ module Palette {
     //! dots, and leaves it beside blue rather than either of the closer hues.
     //!
     //! Ring 1 is the outermost.
-    const THEME_COLOURS = 4;
+    //!
+    //! **Five colours, for the 454's five rings.** A four-ring watch never
+    //! reads the fifth. Each was picked on the five-ring mockup as the hue the
+    //! theme did not already have and its neighbour does not crowd: gold beside
+    //! Terrain's rust, indigo beside Activity's gold, lime beside Beacon's gold,
+    //! ice beside Pulse's lime.
+    const THEME_COLOURS = 5;
     const THEME_COUNT = 4;
     const THEMES = [
         0xE879F9,   //! Terrain:  orchid
         0xB8D64B,   //!           moss
         0x7FD4FF,   //!           ice
         0xFF6B5B,   //!           rust
+        0xE5B33A,   //!           gold
         0xFE4646,   //! Activity: red
         0x6DC54F,   //!           green
         0x1F8FFE,   //!           blue
         0xE59A0A,   //!           gold
+        0x8E7BFF,   //!           indigo
         0x5CD9F0,   //! Beacon:   cyan
         0xFE4646,   //!           red
         0x8E7BFF,   //!           indigo
         0xE59A0A,   //!           gold
+        0xB8D64B,   //!           lime
         0xFE4646,   //! Pulse:    red
         0x2FD9C5,   //!           teal
         0xE879F9,   //!           orchid
-        0xB8D64B    //!           lime
+        0xB8D64B,   //!           lime
+        0x7FD4FF    //!           ice
     ] as Array<Number>;
 
     const WEAK_ACTIVE = 0.55;

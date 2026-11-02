@@ -36,12 +36,12 @@ PITCH = 10
 DOT = 5
 
 LATTICES = {
-    #                 SIZE COLS RADIUS HUB  halfW  cw  hour minute  hands
-    "instinctcrossoveramoled": (390, 38, 190, 21, 14, 46, 131, 176, True),
-    "epix2pro42mm":            (390, 38, 190, 21, 14, 46, 131, 176, False),
-    "epix2":                   (416, 40, 203, 22, 15, 49, 140, 188, False),
-    "epix2pro47mm":            (416, 40, 203, 22, 15, 49, 140, 188, False),
-    "epix2pro51mm":            (454, 42, 210, 23, 15, 51, 145, 195, False),
+    #                 SIZE COLS RADIUS HUB rings halfW  cw  hour minute  hands
+    "instinctcrossoveramoled": (390, 38, 190, 21, 4, 14, 46, 131, 176, True),
+    "epix2pro42mm":            (390, 38, 190, 21, 4, 14, 46, 131, 176, False),
+    "epix2":                   (416, 40, 203, 22, 4, 15, 49, 140, 188, False),
+    "epix2pro47mm":            (416, 40, 203, 22, 4, 15, 49, 140, 188, False),
+    "epix2pro51mm":            (454, 42, 210, 23, 5, 15, 51, 145, 195, False),
 }
 DEFAULT_DEVICE = "instinctcrossoveramoled"
 
@@ -60,13 +60,13 @@ def use_device(name: str) -> None:
     such seam in a script, so the module's globals are rebound instead. Same
     numbers, same source of truth - see the note on LATTICES.
     """
-    global DEVICE, DEVICE_DIR, SIZE, COLS, ROWS, RADIUS, HUB
+    global DEVICE, DEVICE_DIR, SIZE, COLS, ROWS, RADIUS, HUB, RINGS
     global HAND_HALF_WIDTH, HAND_COUNTERWEIGHT, HOUR_REACH, MINUTE_REACH
     global HANDS
     if name not in LATTICES:
         raise SystemExit(f"unknown device {name!r}; known: "
                          + ", ".join(sorted(LATTICES)))
-    (SIZE, COLS, RADIUS, HUB, HAND_HALF_WIDTH, HAND_COUNTERWEIGHT,
+    (SIZE, COLS, RADIUS, HUB, RINGS, HAND_HALF_WIDTH, HAND_COUNTERWEIGHT,
      HOUR_REACH, MINUTE_REACH, HANDS) = LATTICES[name]
     ROWS = COLS
     DEVICE = name
@@ -121,13 +121,13 @@ TIME_SOURCES = (SOURCE_TIME, SOURCE_TIME_OVERLAP)
 # can be told apart. Activity keeps gold on the smallest, innermost ring.
 SHIPPING_THEMES = {
     "terrain": [(0xE8, 0x79, 0xF9), (0xB8, 0xD6, 0x4B),
-                (0x7F, 0xD4, 0xFF), (0xFF, 0x6B, 0x5B)],
+                (0x7F, 0xD4, 0xFF), (0xFF, 0x6B, 0x5B), (0xE5, 0xB3, 0x3A)],
     "activity": [(0xFE, 0x46, 0x46), (0x6D, 0xC5, 0x4F),
-                 (0x1F, 0x8F, 0xFE), (0xE5, 0x9A, 0x0A)],
+                 (0x1F, 0x8F, 0xFE), (0xE5, 0x9A, 0x0A), (0x8E, 0x7B, 0xFF)],
     "beacon": [(0x5C, 0xD9, 0xF0), (0xFE, 0x46, 0x46),
-               (0x8E, 0x7B, 0xFF), (0xE5, 0x9A, 0x0A)],
+               (0x8E, 0x7B, 0xFF), (0xE5, 0x9A, 0x0A), (0xB8, 0xD6, 0x4B)],
     "pulse": [(0xFE, 0x46, 0x46), (0x2F, 0xD9, 0xC5),
-              (0xE8, 0x79, 0xF9), (0xB8, 0xD6, 0x4B)],
+              (0xE8, 0x79, 0xF9), (0xB8, 0xD6, 0x4B), (0x7F, 0xD4, 0xFF)],
 }
 
 # Mockup-only candidates. They deliberately have no production IDs, resource
@@ -195,8 +195,10 @@ def marker_half(ring: int) -> float:
     the outermost but 0.076 of one on the innermost, where an outer-tuned
     window falls between dots and the mark disappears.
     """
-    thickness = (RADIUS - HUB) / RINGS
+    thickness = (RADIUS - ring_floor()) / RINGS
     inner = RADIUS - (ring + 1) * thickness
+    # A centre ball's inner edge is the centre: sized half a ring out instead.
+    inner = max(inner, thickness / 2.0)
     return PITCH / (2.0 * 2.0 * math.pi * inner)
 
 
@@ -215,7 +217,7 @@ def marked(position: float, mark: float, half: float) -> bool:
 
 def mark_middle(ring: int) -> float:
     """The across-the-ring middle. Mirrors DotGrid.markMiddles."""
-    thickness = (RADIUS - HUB) / RINGS
+    thickness = (RADIUS - ring_floor()) / RINGS
     mid = RADIUS - (ring + 0.5) * thickness
     return mid * mid
 
@@ -323,7 +325,7 @@ def band_edge(ring: int, tier: int) -> float:
     """Squared outer radius of a sub-band. Mirrors DotGrid.bandEdges: integer
     thickness, matching the edges that decide a dot's ring, and the top band
     takes the ring's own outer edge rather than stacking three steps."""
-    thickness = (RADIUS - HUB) // RINGS
+    thickness = (RADIUS - ring_floor()) // RINGS
     step = thickness // HOUR_BANDS
     inner = RADIUS - (ring + 1) * thickness
     edge = inner + thickness if tier == HOUR_BANDS else inner + tier * step
@@ -362,7 +364,7 @@ def partial_half_for(level: int) -> float:
 
 
 # Mirrors HourBands.WINDOW_FLOOR: only ring 2 (menu ring 3) is floored.
-WINDOW_FLOOR = (0.0, 0.0, 0.12, 0.0)
+WINDOW_FLOOR = (0.0, 0.0, 0.12, 0.0, 0.0)
 
 
 def partial_half_on(level: int, ring: int) -> float:
@@ -542,7 +544,7 @@ RINGS = 4
 def ring_map(dx: int, dy: int):
     """Radius picks the ring, position runs clockwise from 12."""
     dist = math.hypot(dx, dy)
-    thickness = (RADIUS - HUB) / RINGS
+    thickness = (RADIUS - ring_floor()) / RINGS
     ring = min(RINGS - 1, max(0, int((RADIUS - dist) / thickness)))
     return ring, ((math.degrees(math.atan2(dx, -dy)) + 360) % 360) / 360.0
 
@@ -559,6 +561,13 @@ HAND_MARGIN = 0
 #: Whether this watch has hands to back. Set by use_device(). Mirrors
 #: HandStyle.HANDS: on a watch with none, no backing is ever drawn.
 HANDS = True
+
+def ring_floor() -> int:
+    """Where ring thickness is measured from: the hub under hands, the centre
+    without them, so the centre ball's radius is one ring. Mirrors
+    DotGrid.INNER."""
+    return HUB if HANDS else 0
+
 
 def clear_sq() -> int:
     """Inside this, squared, no dots: the hub under hands, nothing without them,
@@ -725,6 +734,14 @@ def draw_outline(draw, day: int, colours: dict, drift) -> None:
 # --- rendering ---------------------------------------------------------------
 
 
+def _pad(values, filler):
+    """A per-ring list extended to RINGS, or None left alone."""
+    if values is None:
+        return None
+    values = list(values)
+    return values + [filler] * (RINGS - len(values))
+
+
 def render(spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
            held_back: bool = False, hourly=None,
            backing: tuple[int, int, int] | None = None,
@@ -734,6 +751,10 @@ def render(spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
            date: int | None = None,
            time: tuple[float, float] | None = None) -> Image.Image:
     img = Image.new("RGB", (SIZE, SIZE), (0, 0, 0))
+    # Scenes are written for four rings; a five-ring watch's centre ball shows
+    # Steps at its default reading, as StatMap.RING_DEFAULTS has it.
+    spans, assign = _pad(spans, (0.0, 0.68)), _pad(assign, 0)
+    marks, overs = _pad(marks, -1.0), _pad(overs, False)
     # The watermark's cells, resolved once rather than per dot.
     # Awake only. Mirrors CrossoverView.showsDate().
     dating = date is not None and not always_on

@@ -67,18 +67,33 @@ small modules are what differ, and exactly one copy of each reaches any build:
     source-lattice/{crossover,epix416,epix454}/Lattice.mc   the screen
     source-hands/{physical,none}/HandStyle.mc               what the hands are
 
-    screen  COLS  RADIUS  HUB  dots   devices
-    390       38     190   21  1112   instinctcrossoveramoled
-    390       38     190   21  1124   epix2pro42mm         (hub dotted, +12)
-    416       40     203   22  1288   epix2, epix2pro47mm  (+16)
-    454       42     210   23  1396   epix2pro51mm         (+16)
+    screen  COLS  RADIUS  HUB  rings  ring px  dots   devices
+    390       38     190   21      4       42  1112   instinctcrossoveramoled
+    390       38     190   21      4       47  1124   epix2pro42mm         (hub dotted, +12)
+    416       40     203   22      4       50  1288   epix2, epix2pro47mm  (+16)
+    454       42     210   23      5       42  1396   epix2pro51mm         (+16)
 
-**The hub has dots on a watch with no hands.** `DotGrid.CLEAR_SQ` is `HUB²` where hands
-cover the hub and 0 where none do, so on the Epix the innermost ring runs to the centre and
-draws as a solid disc, still filling clockwise. `HUB` itself still sets every ring's
-thickness on every watch, so nothing else moves. `Lattice.HUB_DOTS` is what each screen
-adds (`theHubHasDotsOnlyWithoutHands`); hourly blocks stay off the innermost ring there too,
-because its inner sub-band is twelve wedge tips at the centre, not a band. The 42mm Epix
+**The ring count is per screen.** `Lattice.RINGS` is 4, 4 and 5, and `StatMap.RINGS as
+Number = Lattice.RINGS`, so every array and loop sized by it still folds at compile time.
+The 454 alone has five: the largest screen, and since the drawn hands went the one with
+frame budget to spare. Its fifth ring is the centre ball, set by `ring5` (default Steps,
+because the outer ring tells the time there). Every watch carries `ring5` and only the 454
+reads it, the way only the Crossover reads `handBacking`; it is not in `settings.xml`, so
+Garmin Connect never offers a ring a watch cannot draw, and the version-1 config code does
+not carry it (`ConfigCode.CODE_RINGS`). `onlyThe454HasAFifthRing` holds all of that.
+
+**The hub has dots on a watch with no hands, and rings are measured from the centre
+there.** `DotGrid.CLEAR_SQ` is `HUB²` where hands cover the hub and 0 where none do, so on
+the Epix the innermost ring runs to the centre and draws as a solid disc, still filling
+clockwise. Thickness is `(RADIUS − DotGrid.INNER) / RINGS`, where `INNER` is `HUB` with hands
+and 0 without, so the ball's radius is one ring thickness rather than a hub's width more —
+the user's call, made when the fifth ring left the 454 at 37px rings measured from the hub.
+`Lattice.HUB_DOTS` is what each screen adds (`theHubHasDotsOnlyWithoutHands`,
+`ringsAreMeasuredFromTheCentreWithoutHands`). Two places had divided by the ring's inner
+edge and needed a floor once it could be 0: `markerWidths` and `ringInners` size the ball
+half a ring out, where its dots are, or the quick mark search anchors at the centre and
+misses them. Hourly blocks stay off the innermost ring there too, because its inner
+sub-band is twelve wedge tips at the centre, not a band. The 42mm Epix
 shares the Crossover's `Lattice` but not its dots, so `tools/geometry_export.py` writes a
 lattice per screen *and* hub — `390-hands` is the Crossover's — and the configurator loads
 `Device.lattice`.
@@ -112,11 +127,12 @@ A native 454 fill wants `COLS 44` — 1512 dots, a 12px unlit rim matching the C
 10px. **It tripped the watchdog with the Epix's drawn hands on and would not load.** Bisected
 on the simulator, hands on: 1388 dots ran, 1444 did not. 1380 is what ships, at a 22px rim.
 
-The dots alone were not the problem — 1544 rendered fine with the hands off. It was the hand
-test on top of them. **The Epix no longer draws hands** (see *The Epix tells the time in its
-outer ring*), so that test never runs there and `COLS 44` may now fit — unmeasured. Measure it
-with the headroom probe before raising the count; the Crossover at 1112 is still one
-dot-count bump from its own cliff, with its backing test on.
+**It still does not fit without the hands, and that is measured.** Headroom probe, heaviest
+Epix ring set (time ring, Body Battery and temperature-ahead blocks, temperature range, the
+date), every frame worst-case, two interleaved runs each: `COLS 42` held ~1,500 `PAD` with
+four rings and ~1,200–1,300 with five; `COLS 44` tripped on its *first* frame in both runs.
+About 130 extra dots cost more than all the headroom there was. The Crossover at 1112 is
+likewise one dot-count bump from its own cliff, with its backing test on.
 
 If this is ever revisited, the lever is `PITCH`, and `PITCH` drags `DOT`, `DotGrid.ARMS`,
 `Drift`'s offsets and the whole Python mirror with it. That is a phase, not an edit.
@@ -887,9 +903,10 @@ it did not make, because whether a watch reads a file it never wrote is still un
 
 Stored values are **list indices**, so `resources/properties.xml`, `resources/settings/settings.xml`,
 `resources/strings/strings.xml`, the enums in `StatMap`/`Source`, and the label arrays in
-`source/settings/SettingsMenu.mc` all have to agree. Twelve properties today: `theme`,
-`handBacking`, `alwaysOnFill`, `dotRotation`, `showDate`, `dateOutline`, `ring1`–`ring4`,
-`tempAheadLow`, `tempAheadHigh`. `dotRotation` stores three values and offers two: the third, Upright +
+`source/settings/SettingsMenu.mc` all have to agree. Fourteen properties today: `theme`,
+`handBacking`, `alwaysOnFill`, `dotRotation`, `showDate`, `dateOutline`, `ring1`–`ring5`,
+`tempAheadLow`, `tempAheadHigh`, `configCode` — `ring5` only in `properties.xml`, read on the
+454 alone and set from its on-device menu (see *One face, five watches*). `dotRotation` stores three values and offers two: the third, Upright +
 date, is **retired** — `StatMap.load()` reads it as Upright, and `showDate`'s default of On
 keeps that wearer's date. Never give 2 a new meaning.
 
@@ -899,7 +916,7 @@ index.** −20 to 50, empty block at `tempAheadLow`, full at `tempAheadHigh`.
 phone accepts each end alone; `HourlyWeatherData` divides by the gap and relies on it.
 The levels are bucketed against the scale when sampled, so `Config.reload()` calls
 `HourlyWeatherData.forget()` — drop that and a scale change takes a minute to appear. The
-on-watch entry is two rows *after* the four rings in `RingMenu`, so ring rows keep their
+on-watch entry is two rows *after* the rings in `RingMenu`, so ring rows keep their
 indices; each opens a 71-row `ChoiceMenu` focused on the value in use, measured at ~12.7KB
 of heap while open (`theTemperaturePickerOpensOnTheValueInUse` logs it).
 
@@ -949,19 +966,27 @@ To change a setting in the simulator: **File → Edit Persistent Storage → Edi
 Application.Properties**. Persisted values beat `properties.xml`, so a stale one survives a
 rebuild until **Reset All App Data**.
 
-### A theme is four ring slots and three ramp stops
+### A theme is five ring slots and three ramp stops
 
 `Palette.THEMES` holds only shipping ring colours **flat**, indexed by the dense slot returned
 from `StatMap.themeIndex()`, for the reason `DotGrid.ARMS` is flat: a const array of arrays is
 further than Monkey C's `const` is meant to go, and nesting it resolves in the simulator and
 comes back empty on the watch. `RAMP_STOPS` is flat for the same reason.
 
-There are four shipping themes, outermost to innermost:
+There are four shipping themes, outermost to innermost. The fifth colour is the 454's
+centre ball and no four-ring watch reads it; each was picked on the five-ring mockup as a hue
+the theme lacked and its neighbour does not crowd:
 
-- Terrain: orchid `#E879F9`, moss `#B8D64B`, ice `#7FD4FF`, rust `#FF6B5B`.
-- Activity: red `#FE4646`, green `#6DC54F`, blue `#1F8FFE`, gold `#E59A0A`.
-- Beacon: cyan `#5CD9F0`, red `#FE4646`, indigo `#8E7BFF`, gold `#E59A0A`.
-- Pulse: red `#FE4646`, teal `#2FD9C5`, orchid `#E879F9`, lime `#B8D64B`.
+- Terrain: orchid `#E879F9`, moss `#B8D64B`, ice `#7FD4FF`, rust `#FF6B5B`, gold `#E5B33A`.
+- Activity: red `#FE4646`, green `#6DC54F`, blue `#1F8FFE`, gold `#E59A0A`, indigo `#8E7BFF`.
+- Beacon: cyan `#5CD9F0`, red `#FE4646`, indigo `#8E7BFF`, gold `#E59A0A`, lime `#B8D64B`.
+- Pulse: red `#FE4646`, teal `#2FD9C5`, orchid `#E879F9`, lime `#B8D64B`, ice `#7FD4FF`.
+
+The custom theme is five colours and three stops too (`CUSTOM_THEME_SIZE` 8). One stored
+before that, four and three, is read with `CUSTOM_FIFTH_DEFAULT` (Terrain's gold) slotted in.
+The version-1 config code carries four colours (`ConfigCode.CODE_COLOURS`) and `apply()`
+keeps the watch's fifth, and a stop stays at most 3 (`CUSTOM_STOP_MAX`) because the code
+packs it into two bits.
 
 The temperature ramp names three **indices into the theme, not colours**: a ramp stop *is* a
 ring colour, and writing the value a second time is how the two drift apart. Terrain runs ice

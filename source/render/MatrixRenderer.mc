@@ -185,8 +185,10 @@ module MatrixRenderer {
     //! callers that predate the sun channel need not learn it exists.
     //! Literals, because a const array initialised from other consts has come
     //! back empty on the watch; noSunsCoverEveryRing pins it to the shape.
-    const NO_SUNS = [-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0]
-        as Array<Float>;
+    //! Long enough for five rings, the most any watch has; a four-ring watch
+    //! reads the first eight.
+    const NO_SUNS = [-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0,
+                     -1.0, -1.0] as Array<Float>;
 
     //! Axes and turn positions ignored while hand backing is off. A constant
     //! avoids allocating a six-float placeholder on every drawn frame.

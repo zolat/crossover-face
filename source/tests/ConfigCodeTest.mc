@@ -189,11 +189,12 @@ module ConfigCodeTest {
         var keys = [StatMap.PROPERTY_BACKING, StatMap.PROPERTY_ALWAYS_ON_FILL,
                     StatMap.PROPERTY_ROTATION, StatMap.PROPERTY_DATE,
                     StatMap.PROPERTY_DATE_OUTLINE] as Array<String>;
-        keys.addAll(StatMap.PROPERTY_RINGS);
+        // Version 1 carries the first four rings; the 454's fifth is outside it.
+        keys.addAll(StatMap.PROPERTY_RINGS.slice(0, ConfigCode.CODE_RINGS));
         var highs = [StatMap.BACKING_DARK, StatMap.ALWAYS_ON_FILL_HIDDEN,
                      StatMap.ROTATION_UPRIGHT, StatMap.DATE_ON,
                      StatMap.OUTLINE_80] as Array<Number>;
-        for (var ring = 0; ring < StatMap.RINGS; ring++) {
+        for (var ring = 0; ring < ConfigCode.CODE_RINGS; ring++) {
             highs.add(Source.COUNT - 1);
         }
         Test.assertEqualMessage(ConfigCode.ENUM_KEYS.size(), keys.size(),
@@ -207,10 +208,12 @@ module ConfigCodeTest {
         }
         Test.assertEqualMessage(StatMap.CUSTOM_THEME_SIZE,
             Palette.THEME_COLOURS + Palette.RAMP_POINTS,
-            "a custom theme is four colours and three ramp stops");
+            "a custom theme is five colours and three ramp stops");
         Test.assertEqualMessage(ConfigCode.FIELDS,
-            1 + ConfigCode.ENUM_KEYS.size() + 2 + StatMap.CUSTOM_THEME_SIZE,
-            "a config vector is theme, settings, temperatures, custom theme");
+            1 + ConfigCode.ENUM_KEYS.size() + 2 + ConfigCode.CODE_COLOURS +
+                Palette.RAMP_POINTS,
+            "a config vector is theme, settings, temperatures, four custom " +
+            "colours and the stops");
         return true;
     }
 
@@ -219,7 +222,8 @@ module ConfigCodeTest {
     (:test)
     function aCustomThemeDrawsItsOwnColoursAndRamp(logger as Logger) as Boolean {
         var saved = snapshot();
-        var colours = [0x123456, 0xABCDEF, 0x00FF00, 0xFF8000] as Array<Number>;
+        var colours = [0x123456, 0xABCDEF, 0x00FF00, 0xFF8000, 0x8000FF]
+                      as Array<Number>;
         setCustom(colours, [3, 1, 0] as Array<Number>);
         Properties.setValue(StatMap.PROPERTY_THEME, StatMap.THEME_CUSTOM);
         Config.reload();
@@ -245,7 +249,8 @@ module ConfigCodeTest {
     function theCustomThemeIsCarriedWhicheverThemeIsSelected(
             logger as Logger) as Boolean {
         var saved = snapshot();
-        var colours = [0x111111, 0x222222, 0x333333, 0x444444] as Array<Number>;
+        var colours = [0x111111, 0x222222, 0x333333, 0x444444, 0x555555]
+                      as Array<Number>;
         setCustom(colours, [0, 1, 2] as Array<Number>);
         Properties.setValue(StatMap.PROPERTY_THEME, StatMap.THEME_BEACON);
         Config.reload();
@@ -255,12 +260,48 @@ module ConfigCodeTest {
         var carried = decoded as Array<Number>;
         Test.assertEqualMessage(carried[0], StatMap.THEME_BEACON,
             "the code must say which theme is in force");
-        for (var i = 0; i < Palette.THEME_COLOURS; i++) {
+        for (var i = 0; i < ConfigCode.CODE_COLOURS; i++) {
             Test.assertEqualMessage(carried[ConfigCode.FIELD_COLOURS + i],
                 colours[i], "custom colour " + i + " was dropped");
         }
+        Test.assertEqualMessage(carried[ConfigCode.FIELD_TEMP_LOW],
+            StatMap.tempAheadLow,
+            "a fifth ring must not spill into the temperature field");
         Test.assertEqualMessage(Palette.active[1], 0x5CD9F0,
             "a stored custom theme must not leak into a shipping one");
+        restore(saved);
+        return true;
+    }
+
+    //! A custom theme stored before themes had five colours still loads, with
+    //! the default fifth slotted in ahead of its stops; and a version-1 code,
+    //! which carries four colours, leaves the watch's fifth colour alone.
+    (:test)
+    function aFourColourCustomThemeGainsAFifth(logger as Logger) as Boolean {
+        var saved = snapshot();
+        Storage.setValue(StatMap.STORAGE_CUSTOM_THEME,
+            [0x111111, 0x222222, 0x333333, 0x444444, 3, 1, 0]
+                as Array<Application.Storage.ValueType>);
+        Config.reload();
+        var custom = StatMap.customTheme;
+        Test.assertEqualMessage(custom.size(), StatMap.CUSTOM_THEME_SIZE,
+            "a four-colour custom theme must load widened, not fall back");
+        Test.assertEqualMessage(custom[3], 0x444444, "colour 4 moved");
+        Test.assertEqualMessage(custom[4], StatMap.CUSTOM_FIFTH_DEFAULT,
+            "the fifth colour must be the default");
+        Test.assertEqualMessage(custom[5], 3, "the stops must follow the colours");
+
+        setCustom([0x111111, 0x222222, 0x333333, 0x444444, 0x5A5A5A]
+                      as Array<Number>, [0, 1, 2] as Array<Number>);
+        Config.reload();
+        var code = ConfigCode.current();
+        code[ConfigCode.FIELD_COLOURS] = 0x777777;
+        ConfigCode.apply(code);
+        Config.reload();
+        Test.assertEqualMessage(StatMap.customTheme[0], 0x777777,
+            "the code's colours must apply");
+        Test.assertEqualMessage(StatMap.customTheme[4], 0x5A5A5A,
+            "a version-1 code must leave the fifth colour as it was");
         restore(saved);
         return true;
     }

@@ -34,6 +34,11 @@
     <property id="ring2" type="number">1</property>
     <property id="ring3" type="number">2</property>
     <property id="ring4" type="number">3</property>
+    <!-- The 454's centre ball (StatMap.RINGS is 5 there alone). Every watch
+         carries it and only that one reads it; it is deliberately not in
+         settings.xml, so Garmin Connect never offers a ring a watch cannot
+         draw. Steps, because that watch's outer ring tells the time. -->
+    <property id="ring5" type="number">0</property>
     <!-- The temperature-ahead ring's scale, in whole degrees Celsius: an hour
          at or below tempAheadLow is an empty block, at or above tempAheadHigh
          a full one. Values, not list indices. -20 to 50; StatMap.load() swaps

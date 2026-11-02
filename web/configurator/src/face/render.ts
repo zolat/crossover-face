@@ -90,7 +90,7 @@ export function render(image: ImageData, lattice: Lattice, palette: BuiltPalette
 
   const alwaysOn = mode === "alwaysOn";
   const heldBack = alwaysOn && config.alwaysOnFill === 1;
-  const sources = effectiveRings(config, drawnHands);
+  const sources = effectiveRings(config, drawnHands, lattice.ringCounts.length);
   const readings = sources.map((source) => readingFor(source, alwaysOn));
   const [hourEnd, minuteEnd] = timeFractions(SAMPLE_TIME.hour, SAMPLE_TIME.minute);
   // TimeRing's split edge: the innermost sub-band's outer edge, integer like DotGrid's.

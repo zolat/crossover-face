@@ -223,9 +223,15 @@ class RingMenu extends WatchUi.Menu2 {
 
     function initialize() {
         Menu2.initialize({:title => Rez.Strings.RingsTitle});
-        var titles = [Rez.Strings.Ring1Title, Rez.Strings.Ring2Title,
-                      Rez.Strings.Ring3Title, Rez.Strings.Ring4Title]
-                     as Array<ResourceId>;
+        // The last ring is the inner one, whichever it is: ring 4 says so on a
+        // four-ring watch and ring 5 on the 454.
+        var titles = (StatMap.RINGS == 5)
+            ? [Rez.Strings.Ring1Title, Rez.Strings.Ring2Title,
+               Rez.Strings.Ring3Title, Rez.Strings.Ring4MiddleTitle,
+               Rez.Strings.Ring5Title] as Array<ResourceId>
+            : [Rez.Strings.Ring1Title, Rez.Strings.Ring2Title,
+               Rez.Strings.Ring3Title, Rez.Strings.Ring4Title]
+              as Array<ResourceId>;
         for (var i = 0; i < StatMap.RINGS; i++) {
             addItem(new WatchUi.MenuItem(
                 titles[i], SOURCE_LABELS[StatMap.rings[i]], i, null));

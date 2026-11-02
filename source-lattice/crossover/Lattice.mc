@@ -47,6 +47,9 @@ module Lattice {
     //! legible.
     const HUB as Number = 21;
 
+    //! Rings on this screen, outermost first.
+    const RINGS as Number = 4;
+
     //! What DotGrid.measureRows() counts from the values above. Asserted, not
     //! trusted: it is a claim about this lattice that the suite re-derives.
     const EXPECTED_DOTS as Number = 1112;
