@@ -381,7 +381,9 @@ in Garmin Connect or Garmin Express if the face is ever installed from the store
 custom theme — as one 38-character code. Paste a code there in Garmin Connect and the
 face applies it; the field always shows the watch's current setup, so it can be copied
 back out. `web/configurator/` builds codes in a browser, with a preview drawn on the
-watch's own dot layout:
+watch's own dot layout. It is published at **https://zolat.github.io/crossover-face/**,
+rebuilt by `.github/workflows/configurator-pages.yml` whenever `main` changes it or the
+settings it mirrors. To run it locally:
 
 ```sh
 cd web/configurator && npm ci && npm run dev     # the configurator
