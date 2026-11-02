@@ -54,6 +54,10 @@ module Lattice {
     //! trusted: it is a claim about this lattice that the suite re-derives.
     const EXPECTED_DOTS as Number = 1380;
 
+    //! Lattice dots inside the hub: kept on a watch with no hands, where the
+    //! innermost ring runs to the centre, so that build expects this many more.
+    const HUB_DOTS as Number = 16;
+
     // --- the hands -----------------------------------------------------------
     //
     // Read off Devices/instinctcrossoveramoled/simulator.json: both hands are

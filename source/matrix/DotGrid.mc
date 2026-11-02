@@ -26,10 +26,18 @@ module DotGrid {
     const ROWS as Number = Lattice.ROWS;
 
     const RADIUS as Number = Lattice.RADIUS;
-    const HUB as Number = Lattice.HUB;    //! Where the hands cross; never legible.
+    //! Where the hands cross. It sets the innermost ring's inner edge — and so
+    //! every ring's thickness — on every watch.
+    const HUB as Number = Lattice.HUB;
 
     const RADIUS_SQ = RADIUS * RADIUS;
     const HUB_SQ = HUB * HUB;
+
+    //! Inside this, squared, the lattice has no dots. The hub where there are
+    //! hands to cover it; nothing on a watch with none, so the innermost ring
+    //! runs to the centre and draws as a solid disc rather than a ring round a
+    //! hole the hands no longer fill.
+    const CLEAR_SQ = HandStyle.HANDS ? HUB_SQ : 0;
 
     //! Both grid dimensions are even, so no dot ever sits on an axis and
     //! every dot belongs to exactly one quadrant. build() leans on that.
@@ -43,10 +51,10 @@ module DotGrid {
     }
 
     //! Is there a dot at this offset from centre? False in the corners the
-    //! round screen does not have, and under the hub where nothing is visible.
+    //! round screen does not have, and under the hub where hands cover it.
     function contains(dx as Number, dy as Number) as Boolean {
         var distanceSq = dx * dx + dy * dy;
-        return distanceSq <= RADIUS_SQ && distanceSq >= HUB_SQ;
+        return distanceSq <= RADIUS_SQ && distanceSq >= CLEAR_SQ;
     }
 
     // --- cached dot list -----------------------------------------------------
@@ -303,7 +311,7 @@ module DotGrid {
             for (var c = 0; c < HALF; c++) {
                 var u = (LAST - 2 * c) * STEP;      //! |dx| for this column
                 var d = u * u + vSq;
-                if (d <= RADIUS_SQ && d >= HUB_SQ) {
+                if (d <= RADIUS_SQ && d >= CLEAR_SQ) {
                     n++;
                 }
             }
@@ -515,7 +523,7 @@ module DotGrid {
                 }
                 var dx = offsetAt(c);
                 var d = dx * dx + dy * dy;
-                if (d > RADIUS_SQ || d < HUB_SQ) {
+                if (d > RADIUS_SQ || d < CLEAR_SQ) {
                     continue;
                 }
                 // build()'s ring test, so the two agree on every edge.
@@ -745,7 +753,7 @@ module DotGrid {
             for (var c = 0; c < HALF; c++) {
                 var u = (LAST - 2 * c) * STEP;
                 var distanceSq = u * u + vSq;
-                if (distanceSq > RADIUS_SQ || distanceSq < HUB_SQ) {
+                if (distanceSq > RADIUS_SQ || distanceSq < CLEAR_SQ) {
                     ringAt[base + c] = -1;
                     continue;
                 }

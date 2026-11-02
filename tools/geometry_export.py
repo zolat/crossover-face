@@ -75,7 +75,7 @@ def orientation_for(dx: int, dy: int) -> int:
     return step
 
 
-def lattice(size: int, cols: int, radius: int, hub: int) -> dict:
+def lattice(size: int, cols: int, radius: int, hub: int, hands: bool) -> dict:
     thickness = (radius - hub) // RINGS
     edges = [radius - (k + 1) * thickness for k in range(RINGS)]
     edges_sq = [edge * edge for edge in edges]
@@ -87,7 +87,8 @@ def lattice(size: int, cols: int, radius: int, hub: int) -> dict:
         for col in range(cols):
             dx = (2 * col - (cols - 1)) * (PITCH // 2)
             d = dx * dx + dy * dy
-            if d > radius * radius or d < hub * hub:
+            # The hub has dots on a watch with no hands to cover it (DotGrid.CLEAR_SQ).
+            if d > radius * radius or (hands and d < hub * hub):
                 continue
             ring = 0
             while ring < RINGS - 1 and d < edges_sq[ring]:
@@ -102,6 +103,7 @@ def lattice(size: int, cols: int, radius: int, hub: int) -> dict:
         "cols": cols,
         "radius": radius,
         "hub": hub,
+        "hubDots": not hands,
         "pitch": PITCH,
         "dot": DOT,
         "rings": RINGS,
@@ -114,12 +116,19 @@ def lattice(size: int, cols: int, radius: int, hub: int) -> dict:
     }
 
 
-def lattices() -> dict[int, dict]:
-    """One per screen size; devices that share a size share a lattice."""
-    out: dict[int, dict] = {}
-    for device, (size, cols, radius, hub, *_rest) in mockup.LATTICES.items():
-        if size not in out:
-            out[size] = lattice(size, cols, radius, hub)
+def lattice_key(size: int, hands: bool) -> str:
+    """The file a device's lattice is in. A screen size alone is not enough: the
+    Crossover and the 42mm Epix are both 390, and only the Epix fills its hub."""
+    return f"{size}-hands" if hands else str(size)
+
+
+def lattices() -> dict[str, dict]:
+    """One per screen size and hub; devices that share both share a lattice."""
+    out: dict[str, dict] = {}
+    for device, (size, cols, radius, hub, *_rest, hands) in mockup.LATTICES.items():
+        key = lattice_key(size, hands)
+        if key not in out:
+            out[key] = lattice(size, cols, radius, hub, hands)
     return out
 
 
@@ -129,21 +138,22 @@ def devices() -> list[dict]:
     # on itself — once with drawn hands, now with the time ring. That is a watch
     # with no hands of its own.
     for device, (size, *_rest, hands) in mockup.LATTICES.items():
-        rows.append({"id": device, "screen": size, "drawnHands": not hands,
+        rows.append({"id": device, "screen": size, "lattice": lattice_key(size, hands),
+                     "drawnHands": not hands,
                      "displayMm": round(DISPLAY_INCHES[device] * 25.4, 2)})
     return rows
 
 
-def monkeyc_block(by_size: dict[int, dict]) -> str:
+def monkeyc_block(by_size: dict[str, dict]) -> str:
     flat = []
-    for size in sorted(by_size):
-        data = by_size[size]
-        flat.append(f"        {size}, "
+    for key in sorted(by_size):
+        data = by_size[key]
+        flat.append(f"        {data['screen']}, {int(data['hubDots'])}, "
                     + ", ".join(str(n) for n in data["ringCounts"] + data["orientationCounts"]))
     return "\n".join([
         BLOCK_START,
-        "    //! Per lattice: the screen, dots per ring outermost first, then dots per",
-        "    //! (ring, ARMS row), ring-major.",
+        "    //! Per lattice: the screen, 1 if the hub has dots, dots per ring outermost",
+        "    //! first, then dots per (ring, ARMS row), ring-major.",
         "    const RING_DOTS = [",
         ",\n".join(flat),
         "    ] as Array<Number>;",
@@ -151,10 +161,10 @@ def monkeyc_block(by_size: dict[int, dict]) -> str:
     ])
 
 
-def render(by_size: dict[int, dict]) -> dict[Path, str]:
+def render(by_size: dict[str, dict]) -> dict[Path, str]:
     files = {
-        OUT_DIR / f"{size}.json": json.dumps(data, separators=(",", ":")) + "\n"
-        for size, data in by_size.items()
+        OUT_DIR / f"{key}.json": json.dumps(data, separators=(",", ":")) + "\n"
+        for key, data in by_size.items()
     }
     files[OUT_DIR / "devices.json"] = json.dumps(devices(), indent=2) + "\n"
     return files
@@ -186,8 +196,8 @@ def main(argv: list[str] | None = None) -> int:
         print("stale: " + ", ".join(str(p.relative_to(REPO)) for p in stale)
               + " - run python3 tools/geometry_export.py", file=sys.stderr)
         return 1
-    for size, data in sorted(by_size.items()):
-        print(f"{size}: {len(data['dots'])} dots, rings {data['ringCounts']}")
+    for key, data in sorted(by_size.items()):
+        print(f"{key}: {len(data['dots'])} dots, rings {data['ringCounts']}")
     return 0
 
 

@@ -237,7 +237,7 @@ def marked_dot(ring: int, mark: float):
         for col in range(COLS):
             dx = (2 * col - (COLS - 1)) * (PITCH // 2)
             d = dx * dx + dy * dy
-            if d > RADIUS * RADIUS or d < HUB * HUB:
+            if d > RADIUS * RADIUS or d < clear_sq():
                 continue
             r, position = ring_map(dx, dy)
             if r != ring or not marked(position, mark, half):
@@ -560,6 +560,12 @@ HAND_MARGIN = 0
 #: HandStyle.HANDS: on a watch with none, no backing is ever drawn.
 HANDS = True
 
+def clear_sq() -> int:
+    """Inside this, squared, no dots: the hub under hands, nothing without them,
+    so the innermost ring runs to the centre. Mirrors DotGrid.CLEAR_SQ."""
+    return HUB * HUB if HANDS else 0
+
+
 #: What handAt()'s three answers paint.
 NO_HAND, HOUR, MINUTE = 0, 1, 2
 
@@ -756,7 +762,7 @@ def render(spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
         for col in range(COLS):
             dx = (2 * col - (COLS - 1)) * (PITCH // 2)
             dist_sq = dx * dx + dy * dy
-            if dist_sq > RADIUS * RADIUS or dist_sq < HUB * HUB:
+            if dist_sq > RADIUS * RADIUS or dist_sq < clear_sq():
                 continue
 
             x, y = centre + dx, centre + dy

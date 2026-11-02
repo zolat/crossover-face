@@ -2,30 +2,35 @@
   {
     "id": "instinctcrossoveramoled",
     "screen": 390,
+    "lattice": "390-hands",
     "drawnHands": false,
     "displayMm": 30.48
   },
   {
     "id": "epix2pro42mm",
     "screen": 390,
+    "lattice": "390",
     "drawnHands": true,
     "displayMm": 30.48
   },
   {
     "id": "epix2",
     "screen": 416,
+    "lattice": "416",
     "drawnHands": true,
     "displayMm": 33.02
   },
   {
     "id": "epix2pro47mm",
     "screen": 416,
+    "lattice": "416",
     "drawnHands": true,
     "displayMm": 33.02
   },
   {
     "id": "epix2pro51mm",
     "screen": 454,
+    "lattice": "454",
     "drawnHands": true,
     "displayMm": 35.56
   }

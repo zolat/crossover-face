@@ -51,16 +51,16 @@ export function mountApp(root: HTMLElement, store: Store, devices: Device[]) {
   const saved = savedSection(library, store, (id) => DEVICE_NAMES[id] ?? id);
 
   let lattice: Lattice | null = null;
-  let latticeScreen = 0;
+  let latticeKey = "";
   const deviceOf = (state: State) => devices.find((device) => device.id === state.device) ?? devices[0];
 
   // --- the preview ---------------------------------------------------------
 
   async function drawPreview(state: State) {
     const device = deviceOf(state);
-    if (!lattice || latticeScreen !== device.screen) {
-      lattice = await loadLattice(device.screen);
-      latticeScreen = device.screen;
+    if (!lattice || latticeKey !== device.lattice) {
+      lattice = await loadLattice(device.lattice);
+      latticeKey = device.lattice;
     }
     if (store.get() !== state) return; // a newer state is already on its way
     const palette = build(themeColours(state.config.theme, custom(state.config)));

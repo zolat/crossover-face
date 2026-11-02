@@ -68,9 +68,20 @@ small modules are what differ, and exactly one copy of each reaches any build:
     source-hands/{physical,none}/HandStyle.mc               what the hands are
 
     screen  COLS  RADIUS  HUB  dots   devices
-    390       38     190   21  1112   instinctcrossoveramoled, epix2pro42mm
-    416       40     203   22  1272   epix2, epix2pro47mm
-    454       42     210   23  1380   epix2pro51mm
+    390       38     190   21  1112   instinctcrossoveramoled
+    390       38     190   21  1124   epix2pro42mm         (hub dotted, +12)
+    416       40     203   22  1288   epix2, epix2pro47mm  (+16)
+    454       42     210   23  1396   epix2pro51mm         (+16)
+
+**The hub has dots on a watch with no hands.** `DotGrid.CLEAR_SQ` is `HUB²` where hands
+cover the hub and 0 where none do, so on the Epix the innermost ring runs to the centre and
+draws as a solid disc, still filling clockwise. `HUB` itself still sets every ring's
+thickness on every watch, so nothing else moves. `Lattice.HUB_DOTS` is what each screen
+adds (`theHubHasDotsOnlyWithoutHands`); hourly blocks stay off the innermost ring there too,
+because its inner sub-band is twelve wedge tips at the centre, not a band. The 42mm Epix
+shares the Crossover's `Lattice` but not its dots, so `tools/geometry_export.py` writes a
+lattice per screen *and* hub — `390-hands` is the Crossover's — and the configurator loads
+`Device.lattice`.
 
 **`Lattice`'s constants stay `const` on both sides of the seam.** `DotGrid` re-declares them
 (`const RADIUS as Number = Lattice.RADIUS;`) rather than reading through, so everything

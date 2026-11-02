@@ -101,9 +101,12 @@ C compiler fails on them, which bites people whose iCloud folder is named
 | Product IDs | Screen | Input | Hands | Dots |
 |---|---:|---|---|---:|
 | `instinctcrossoveramoled` | 390 × 390px | buttons | physical | 1,112 |
-| `epix2pro42mm` | 390 × 390px | touch + buttons | time ring | 1,112 |
-| `epix2`, `epix2pro47mm` | 416 × 416px | touch + buttons | time ring | 1,272 |
-| `epix2pro51mm` | 454 × 454px | touch + buttons | time ring | 1,380 |
+| `epix2pro42mm` | 390 × 390px | touch + buttons | time ring | 1,124 |
+| `epix2`, `epix2pro47mm` | 416 × 416px | touch + buttons | time ring | 1,288 |
+| `epix2pro51mm` | 454 × 454px | touch + buttons | time ring | 1,396 |
+
+With no hands to hide it, the Epix fills the hub with dots: its centre ring is a solid
+disc rather than a ring round an empty middle.
 
 All targets are round AMOLED watches. Reference data lives under
 `~/.Garmin/ConnectIQ/Devices/<product-id>/`; the SDK also provides a page under

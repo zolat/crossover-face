@@ -6,6 +6,8 @@ export interface Lattice {
   cols: number;
   radius: number;
   hub: number;
+  /** True where the hub has dots: a watch with no hands, whose innermost ring runs to the centre. */
+  hubDots: boolean;
   pitch: number;
   dot: number;
   rings: number;
@@ -19,21 +21,24 @@ export interface Lattice {
 export interface Device {
   id: string;
   screen: number;
+  /** The lattice file: the screen size, and `-hands` where the hub is kept clear for hands. */
+  lattice: string;
   drawnHands: boolean;
   /** The display's published diameter, for the real-size view. */
   displayMm: number;
 }
 
-const cache = new Map<number, Promise<Lattice>>();
+const cache = new Map<string, Promise<Lattice>>();
 
-export function loadLattice(screen: number, base = import.meta.env.BASE_URL): Promise<Lattice> {
-  let found = cache.get(screen);
+/** A device's lattice by `Device.lattice`. A screen size is not enough: the Crossover and the 42mm Epix share 390. */
+export function loadLattice(key: string, base = import.meta.env.BASE_URL): Promise<Lattice> {
+  let found = cache.get(key);
   if (!found) {
-    found = fetch(`${base}geometry/${screen}.json`).then((response) => {
-      if (!response.ok) throw new Error(`no lattice for ${screen}: ${response.status}`);
+    found = fetch(`${base}geometry/${key}.json`).then((response) => {
+      if (!response.ok) throw new Error(`no lattice ${key}: ${response.status}`);
       return response.json() as Promise<Lattice>;
     });
-    cache.set(screen, found);
+    cache.set(key, found);
   }
   return found;
 }

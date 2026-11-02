@@ -6,28 +6,29 @@ import { alwaysOnWorst } from "./luminance";
 import { build, mix, scale, themeColours } from "./palette";
 import { schema } from "./schema";
 
-const lattice = (screen: number) =>
+const lattice = (key: string) =>
   JSON.parse(
-    readFileSync(fileURLToPath(new URL(`../../public/geometry/${screen}.json`, import.meta.url)), "utf8"),
+    readFileSync(fileURLToPath(new URL(`../../public/geometry/${key}.json`, import.meta.url)), "utf8"),
   ) as Lattice;
 
 // What MatrixTest logs for each shipping theme — everyThemeFitsTheAlwaysOnBudget,
 // theAlwaysOnMarkFitsTheBudget and theSunDotsFitTheAlwaysOnBudget — captured from the
-// suite on 2026-11-01. The acceptance bar is 0.1 points; these agree to the log's
-// six digits, so a drift in the formula shows long before it matters.
-const LOGGED: Record<number, Record<number, [number, number, number]>> = {
-  390: { 0: [0.060301, 0.0006, 0.001083], 1: [0.047197, 0.000583, 0.001017],
-         7: [0.05269, 0.000626, 0.001125], 8: [0.0514, 0.000635, 0.001153] },
-  454: { 0: [0.060955, 0.000491, 0.000886], 1: [0.047714, 0.000477, 0.000833],
-         7: [0.053944, 0.000512, 0.000921], 8: [0.052004, 0.00052, 0.000944] },
+// suite: the Crossover's 390-hands on 2026-11-01, the 454 Epix on 2026-11-02 once its hub
+// had dots. The acceptance bar is 0.1 points; these agree to the log's six digits, so a
+// drift in the formula shows long before it matters.
+const LOGGED: Record<string, Record<number, [number, number, number]>> = {
+  "390-hands": { 0: [0.060301, 0.0006, 0.001083], 1: [0.047197, 0.000583, 0.001017],
+                 7: [0.05269, 0.000626, 0.001125], 8: [0.0514, 0.000635, 0.001153] },
+  "454": { 0: [0.061514, 0.000491, 0.000886], 1: [0.048365, 0.000477, 0.000833],
+           7: [0.054594, 0.000512, 0.000921], 8: [0.052809, 0.00052, 0.000944] },
 };
 const NO_CUSTOM = { colours: [0, 0, 0, 0], ramp: [0, 0, 0] };
 
 describe("always-on luminance", () => {
-  for (const [screen, themes] of Object.entries(LOGGED)) {
+  for (const [key, themes] of Object.entries(LOGGED)) {
     for (const [theme, [field, marks, suns]] of Object.entries(themes)) {
-      it(`matches MatrixTest for theme ${theme} at ${screen}`, () => {
-        const figure = alwaysOnWorst(lattice(Number(screen)), build(themeColours(Number(theme), NO_CUSTOM)));
+      it(`matches MatrixTest for theme ${theme} at ${key}`, () => {
+        const figure = alwaysOnWorst(lattice(key), build(themeColours(Number(theme), NO_CUSTOM)));
         expect(figure.field).toBeCloseTo(field, 5);
         expect(figure.marks).toBeCloseTo(marks, 5);
         expect(figure.suns).toBeCloseTo(suns, 5);
@@ -37,12 +38,12 @@ describe("always-on luminance", () => {
 
   it("matches ConfigCodeTest's all-white custom theme, under budget", () => {
     const white = build({ colours: [0xffffff, 0xffffff, 0xffffff, 0xffffff], ramp: [0, 1, 2] });
-    const figure = alwaysOnWorst(lattice(390), white);
+    const figure = alwaysOnWorst(lattice("390-hands"), white);
     expect(figure.field).toBeCloseTo(0.088245, 5);
     expect(figure.marks).toBeCloseTo(0.000564, 5);
     expect(figure.suns).toBeCloseTo(0.00107, 5);
-    for (const screen of [390, 416, 454]) {
-      expect(alwaysOnWorst(lattice(screen), white).total).toBeLessThan(0.1);
+    for (const key of ["390-hands", "390", "416", "454"]) {
+      expect(alwaysOnWorst(lattice(key), white).total).toBeLessThan(0.1);
     }
   });
 });

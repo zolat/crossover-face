@@ -115,6 +115,11 @@ untouched.
   minute outshone its magenta hour); softer: Terrain light blue / salmon, Activity and Pulse
   magenta / mustard, Beacon mint / lavender. Chosen on the mockups over HSV and an
   OKLCH-keep-saturation hybrid.
+- [x] Phase 5 — the centre as a ball. Without hands the hub's empty middle looked odd, so
+  the Epix keeps the lattice's dots inside it (`DotGrid.CLEAR_SQ`): +12 at 390, +16 at 416
+  and 454, all in the innermost ring, which now draws as a solid disc. It still fills
+  clockwise — chosen on the mockups over a disc that grows from the centre. The geometry
+  export splits the 390 lattice into the Crossover's `390-hands` and the Epix's `390`.
 - [ ] Phase 4.2 — a "time colours" control in the configurator (spread, maybe lightness
   offset), as the playground had. Needs a setting and a config-code version.
 

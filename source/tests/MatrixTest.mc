@@ -19,7 +19,8 @@ module MatrixTest {
     //! It is still a pin: Lattice states the count as a claim and the tests
     //! below re-derive it from COLS, RADIUS and HUB, so a wrong figure in
     //! either place fails rather than propagating.
-    const EXPECTED_DOTS as Number = Lattice.EXPECTED_DOTS;
+    const EXPECTED_DOTS as Number = Lattice.EXPECTED_DOTS +
+                                    (HandStyle.HANDS ? 0 : Lattice.HUB_DOTS);
 
     //! Garmin blanks an always-on face above this share of screen luminance.
     const BUDGET = 0.10;
@@ -220,13 +221,28 @@ module MatrixTest {
         return true;
     }
 
+    //! Under the hub there are dots exactly where there are no hands to cover
+    //! it, and they belong to the innermost ring.
     (:test)
-    function hubIsExcluded(logger as Logger) as Boolean {
-        Test.assertMessage(!DotGrid.contains(0, 0), "centre must be empty");
-        Test.assertMessage(!DotGrid.contains(DotGrid.HUB - 1, 0),
-            "inside the hub must be empty");
+    function theHubHasDotsOnlyWithoutHands(logger as Logger) as Boolean {
+        Test.assertEqualMessage(DotGrid.contains(5, 5), !HandStyle.HANDS,
+            "the hub must be empty under hands and dotted without them");
+        Test.assertEqualMessage(DotGrid.contains(DotGrid.HUB - 1, 0),
+            !HandStyle.HANDS, "likewise its edge");
         Test.assertMessage(DotGrid.contains(DotGrid.HUB + 5, 0),
             "just outside the hub must have dots");
+        DotGrid.ensureBuilt();
+        var inner = StatMap.RINGS - 1;
+        var centred = 0;
+        for (var i = DotGrid.ringStart[inner]; i < DotGrid.ringStart[inner + 1]; i++) {
+            var dx = DotGrid.xs[i];
+            var dy = DotGrid.ys[i];
+            if (dx * dx + dy * dy < DotGrid.HUB_SQ) {
+                centred++;
+            }
+        }
+        Test.assertEqualMessage(centred, HandStyle.HANDS ? 0 : Lattice.HUB_DOTS,
+            "the hub's dots must be the innermost ring's");
         return true;
     }
 
@@ -5830,7 +5846,12 @@ module MatrixTest {
                 Test.assertMessage(worst >= MIN_BAND_DOTS,
                     "ring " + ring + " is offered the forecast but its " +
                     "thinnest sub-band holds only " + worst + " dots");
-            } else {
+            } else if (HandStyle.HANDS) {
+                // Only with a clear hub. Without hands the innermost ring runs
+                // to the centre, and its inner sub-band's dots are twelve
+                // wedge tips crowding the middle rather than a band a block
+                // could be read in — the count clears the bar and still means
+                // nothing, so the forecast stays off it there too.
                 Test.assertMessage(worst < MIN_BAND_DOTS,
                     "ring " + ring + " holds " + worst + " dots in its " +
                     "thinnest sub-band, so it could carry the forecast — " +
