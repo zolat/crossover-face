@@ -24,7 +24,7 @@ body { font: 400 16px/1.5 "Hanken Grotesk", system-ui, sans-serif; -webkit-font-
 .stage { position: sticky; top: 0; height: 100vh; display: grid; grid-template-columns: minmax(0, 1fr); place-items: center; padding: 56px 48px calc(var(--code-h) * 0 + 88px); }
 .face-box { width: min(calc(100vh - 200px), 92%); aspect-ratio: 1; display: grid; place-items: center; }
 .face { border-radius: 50%; image-rendering: pixelated; display: block; max-width: 100%; aspect-ratio: 1; height: auto; }
-.face.smooth { image-rendering: auto; }
+.face.smooth, .face.shrunk { image-rendering: auto; }
 .face[hidden], .card[hidden] { display: none; }
 .card { border: 1px dashed var(--text); }
 .mode { position: absolute; top: 24px; left: 48px; right: 48px; display: flex; flex-wrap: wrap; gap: 10px 28px; }
@@ -86,7 +86,7 @@ h2 { margin: 36px 0 10px; }
 .temp input { width: 76px; }
 
 /* The code: always in reach, because getting it onto the watch is the point. */
-.code { position: fixed; right: 0; bottom: 0; width: calc(100% * 0.85 / 2); min-width: 360px; background: #000; border-top: 1px solid var(--rule); border-left: 1px solid var(--rule); padding: 16px 48px 20px; }
+.code { position: fixed; z-index: 2; right: 0; bottom: 0; width: calc(100% * 0.85 / 2); min-width: 360px; background: #000; border-top: 1px solid var(--rule); border-left: 1px solid var(--rule); padding: 16px 48px 20px; }
 .code > p { margin: 0 0 4px; color: var(--quiet); font-size: 14px; }
 .code output { display: block; font: 600 21px/1.3 Doto, ui-monospace, monospace; letter-spacing: .04em; word-break: break-all; color: var(--code, var(--text)); user-select: all; }
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; margin-top: 12px; }
@@ -123,8 +123,10 @@ button { font: 600 15px "Hanken Grotesk", sans-serif; cursor: pointer; }
 
 @media (max-width: 860px) {
   .app { display: block; }
-  .stage { position: relative; height: auto; padding: 16px 16px 64px; }
-  .face-box { width: 100%; }
+  /* Sticky with a negative top that compact.ts sets: the face shrinks into the strip
+     left showing, above the controls scrolling under it. */
+  .stage { position: sticky; top: 0; z-index: 1; background: var(--black); height: auto; padding: 16px 16px 64px; }
+  .face-box { width: 100%; transform-origin: top center; }
   .mode { position: static; order: -1; justify-self: start; margin-bottom: 16px; }
   .size { position: static; margin-top: 12px; }
   .meter { left: 16px; right: 16px; bottom: 20px; }

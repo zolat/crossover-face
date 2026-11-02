@@ -314,6 +314,32 @@ try {
   check("the face fills the phone's width", faceBox[0] >= 15.5 && faceBox[1] <= 374.5 && faceBox[1] - faceBox[0] > 340, `${faceBox}`);
   await phone.screenshot({ path: join(shots, "phone-top.png") });
   await phone.screenshot({ path: join(shots, "phone-full.png"), fullPage: true });
+  // Scrolled down to the controls, the face shrinks into a strip at the top and stays.
+  const faceOnScreen = () => phone.$eval("canvas.face", (el) => {
+    const r = el.getBoundingClientRect();
+    return { top: r.top, bottom: r.bottom, size: r.width };
+  });
+  const fullFace = await faceOnScreen();
+  await phone.$eval(".rings", (el) => el.scrollIntoView({ block: "center" }));
+  await new Promise((r) => setTimeout(r, 150));
+  const shrunk = await faceOnScreen();
+  check("scrolled to the rings, the face stays on screen", shrunk.top >= 0 && shrunk.bottom <= 844, JSON.stringify(shrunk));
+  check("…shrunk, but not too small to read", shrunk.size < fullFace.size * 0.5 && shrunk.size >= 100, `${shrunk.size} of ${fullFace.size}`);
+  const ringClear = await phone.$eval(".rings .ring:nth-child(1) select", (el) => {
+    const r = el.getBoundingClientRect();
+    return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2) === el;
+  });
+  check("…and the controls are not under it", ringClear);
+  await phone.select(".rings .ring:nth-child(1) select", "7");
+  await new Promise((r) => setTimeout(r, 150));
+  check("a change made down there shows in the shrunk face", (await phone.$eval(".code output", (el) => el.textContent)) !== vector &&
+    (await faceOnScreen()).top >= 0);
+  await phone.screenshot({ path: join(shots, "phone-scrolled.png") });
+  await phone.evaluate(() => window.scrollTo(0, 0));
+  await new Promise((r) => setTimeout(r, 150));
+  check("back at the top, the face is full size again", Math.abs((await faceOnScreen()).size - fullFace.size) < 1);
+  check("the desktop face does not stick or shrink", await page.$eval(".stage", (el) => el.style.top === "") &&
+    await page.$eval(".face-box", (el) => el.style.transform === ""));
   const savedFits = await phone.$$eval(".saved .entry", (rows) => rows.length > 0 && rows.every((row) => row.getBoundingClientRect().right <= 390 - 16 + 0.5));
   check("saved configs fit at phone width", savedFits);
 

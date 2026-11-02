@@ -14,6 +14,7 @@ import { remembered, type State, type Store, writeHash } from "../state";
 import { choices, select } from "./controls";
 import { h } from "./dom";
 import { savedSection, suggestedName } from "./library";
+import { compactFace } from "./compact";
 import { CARD_MM, calibration, estimatedPxPerMm, faceSize, type View } from "./size";
 
 const DEVICE_NAMES: Record<string, string> = {
@@ -39,9 +40,9 @@ export function mountApp(root: HTMLElement, store: Store, devices: Device[]) {
   const meterFill = h("i", {});
   const modeSlot = h("div", { class: "mode" });
   const sizeSlot = h("div", { class: "size" });
-  const stage = h("section", { class: "stage", "aria-label": "Preview" }, faceBox, modeSlot, sizeSlot,
-    h("div", { class: "meter" }, meterText, h("span", { class: "bar", "aria-hidden": "true" }, meterFill, h("b", {})),
-      h("span", {}, "10%")));
+  const meter = h("div", { class: "meter" }, meterText, h("span", { class: "bar", "aria-hidden": "true" }, meterFill, h("b", {})),
+    h("span", {}, "10%"));
+  const stage = h("section", { class: "stage", "aria-label": "Preview" }, faceBox, modeSlot, sizeSlot, meter);
   const panel = h("section", { class: "panel" });
   const codeBar = h("footer", { class: "code" });
   root.replaceChildren(h("div", { class: "app" }, stage, panel), codeBar);
@@ -110,6 +111,7 @@ export function mountApp(root: HTMLElement, store: Store, devices: Device[]) {
   }
 
   function drawSize(state: State) {
+    shrinking.refresh();
     if (state.view !== "actual") {
       sizeSlot.replaceChildren();
       return;
@@ -136,6 +138,8 @@ export function mountApp(root: HTMLElement, store: Store, devices: Device[]) {
   }
 
   new ResizeObserver(() => fitFace(store.get())).observe(faceBox);
+  // On a phone the face shrinks into a strip at the top rather than scrolling away.
+  const shrinking = compactFace(stage, faceBox, canvas, [modeSlot, sizeSlot, meter], () => !calibrating);
 
   // --- the code ------------------------------------------------------------
 
