@@ -25,7 +25,7 @@ import Toybox.System;
 //!
 //! On a watch whose hands are real, this is correct only while they show system
 //! time; the view asks for that explicitly via View.setClockHandPosition().
-//! Where the face draws them there is nothing to ask.
+//! A watch with no hands never backs anything, so none of this runs there.
 module HandBacking {
 
     //! What handAt() answers with, and the slots a colour table is indexed by.
@@ -33,6 +33,15 @@ module HandBacking {
     const HOUR = 1;
     const MINUTE = 2;
     const SLOTS = 3;
+
+    //! Colour for each slot handAt() can return: nothing, the hour hand, the
+    //! minute hand. Both hands take the one backing colour, because the brass
+    //! hands themselves are what tell them apart — the dots only have to sit
+    //! behind. A table rather than one colour so the renderer's loop is an
+    //! index, whichever hand a dot is under.
+    function coloursFor(backing as Number) as Array<Number> {
+        return [0, backing, backing] as Array<Number>;
+    }
 
     const HALF_WIDTH as Number = Lattice.HAND_HALF_WIDTH;
     const COUNTERWEIGHT as Number = Lattice.HAND_COUNTERWEIGHT;

@@ -384,12 +384,7 @@ module MatrixRenderer {
         // What each hand paints, indexed by the slot handAt() returns. Resolved
         // once a frame, not once a dot — the loop is left with an array lookup
         // where it used to have a colour, which is the same work.
-        //
-        // A table rather than a branch is what lets the two hand styles differ
-        // for free: the Crossover points both slots at its one backing colour,
-        // and a drawn face gives the hour and minute their own, with neither
-        // paying for the other's shape.
-        var handColour = HandStyle.coloursFor(backingColour);
+        var handColour = HandBacking.coloursFor(backingColour);
         // The hand footprint, hoisted. handAt() keeps the readable definition
         // of the test below; these are the numbers its body reads, lifted out
         // so the inlined copy costs no lookups. They are consts, so this is

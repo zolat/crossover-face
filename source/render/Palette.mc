@@ -212,22 +212,6 @@ module Palette {
     const BACKING_WHITE = 0xFFFFFF;
     const BACKING_DARK = 0x101010;
 
-    //! The hands themselves, on a watch that has none of its own.
-    //!
-    //! These are the Crossover's real hands, read off `analogHands.colors` in
-    //! its simulator.json: a white hour hand and a mid-grey minute hand. Taking
-    //! them rather than choosing something is what makes the drawn hands free
-    //! of the palette. Every theme in this file was already designed around a
-    //! grey minute hand sweeping over it — it is the constraint the whole
-    //! palette answers to — so reusing these two values means no theme needs
-    //! measuring again.
-    //!
-    //! The hour hand takes BACKING_WHITE rather than a second copy of
-    //! 0xFFFFFF, for the reason RAMP_STOPS holds indices: writing a colour
-    //! twice is how the two drift apart.
-    const HAND_HOUR = BACKING_WHITE;
-    const HAND_MINUTE = 0x808080;
-
     //! The time ring's elapsed dots. White, because that is the Crossover's own
     //! hour hand and the one colour no theme uses, so it reads as the clock
     //! rather than as a fifth reading. What has not elapsed draws from dimOf —

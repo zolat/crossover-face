@@ -25,8 +25,7 @@ class CrossoverApp extends Application.AppBase {
     }
 
     function getInitialView() as [Views] or [Views, InputDelegates] {
-        var view = new CrossoverView();
-        return [view, new CrossoverDelegate(view)];
+        return [new CrossoverView()];
     }
 
     //! The on-device settings menu, offered by the system Watch Face menu.

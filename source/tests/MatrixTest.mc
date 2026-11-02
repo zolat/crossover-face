@@ -86,7 +86,7 @@ module MatrixTest {
     function frameLuminanceWithHands(spans as Array<Array<Float> >,
                                      palette as Array<Number>,
                                      backing as Number) as Float {
-        var handColour = HandStyle.coloursFor(backing);
+        var handColour = HandBacking.coloursFor(backing);
         var total = 0.0;
         for (var row = 0; row < DotGrid.ROWS; row++) {
             var dy = DotGrid.offsetAt(row);
@@ -1467,10 +1467,6 @@ module MatrixTest {
         return (label == null) ? "" : label.toString();
     }
 
-    //! Every settings row that shows a value, by index. The rings row is not
-    //! here: it opens a sub-menu and carries no value of its own.
-    const MENU_VALUE_ROWS = [0, 1, 2, 3, 4, 5, 6, 8] as Array<Number>;
-
     // --- the date ----------------------------------------------------------
 
     //! The day the tests draw. Two digits with no repeated one, so a glyph
@@ -1875,12 +1871,12 @@ module MatrixTest {
         var view = new CrossoverView();
         var saved = StatMap.date;
         StatMap.date = StatMap.DATE_ON;
-        Test.assertMessage(!view.showsDate(null, true),
+        Test.assertMessage(!view.showsDate(true),
             "an always-on frame must never carry the date");
-        Test.assertMessage(view.showsDate(null, false),
+        Test.assertMessage(view.showsDate(false),
             "an awake frame with the setting on must");
         StatMap.date = StatMap.DATE_OFF;
-        Test.assertMessage(!view.showsDate(null, false),
+        Test.assertMessage(!view.showsDate(false),
             "and the setting off must keep it off awake too");
         StatMap.date = saved;
 
@@ -2215,45 +2211,50 @@ module MatrixTest {
         return true;
     }
 
-    //! The row the staleness test below drives. Named rather than written as a
-    //! bare index because the two have to move together: the test changes the
-    //! backing setting and then asserts that *this* row followed it, so a row
-    //! inserted above backing turns the test into a check on somebody else's
-    //! sub-label, which passes for the wrong reason or fails for no reason.
-    const MENU_BACKING_ROW = 2;
-
+    //! A row's sub-label follows its setting once the menu is shown again,
+    //! and every row that carries a value still has one after the refresh.
+    //!
+    //! Driven through the rotation row, which every watch has, and found by id
+    //! as onShow() finds it: the Hands row exists only where there are hands,
+    //! so a row's index differs between the Crossover and the Epix.
     (:test)
     function settingsMenuRefreshesItsSubLabels(logger as Logger) as Boolean {
-        Properties.setValue(StatMap.PROPERTY_BACKING, StatMap.BACKING_OFF);
+        var saved = StatMap.rotation;
+        Properties.setValue(StatMap.PROPERTY_ROTATION, StatMap.ROTATION_RADIAL);
         Config.reload();
         var menu = new SettingsMenu();
-        var before = subLabelOf(menu, MENU_BACKING_ROW);
+        var row = menu.findItemById(:rotation);
+        Test.assertMessage(row >= 0, "the menu has no rotation row");
+        var before = subLabelOf(menu, row);
 
         // What a sub-menu does when the user picks a different value.
-        Properties.setValue(StatMap.PROPERTY_BACKING, StatMap.BACKING_WHITE);
+        Properties.setValue(StatMap.PROPERTY_ROTATION,
+                            StatMap.ROTATION_UPRIGHT);
         Config.reload();
-        Test.assertEqualMessage(subLabelOf(menu, MENU_BACKING_ROW), before,
+        Test.assertEqualMessage(subLabelOf(menu, row), before,
             "sub-label should still be stale before the menu is shown again");
 
         menu.onShow();
-        logger.debug("was '" + before + "', now '" +
-                     subLabelOf(menu, MENU_BACKING_ROW) + "'");
-        Test.assertMessage(!subLabelOf(menu, MENU_BACKING_ROW).equals(before),
+        logger.debug("was '" + before + "', now '" + subLabelOf(menu, row) +
+                     "'");
+        Test.assertMessage(!subLabelOf(menu, row).equals(before),
             "onShow must refresh the sub-label to the new setting");
 
-        // onShow refreshes rows by index, so inserting a row silently points
-        // the refreshes at the wrong ones. Every row that carries a value must
-        // still have one after a refresh.
-        for (var i = 0; i < MENU_VALUE_ROWS.size(); i++) {
-            var row = MENU_VALUE_ROWS[i];
-            Test.assertMessage(menu.getItem(row) != null,
-                "menu row " + row + " is missing");
-            Test.assertMessage(subLabelOf(menu, row).length() > 0,
-                "menu row " + row + " lost its sub-label — the indexes " +
-                "onShow refreshes have drifted from the rows it adds");
+        // Every row but the rings, which opens a sub-menu, shows a value.
+        var rows = 0;
+        for (var i = 0; menu.getItem(i) != null; i++) {
+            var item = menu.getItem(i) as WatchUi.MenuItem;
+            rows++;
+            if (item.getId() == :rings) {
+                continue;
+            }
+            Test.assertMessage(subLabelOf(menu, i).length() > 0,
+                "menu row " + i + " lost its sub-label after a refresh");
         }
+        Test.assertEqualMessage(rows, HandStyle.HANDS ? 9 : 8,
+            "the menu must have every row, the Hands row only with hands");
 
-        Properties.setValue(StatMap.PROPERTY_BACKING, StatMap.BACKING_OFF);
+        Properties.setValue(StatMap.PROPERTY_ROTATION, saved);
         Config.reload();
         return true;
     }
@@ -4080,105 +4081,48 @@ module MatrixTest {
         return true;
     }
 
-    //! Each hand paints from its own slot, and the two styles differ only there.
-    //!
-    //! `HandStyle.coloursFor` is what the renderer hoists once a frame and then
-    //! indexes per dot, so this is the whole of the difference between a watch
-    //! whose hands are brass and one that draws them. Asserted through the
-    //! style rather than against fixed colours, so one test serves both builds.
+    //! Both hands back with the one colour: the brass hands are what tell them
+    //! apart, so the dots behind only have to sit there.
     (:test)
-    function eachHandPaintsFromItsOwnSlot(logger as Logger) as Boolean {
-        var colours = HandStyle.coloursFor(Palette.BACKING_WHITE);
+    function bothHandsBackWithTheOneColour(logger as Logger) as Boolean {
+        var colours = HandBacking.coloursFor(Palette.BACKING_WHITE);
         Test.assertEqualMessage(colours.size(), HandBacking.SLOTS,
             "the table must have a slot for every answer handAt gives");
-        logger.debug("hour " + colours[HandBacking.HOUR].format("%06X") +
-                     ", minute " + colours[HandBacking.MINUTE].format("%06X"));
-        if (HandStyle.DRAWN) {
-            // Drawn, the two hands must be told apart. They are the Crossover's
-            // own white-and-grey pair, which is what lets every theme's
-            // measurements carry over untouched.
-            Test.assertEqualMessage(colours[HandBacking.HOUR],
-                Palette.HAND_HOUR, "the drawn hour hand is the Crossover's");
-            Test.assertEqualMessage(colours[HandBacking.MINUTE],
-                Palette.HAND_MINUTE, "the drawn minute hand is the Crossover's");
-            Test.assertMessage(
-                colours[HandBacking.HOUR] != colours[HandBacking.MINUTE],
-                "drawn hands must be distinguishable from each other");
-        } else {
-            // Brass, the hands distinguish themselves and the dots behind them
-            // only have to sit there, so one backing colour serves both.
-            Test.assertEqualMessage(colours[HandBacking.HOUR],
-                Palette.BACKING_WHITE, "the backing is the backing");
-            Test.assertEqualMessage(colours[HandBacking.MINUTE],
-                Palette.BACKING_WHITE, "both hands take the one backing");
-        }
-        // Dark is a silhouette on either watch: one colour, both hands.
-        var dark = HandStyle.coloursFor(Palette.BACKING_DARK);
-        Test.assertEqualMessage(dark[HandBacking.HOUR], Palette.BACKING_DARK,
-            "a dark hand is cut out of the field, not coloured");
-        Test.assertEqualMessage(dark[HandBacking.MINUTE], Palette.BACKING_DARK,
-            "and both hands are cut out the same way");
+        Test.assertEqualMessage(colours[HandBacking.HOUR],
+            Palette.BACKING_WHITE, "the backing is the backing");
+        Test.assertEqualMessage(colours[HandBacking.MINUTE],
+            Palette.BACKING_WHITE, "both hands take the one backing");
         return true;
     }
 
-    //! The hands stay lit in always-on exactly when the face is the one drawing
-    //! them.
-    //!
-    //! One line, and it is the whole of the Epix's power-mode difference. Where
-    //! the hands are brass they keep telling the time with the dots behind them
-    //! dark, so backing is suppressed to save light; where the face draws them
-    //! they are the only thing on the glass saying what o'clock it is, and
-    //! suppressing them would leave always-on with no time on it at all. Tying
-    //! the two constants together is what stops a future style setting one and
-    //! forgetting the other.
+    //! A watch with no hands never backs a dot, whatever the Hands setting
+    //! stores — the Epix has carried it set to Dark since its drawn hands — and
+    //! so the minute never reaches the field print, which would clear and
+    //! redraw the whole screen once a minute for hands that are not there.
     (:test)
-    function handsSurviveAlwaysOnExactlyWhenTheFaceDrawsThem(
-            logger as Logger) as Boolean {
-        logger.debug("drawn " + HandStyle.DRAWN +
-                     ", always-on " + HandStyle.ALWAYS_ON);
-        Test.assertEqualMessage(HandStyle.ALWAYS_ON, HandStyle.DRAWN,
-            "hands the face draws must survive always-on, and only those");
-        return true;
-    }
-
-    //! A touch-and-hold is useful only where the face owns the hands.
-    (:test)
-    function peekIsTransientAndOnlyForDrawnHands(logger as Logger) as Boolean {
+    function aWatchWithNoHandsNeverBacksADot(logger as Logger) as Boolean {
+        var saved = StatMap.backing;
+        Properties.setValue(StatMap.PROPERTY_BACKING, StatMap.BACKING_DARK);
+        Config.reload();
         var view = new CrossoverView();
-        Test.assertMessage(!view.isPeeking(), "a new face must not start in peek mode");
+        var backing = view.backingColour();
+        Test.assertEqualMessage(backing == null, !HandStyle.HANDS,
+            "backing must be off exactly where there are no hands");
 
-        var handled = view.togglePeek();
-        Test.assertEqualMessage(handled, HandStyle.DRAWN,
-            "only a drawn-hands watch may consume the hold gesture");
-        Test.assertEqualMessage(view.isPeeking(), HandStyle.DRAWN,
-            "a handled hold must hide the drawn hands");
-
-        if (HandStyle.DRAWN) {
-            view.onEnterSleep();
-            Test.assertMessage(!view.isPeeking(),
-                "sleep must restore the hands without changing settings");
+        var drift = [0, 0] as Array<Number>;
+        var at9 = copyOf(view.fieldPrint(backing, 0, drift, 9, 0));
+        var at10 = copyOf(view.fieldPrint(backing, 0, drift, 10, 0));
+        var moved = false;
+        for (var i = 0; i < at9.size(); i++) {
+            if (at9[i] != at10[i]) {
+                moved = true;
+            }
         }
-        return true;
-    }
+        Test.assertEqualMessage(moved, HandStyle.HANDS,
+            "the minute must move the field print only where hands are backed");
 
-    //! On Epix, the date is the unobstructed-data view; on a Crossover the
-    //! physical hands cost the renderer nothing and the date stays visible.
-    (:test)
-    function dateWaitsForAnEpixPeek(logger as Logger) as Boolean {
-        var view = new CrossoverView();
-        var saved = StatMap.date;
-        StatMap.date = StatMap.DATE_ON;
-
-        Test.assertEqualMessage(view.showsDate(Palette.BACKING_DARK, false),
-            !HandStyle.DRAWN,
-            "drawn hands must defer the date until the field is unobstructed");
-        Test.assertMessage(view.showsDate(null, false),
-            "hands off or peeked must reveal the date");
-
-        StatMap.date = StatMap.DATE_OFF;
-        Test.assertMessage(!view.showsDate(null, false),
-            "peek must not add a date the setting has turned off");
-        StatMap.date = saved;
+        Properties.setValue(StatMap.PROPERTY_BACKING, saved);
+        Config.reload();
         return true;
     }
 

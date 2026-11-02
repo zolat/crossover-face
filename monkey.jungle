@@ -15,23 +15,25 @@ base.sourcePath = source
 # exactly one HandStyle reach any given build:
 #
 #   source-lattice/*  the six screen-dependent constants plus the hand geometry.
-#   source-hands/*    what the hands are: brass over the glass, or lit dots.
+#   source-hands/*    what the hands are: brass over the glass, or none, where
+#                     the outer ring tells the time instead.
 #
 # epix2pro42mm is 390x390, so it takes the Crossover's lattice unchanged and
 # differs from it only in having no hands of its own.
 instinctcrossoveramoled.sourcePath = $(base.sourcePath);source-lattice/crossover;source-hands/physical
-epix2pro42mm.sourcePath = $(base.sourcePath);source-lattice/crossover;source-hands/drawn
-epix2.sourcePath = $(base.sourcePath);source-lattice/epix416;source-hands/drawn
-epix2pro47mm.sourcePath = $(base.sourcePath);source-lattice/epix416;source-hands/drawn
-epix2pro51mm.sourcePath = $(base.sourcePath);source-lattice/epix454;source-hands/drawn
+epix2pro42mm.sourcePath = $(base.sourcePath);source-lattice/crossover;source-hands/none
+epix2.sourcePath = $(base.sourcePath);source-lattice/epix416;source-hands/none
+epix2pro47mm.sourcePath = $(base.sourcePath);source-lattice/epix416;source-hands/none
+epix2pro51mm.sourcePath = $(base.sourcePath);source-lattice/epix454;source-hands/none
 
-# What the four hands-drawn watches override, shared between them.
+# What the four watches with no hands override - today only the 60x60 launcher
+# icon - shared between them.
 #
 # It cannot be a qualified folder. `resources-<device>` would need four copies
-# of the same two files, and the family qualifier is no better: epix2pro42mm is
+# of the same files, and the family qualifier is no better: epix2pro42mm is
 # round-390x390, which is the Crossover's family too, so a family folder would
 # reach the one watch these overrides are wrong for.
-epix2.resourcePath = $(epix2.resourcePath);resources-drawn-hands
-epix2pro42mm.resourcePath = $(epix2pro42mm.resourcePath);resources-drawn-hands
-epix2pro47mm.resourcePath = $(epix2pro47mm.resourcePath);resources-drawn-hands
-epix2pro51mm.resourcePath = $(epix2pro51mm.resourcePath);resources-drawn-hands
+epix2.resourcePath = $(epix2.resourcePath);resources-no-hands
+epix2pro42mm.resourcePath = $(epix2pro42mm.resourcePath);resources-no-hands
+epix2pro47mm.resourcePath = $(epix2pro47mm.resourcePath);resources-no-hands
+epix2pro51mm.resourcePath = $(epix2pro51mm.resourcePath);resources-no-hands

@@ -2,10 +2,10 @@
 
 Iterating on colour through a compile + sideload loop costs a minute a time;
 this costs a second. It renders each target's native geometry, composites it
-into Garmin's device art, and adds physical or dot hands as appropriate — so
-what you review is the watch, not an abstract grid.
+into Garmin's device art, and adds the physical hands where a watch has them —
+so what you review is the watch, not an abstract grid.
 
-Device art comes from the installed profile. Lattice and drawn-hand constants
+Device art comes from the installed profile. Lattice and hand constants
 mirror ``source-lattice/*/Lattice.mc`` and are pinned by the Monkey C tests.
 
 Usage:  python3 tools/mockup.py [outdir] [device]
@@ -35,12 +35,12 @@ PITCH = 10
 DOT = 5
 
 LATTICES = {
-    #                 SIZE COLS RADIUS HUB  halfW  cw  hour minute  drawn
-    "instinctcrossoveramoled": (390, 38, 190, 21, 14, 46, 131, 176, False),
-    "epix2pro42mm":            (390, 38, 190, 21, 14, 46, 131, 176, True),
-    "epix2":                   (416, 40, 203, 22, 15, 49, 140, 188, True),
-    "epix2pro47mm":            (416, 40, 203, 22, 15, 49, 140, 188, True),
-    "epix2pro51mm":            (454, 42, 210, 23, 15, 51, 145, 195, True),
+    #                 SIZE COLS RADIUS HUB  halfW  cw  hour minute  hands
+    "instinctcrossoveramoled": (390, 38, 190, 21, 14, 46, 131, 176, True),
+    "epix2pro42mm":            (390, 38, 190, 21, 14, 46, 131, 176, False),
+    "epix2":                   (416, 40, 203, 22, 15, 49, 140, 188, False),
+    "epix2pro47mm":            (416, 40, 203, 22, 15, 49, 140, 188, False),
+    "epix2pro51mm":            (454, 42, 210, 23, 15, 51, 145, 195, False),
 }
 DEFAULT_DEVICE = "instinctcrossoveramoled"
 
@@ -61,12 +61,12 @@ def use_device(name: str) -> None:
     """
     global DEVICE, DEVICE_DIR, SIZE, COLS, ROWS, RADIUS, HUB
     global HAND_HALF_WIDTH, HAND_COUNTERWEIGHT, HOUR_REACH, MINUTE_REACH
-    global DRAWN_HANDS
+    global HANDS
     if name not in LATTICES:
         raise SystemExit(f"unknown device {name!r}; known: "
                          + ", ".join(sorted(LATTICES)))
     (SIZE, COLS, RADIUS, HUB, HAND_HALF_WIDTH, HAND_COUNTERWEIGHT,
-     HOUR_REACH, MINUTE_REACH, DRAWN_HANDS) = LATTICES[name]
+     HOUR_REACH, MINUTE_REACH, HANDS) = LATTICES[name]
     ROWS = COLS
     DEVICE = name
     DEVICE_DIR = os.path.join(DEVICES_DIR, name)
@@ -482,19 +482,16 @@ HOUR_REACH = 131
 MINUTE_REACH = 176
 HAND_MARGIN = 0
 
-#: Whether this watch's hands are the face's to draw. Set by use_device().
-DRAWN_HANDS = False
+#: Whether this watch has hands to back. Set by use_device(). Mirrors
+#: HandStyle.HANDS: on a watch with none, no backing is ever drawn.
+HANDS = True
 
-#: What handAt()'s three answers paint, mirroring source-hands/*/HandStyle.mc.
+#: What handAt()'s three answers paint.
 NO_HAND, HOUR, MINUTE = 0, 1, 2
-HAND_HOUR = (0xFF, 0xFF, 0xFF)
-HAND_MINUTE = (0x80, 0x80, 0x80)
 
 
 def hand_colours(backing):
-    """Mirrors HandStyle.coloursFor: one backing colour, or a real pair."""
-    if DRAWN_HANDS and backing == (0xFF, 0xFF, 0xFF):
-        return (None, HAND_HOUR, HAND_MINUTE)
+    """Mirrors HandBacking.coloursFor: one backing colour for both hands."""
     return (None, backing, backing)
 
 
@@ -658,12 +655,12 @@ def render(spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
            time: tuple[float, float] | None = None) -> Image.Image:
     img = Image.new("RGB", (SIZE, SIZE), (0, 0, 0))
     # The watermark's cells, resolved once rather than per dot.
-    # Awake only, and drawn hands own the ordinary time view: their date
-    # appears when hands are off (the persistent choice or a temporary
-    # touch-and-hold peek), which is also what keeps the largest merged render
-    # inside its watchdog. Mirrors CrossoverView.showsDate().
-    dating = (date is not None and not always_on and
-              (not DRAWN_HANDS or backing is None))
+    # Awake only. Mirrors CrossoverView.showsDate().
+    dating = date is not None and not always_on
+    # A watch with no hands never backs a dot. Mirrors
+    # CrossoverView.backingColour().
+    if not HANDS:
+        backing = None
     glyph = glyph_cells(date) if dating else set()
     # The colour each numeral dot is drawn in, which its outline is inked in.
     glyph_colours = {}
@@ -901,7 +898,7 @@ def main(outdir: str = "build/mockups", device: str = DEFAULT_DEVICE) -> int:
     use_device(device)
     os.makedirs(outdir, exist_ok=True)
     print(f"{device}: {SIZE}x{SIZE}, {COLS}x{ROWS} lattice, radius {RADIUS}, "
-          f"hub {HUB}, hands {'drawn' if DRAWN_HANDS else 'physical'}")
+          f"hub {HUB}, hands {'physical' if HANDS else 'none'}")
     # steps, heart rate, battery, body battery — as levels
     values = [(0.0, 0.68), (0.0, 0.55), (0.0, 0.82), (0.0, 0.40)]
     written = []
@@ -964,20 +961,20 @@ def main(outdir: str = "build/mockups", device: str = DEFAULT_DEVICE) -> int:
           "Worst case — every stat 100%, always-on").save(path)
     written.append(path)
 
-    # 6. Physical backing or drawn hands, shown in all three configured states.
-    when = (10, 9)
-    panels = []
-    for label, backing in (("OFF", None), ("WHITE", (255, 255, 255)),
-                           ("DARK", (16, 16, 16))):
-        face = render(values, backing=backing, at_time=when)
-        panels.append((f"{label}   luminance {measure(face) * 100:.2f}%",
-                       composite(face, at_time=when)))
-    path = os.path.join(outdir, "05-hand-backing.png")
-    title = ("Drawn hands — off, white and grey, or dark"
-             if DRAWN_HANDS else
-             "Behind physical hands — awake only, hands held at system time")
-    sheet(panels, title).save(path)
-    written.append(path)
+    # 6. Physical backing, shown in all three configured states. Only where
+    #    there are hands to back.
+    if HANDS:
+        when = (10, 9)
+        panels = []
+        for label, backing in (("OFF", None), ("WHITE", (255, 255, 255)),
+                               ("DARK", (16, 16, 16))):
+            face = render(values, backing=backing, at_time=when)
+            panels.append((f"{label}   luminance {measure(face) * 100:.2f}%",
+                           composite(face, at_time=when)))
+        path = os.path.join(outdir, "05-hand-backing.png")
+        sheet(panels, "Behind physical hands — awake only, hands held at "
+                      "system time").save(path)
+        written.append(path)
 
     # 7. Rings assigned to weather — temperature is a range, not a level, and
     #    the mark says where in that range now falls.

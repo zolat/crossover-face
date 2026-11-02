@@ -59,8 +59,11 @@ class SettingsMenu extends WatchUi.Menu2 {
         // changing any setting; the theme remains the first visual choice.
         addItem(new WatchUi.MenuItem(
             Rez.Strings.ThemeTitle, themeLabel(), :theme, null));
-        addItem(new WatchUi.MenuItem(
-            Rez.Strings.BackingTitle, backingLabel(), :backing, null));
+        // Only where there are hands to light the dots behind.
+        if (HandStyle.HANDS) {
+            addItem(new WatchUi.MenuItem(
+                Rez.Strings.BackingTitle, backingLabel(), :backing, null));
+        }
         addItem(new WatchUi.MenuItem(Rez.Strings.AlwaysOnFillTitle,
             alwaysOnFillLabel(), :alwaysOnFill, null));
         addItem(new WatchUi.MenuItem(
@@ -79,19 +82,31 @@ class SettingsMenu extends WatchUi.Menu2 {
     //! moment a sub-menu changes one. onShow() runs when this menu returns to
     //! the foreground after that sub-menu is popped, which is the only point
     //! the values can be refreshed — the menu itself is not rebuilt.
+    //!
+    //! **By id, not by row.** Rows used to be refreshed by index, and the Hands
+    //! row exists only on a watch with hands, so every row below it sits one
+    //! place higher on the Epix than on the Crossover. An index refresh would
+    //! label each with its neighbour's value, and getItem() on a wrong index
+    //! answers null rather than throwing.
     function onShow() as Void {
         Menu2.onShow();
-        setSubLabelOf(1, themeLabel());
-        setSubLabelOf(2, backingLabel());
-        setSubLabelOf(3, alwaysOnFillLabel());
-        setSubLabelOf(4, rotationLabel());
-        setSubLabelOf(5, dateLabel());
-        setSubLabelOf(6, dateOutlineLabel());
-        setSubLabelOf(8, Diagnostics.summary());
+        setSubLabelOf(:theme, themeLabel());
+        if (HandStyle.HANDS) {
+            setSubLabelOf(:backing, backingLabel());
+        }
+        setSubLabelOf(:alwaysOnFill, alwaysOnFillLabel());
+        setSubLabelOf(:rotation, rotationLabel());
+        setSubLabelOf(:date, dateLabel());
+        setSubLabelOf(:dateOutline, dateOutlineLabel());
+        setSubLabelOf(:diagnostics, Diagnostics.summary());
     }
 
-    private function setSubLabelOf(index as Number,
+    private function setSubLabelOf(id as Symbol,
                                    label as ResourceId or String) as Void {
+        var index = findItemById(id);
+        if (index < 0) {
+            return;
+        }
         var item = getItem(index);
         if (item != null) {
             item.setSubLabel(label);

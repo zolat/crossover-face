@@ -54,8 +54,13 @@ untouched.
   Overlap is the Epix default. `TimeRing` walks both styles in one loop, with a four-slot
   colour table and two radius bounds set before the walk. Always-on at 11:59: 4.22% on the
   454. 174/174 on all five.
-- [ ] Phase 2 — remove drawn hands, the peek and the date deferral from the Epix ← current
-- [ ] Phase 3 — docs
+- [x] Phase 2 — remove drawn hands, the peek and the date deferral from the Epix.
+  `source-hands/drawn` is now `source-hands/none` (`HANDS = false`), so the view never
+  backs a dot there whatever `handBacking` stores, and the minute leaves the field print.
+  `CrossoverDelegate` and the peek are gone; the date shows whenever it is on. The Hands row
+  is Crossover-only, and `SettingsMenu.onShow()` refreshes by id rather than by row.
+  `resources-no-hands/` keeps only the 60x60 icon. 174/174 on all five.
+- [ ] Phase 3 — docs ← current
 
 ## Epix 2 family
 

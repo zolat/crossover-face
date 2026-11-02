@@ -11,10 +11,6 @@ class CrossoverView extends WatchUi.WatchFace {
     //! Tracks sleep state for devices that predate System.getDisplayMode().
     private var _asleep as Boolean = false;
 
-    //! True while a drawn-hands watch is showing its unobstructed data field.
-    //! Transient by design: sleep restores the time without touching settings.
-    private var _peeking as Boolean = false;
-
     //! The wake reveal: the date's outline grows in over REVEAL_STEPS ticks of
     //! a high-power timer, about 0.8s. A watch face gets timers only while
     //! awake, which is the only time the outline is drawn anyway. Resting at
@@ -71,7 +67,6 @@ class CrossoverView extends WatchUi.WatchFace {
     //! Garmin's graphics pool; a purged dynamic buffer cannot be restored from
     //! the executable.
     function onLayout(dc as Dc) as Void {
-        _peeking = false;
         _frameBuffer = null;
         _frameDc = null;
         try {
@@ -100,7 +95,6 @@ class CrossoverView extends WatchUi.WatchFace {
     //! reload at the point they change and invalidate FrameGate there; merely
     //! becoming visible again does not make its pixels stale.
     function onShow() as Void {
-        _peeking = false;
         DotGrid.ensureBuilt();
         startReveal();
     }
@@ -166,18 +160,10 @@ class CrossoverView extends WatchUi.WatchFace {
         //
         // Held back with the spans and the marks: all three are the ring's
         // data, and that mode is the one that carries none.
-        // Backing is awake-only where the hands are real: in always-on it would
-        // cost luminance for a detail nobody is looking at, and the brass keeps
-        // telling the time whether the dots behind it are lit or not.
-        //
-        // **Where the face draws the hands, that inverts.** They are the only
-        // thing on the glass saying what o'clock it is, so they stay through
-        // always-on and through the held-back mode both. It is close to free:
-        // a hand recolours dots that were already lit at the unfilled tier
-        // rather than adding lit area, which is why HandStyle can simply say so
-        // rather than trading it against the budget.
-        var backing = (_peeking || (lowPower && !HandStyle.ALWAYS_ON))
-            ? null : backingColour();
+        // Backing is awake-only: in always-on it would cost luminance for a
+        // detail nobody is looking at, and the brass keeps telling the time
+        // whether the dots behind it are lit or not.
+        var backing = lowPower ? null : backingColour();
 
         // The date, brought up to date before anything reads it.
         //
@@ -191,7 +177,7 @@ class CrossoverView extends WatchUi.WatchFace {
         // Off, nothing is read at all: today() is arithmetic on the epoch
         // second in the common case, but it is still two system calls that a
         // frame without the date has no reason to pay.
-        var dating = showsDate(backing, lowPower);
+        var dating = showsDate(lowPower);
         DateGlyph.active = dating;
         var day = 0;
         if (dating) {
@@ -363,8 +349,12 @@ class CrossoverView extends WatchUi.WatchFace {
         return out;
     }
 
-    //! The colour to place under the hands, or null when the option is off.
-    private function backingColour() as Number? {
+    //! The colour to place under the hands, or null when the option is off —
+    //! and always null on a watch with no hands, whatever the setting stores.
+    function backingColour() as Number? {
+        if (!HandStyle.HANDS) {
+            return null;
+        }
         if (StatMap.backing == StatMap.BACKING_WHITE) {
             return Palette.BACKING_WHITE;
         }
@@ -377,12 +367,11 @@ class CrossoverView extends WatchUi.WatchFace {
     //! Backing is only correct while the hands show the time, so ask for that
     //! explicitly rather than hoping the watch has not parked them elsewhere.
     //!
-    //! Nothing to ask where the face draws its own: there are no hands to park,
-    //! and `handAt()` reads the same clock the rest of the frame does. The `has`
-    //! guard below would no-op anyway, but saying it outright is what keeps the
-    //! two styles readable side by side.
+    //! Nothing to ask on a watch with no hands. The `has` guard below would
+    //! no-op anyway, but saying it outright keeps the two styles readable side
+    //! by side.
     private function holdHandsAtSystemTime() as Void {
-        if (HandStyle.DRAWN || StatMap.backing == StatMap.BACKING_OFF) {
+        if (!HandStyle.HANDS || StatMap.backing == StatMap.BACKING_OFF) {
             return;
         }
         if (self has :setClockHandPosition &&
@@ -390,30 +379,6 @@ class CrossoverView extends WatchUi.WatchFace {
             setClockHandPosition(
                 {:clockState => WatchUi.ANALOG_CLOCK_STATE_SYSTEM_TIME});
         }
-    }
-
-    //! Toggle the Epix's temporary unobstructed-data view.
-    //!
-    //! Returning false on a physical-hands watch leaves the system's hold
-    //! gesture alone. On Epix, forgetting the frame repaints the authoritative
-    //! buffer without the hand silhouettes.
-    function togglePeek() as Boolean {
-        if (!HandStyle.DRAWN) {
-            return false;
-        }
-        _peeking = !_peeking;
-        if (_peeking) {
-            startReveal();
-        } else {
-            stopReveal();
-        }
-        FrameGate.forget();
-        WatchUi.requestUpdate();
-        return true;
-    }
-
-    function isPeeking() as Boolean {
-        return _peeking;
     }
 
     //! Which position each ring marks this frame, into `out`.
@@ -452,13 +417,8 @@ class CrossoverView extends WatchUi.WatchFace {
     //! outline would hold some pixels lit through two of the four drift phases
     //! against one for every dot pixel. It also looks better: the field rests
     //! plain, and waking connects the dots.
-    //!
-    //! And the date and drawn hands cannot share the larger Epix hot path
-    //! without crossing its watchdog. The date is detail in the field, so hands
-    //! win while telling time and a peek (or Hands: Off) reveals it.
-    function showsDate(backing as Number?, lowPower as Boolean) as Boolean {
-        return StatMap.date == StatMap.DATE_ON && !lowPower &&
-               (!HandStyle.DRAWN || backing == null);
+    function showsDate(lowPower as Boolean) as Boolean {
+        return StatMap.date == StatMap.DATE_ON && !lowPower;
     }
 
     //! Ink the outline into `target` as far as the reveal has got. `cleared`
@@ -477,7 +437,7 @@ class CrossoverView extends WatchUi.WatchFace {
     //! outline tripped the watchdog in the simulator.
     private function startReveal() as Void {
         // The awake decision, made before there is a frame to make it for.
-        if (!showsDate(_peeking ? null : backingColour(), false)) {
+        if (!showsDate(false)) {
             stopReveal();
             return;
         }
@@ -539,7 +499,6 @@ class CrossoverView extends WatchUi.WatchFace {
 
     function onEnterSleep() as Void {
         _asleep = true;
-        _peeking = false;
         stopReveal();
         WatchUi.requestUpdate();
     }
