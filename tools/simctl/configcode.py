@@ -24,8 +24,9 @@ import sys
 from collections import OrderedDict
 from pathlib import Path
 
-VERSION = 1
-LENGTH = 28  # bytes, v1
+VERSION = 2
+LENGTHS = {1: 28, 2: 33}  # bytes, per version
+LENGTH = LENGTHS[VERSION]
 
 THEME_CUSTOM = 99
 THEME_IDS = (0, 1, 7, 8, THEME_CUSTOM)
@@ -47,9 +48,14 @@ ENUM_FIELDS = (
     ("ring4", SOURCE_MAX),
 )
 
-#: Terrain, so a face that never had a custom theme carries a sensible one.
-DEFAULT_CUSTOM_COLOURS = (0xE879F9, 0xB8D64B, 0x7FD4FF, 0xFF6B5B)
+#: The 51mm's fifth ring, appended in version 2 after the v1 fields.
+RING5_MAX = SOURCE_MAX
+
+#: Terrain, so a face that never had a custom theme carries a sensible one. Five
+#: colours since version 2; the fifth is the 51mm's centre ball (StatMap.CUSTOM_DEFAULT).
+DEFAULT_CUSTOM_COLOURS = (0xE879F9, 0xB8D64B, 0x7FD4FF, 0xFF6B5B, 0xE5B33A)
 DEFAULT_CUSTOM_RAMP = (2, 0, 3)
+COLOURS = len(DEFAULT_CUSTOM_COLOURS)
 
 DEFAULTS = OrderedDict(
     theme=0,
@@ -64,6 +70,8 @@ DEFAULTS = OrderedDict(
     ring2=8,
     ring3=2,
     ring4=3,
+    # The 51mm's centre ball (StatMap.RING_DEFAULTS[4]): Steps.
+    ring5=0,
     tempAheadLow=0,
     tempAheadHigh=45,
     customColours=list(DEFAULT_CUSTOM_COLOURS),
@@ -95,7 +103,7 @@ def _check(config: dict) -> None:
         raise ConfigCodeError(f"missing {', '.join(missing)}")
     if config["theme"] not in THEME_IDS:
         raise ConfigCodeError(f"theme={config['theme']} is not one of {THEME_IDS}")
-    for key, high in ENUM_FIELDS:
+    for key, high in ENUM_FIELDS + (("ring5", RING5_MAX),):
         value = config[key]
         if not isinstance(value, int) or isinstance(value, bool) or not 0 <= value <= high:
             raise ConfigCodeError(f"{key}={value!r} is outside 0..{high}")
@@ -103,21 +111,26 @@ def _check(config: dict) -> None:
         if not TEMP_MIN <= config[key] <= TEMP_MAX:
             raise ConfigCodeError(f"{key}={config[key]} is outside {TEMP_MIN}..{TEMP_MAX}")
     colours, ramp = config["customColours"], config["customRamp"]
-    if len(colours) != 4 or any(not 0 <= c <= 0xFFFFFF for c in colours):
-        raise ConfigCodeError(f"customColours={colours!r} must be four 0xRRGGBB values")
-    if len(ramp) != 3 or any(not 0 <= stop <= 3 for stop in ramp):
-        raise ConfigCodeError(f"customRamp={ramp!r} must be three indices 0..3")
+    if len(colours) != COLOURS or any(not 0 <= c <= 0xFFFFFF for c in colours):
+        raise ConfigCodeError(f"customColours={colours!r} must be {COLOURS} 0xRRGGBB values")
+    if len(ramp) != 3 or any(not 0 <= stop < COLOURS for stop in ramp):
+        raise ConfigCodeError(f"customRamp={ramp!r} must be three indices 0..{COLOURS - 1}")
 
 
 def to_bytes(config: dict) -> bytes:
+    """Always the newest version: version 1's fields in place, then version 2's."""
     _check(config)
     body = bytearray([VERSION, config["theme"]])
     body += bytes(config[key] for key, _ in ENUM_FIELDS)
     body += bytes([config["tempAheadLow"] + TEMP_OFFSET, config["tempAheadHigh"] + TEMP_OFFSET])
-    for colour in config["customColours"]:
+    colours, ramp = config["customColours"], config["customRamp"]
+    for colour in colours[:4]:
         body += colour.to_bytes(3, "big")
-    cold, mid, hot = config["customRamp"]
-    body.append(cold | (mid << 2) | (hot << 4))
+    # A stop's low two bits where version 1 had them, its third bit in byte 30.
+    body.append((ramp[0] & 3) | ((ramp[1] & 3) << 2) | ((ramp[2] & 3) << 4))
+    body.append(config["ring5"])
+    body += colours[4].to_bytes(3, "big")
+    body.append((ramp[0] >> 2) | ((ramp[1] >> 2) << 1) | ((ramp[2] >> 2) << 2))
     body += crc16(bytes(body)).to_bytes(2, "big")
     assert len(body) == LENGTH
     return bytes(body)
@@ -150,24 +163,35 @@ def decode(code: str) -> "OrderedDict[str, object]":
     data = _unwrap(code)
     if not data:
         raise ConfigCodeError("empty")
-    if data[0] != VERSION:
-        raise ConfigCodeError(f"version {data[0]} is not one this decoder reads (1)")
-    if len(data) != LENGTH:
-        raise ConfigCodeError(f"{len(data)} bytes, a version-1 code is {LENGTH}")
+    version = data[0]
+    if version not in LENGTHS:
+        raise ConfigCodeError(f"version {version} is not one this decoder reads (1, 2)")
+    if len(data) != LENGTHS[version]:
+        raise ConfigCodeError(f"{len(data)} bytes, a version-{version} code is "
+                              f"{LENGTHS[version]}")
     if crc16(data[:-2]) != int.from_bytes(data[-2:], "big"):
         raise ConfigCodeError("checksum does not match: the code is damaged or mistyped")
 
     config: "OrderedDict[str, object]" = OrderedDict(theme=data[1])
     for index, (key, _) in enumerate(ENUM_FIELDS):
         config[key] = data[2 + index]
+    # Version 2's fields, or their defaults for a version-1 code: a newer decoder
+    # fills what an older code lacks, so ring 5 shows Steps and colour 5 is gold.
+    config["ring5"] = data[26] if version >= 2 else DEFAULTS["ring5"]
     config["tempAheadLow"] = data[11] - TEMP_OFFSET
     config["tempAheadHigh"] = data[12] - TEMP_OFFSET
-    config["customColours"] = [int.from_bytes(data[13 + 3 * i : 16 + 3 * i], "big")
-                               for i in range(4)]
+    colours = [int.from_bytes(data[13 + 3 * i : 16 + 3 * i], "big") for i in range(4)]
+    colours.append(int.from_bytes(data[27:30], "big") if version >= 2
+                   else DEFAULT_CUSTOM_COLOURS[4])
+    config["customColours"] = colours
     ramp = data[25]
     if ramp >> 6:
         raise ConfigCodeError(f"ramp byte 0x{ramp:02x} sets its reserved top bits")
-    config["customRamp"] = [ramp & 3, (ramp >> 2) & 3, (ramp >> 4) & 3]
+    high = data[30] if version >= 2 else 0
+    if high >> 3:
+        raise ConfigCodeError(f"ramp high byte 0x{high:02x} sets its reserved bits")
+    config["customRamp"] = [(ramp & 3) | ((high & 1) << 2), ((ramp >> 2) & 3) | ((high >> 1 & 1) << 2),
+                            ((ramp >> 4) & 3) | ((high >> 2 & 1) << 2)]
     _check(config)
     return config
 
@@ -185,10 +209,13 @@ BLOCK_END = "    // --- end of generated vectors ---"
 
 
 def config_vector(config: dict) -> list[int]:
-    """A config in ConfigCode.mc's nineteen-number order."""
+    """A config in ConfigCode.mc's twenty-one-number order: version 1's nineteen, then
+    ring 5 and custom colour 5, appended so no older index moves."""
+    colours = list(config["customColours"])
     return ([config["theme"]] + [config[key] for key, _ in ENUM_FIELDS]
             + [config["tempAheadLow"], config["tempAheadHigh"]]
-            + list(config["customColours"]) + list(config["customRamp"]))
+            + colours[:4] + list(config["customRamp"])
+            + [config["ring5"], colours[4]])
 
 
 def monkeyc_block(vectors: dict) -> str:
@@ -199,6 +226,7 @@ def monkeyc_block(vectors: dict) -> str:
         return ",\n".join("        " + ", ".join(str(n) for n in row) for row in rows)
 
     valid, aliases, invalid = vectors["valid"], vectors["aliases"], vectors["invalid"]
+    v1 = vectors["v1"]
     names = [vector["name"] for vector in valid]
     return "\n".join([
         BLOCK_START,
@@ -208,6 +236,14 @@ def monkeyc_block(vectors: dict) -> str:
         "    //! ConfigCode.FIELDS numbers per code, in VALID_CODES order.",
         "    const VALID_CONFIGS = [",
         numbers(config_vector(vector["config"]) for vector in valid),
+        "    ] as Array<Number>;",
+        "    //! Version-1 codes, decode-only, and the ConfigCode.FIELDS numbers a",
+        "    //! version-2 decoder makes of each: ring 5 and colour 5 at their defaults.",
+        "    const V1_CODES = [",
+        strings(vector["code"] for vector in v1),
+        "    ] as Array<String>;",
+        "    const V1_CONFIGS = [",
+        numbers(config_vector(vector["config"]) for vector in v1),
         "    ] as Array<Number>;",
         "    const ALIAS_CODES = [",
         strings(json.dumps(alias["code"])[1:-1] for alias in aliases),

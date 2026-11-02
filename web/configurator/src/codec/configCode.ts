@@ -4,9 +4,12 @@
 // tools/testdata/config-codes.json, beside tools/simctl/configcode.py and
 // source/settings/ConfigCode.mc.
 
-export const VERSION = 1;
-export const LENGTH = 28;
-const PAYLOAD = 26;
+/** The version this page writes; it reads version 1 too, filling version 2's fields with their defaults. */
+export const VERSION = 2;
+export const LENGTH = 33;
+const PAYLOAD = 31;
+const LENGTH_V1 = 28;
+const PAYLOAD_V1 = 26;
 const TEMP_OFFSET = 20;
 
 export const THEME_CUSTOM = 99;
@@ -27,10 +30,12 @@ export interface Config {
   ring2: number;
   ring3: number;
   ring4: number;
+  /** The 51mm's centre ball. Every watch carries it; only the 51mm draws it. */
+  ring5: number;
   tempAheadLow: number;
   tempAheadHigh: number;
-  /** Four 0xRRGGBB colours, outermost ring first. */
-  customColours: [number, number, number, number];
+  /** Five 0xRRGGBB colours, outermost ring first; the fifth is the 51mm's centre ball. */
+  customColours: [number, number, number, number, number];
   /** Cold, mid and hot stops: indices into customColours. */
   customRamp: [number, number, number];
 }
@@ -60,9 +65,11 @@ export const DEFAULT_CONFIG: Config = {
   ring2: 8,
   ring3: 2,
   ring4: 3,
+  // StatMap.RING_DEFAULTS[4]: the 51mm's centre ball shows Steps.
+  ring5: 0,
   tempAheadLow: 0,
   tempAheadHigh: 45,
-  customColours: [0xe879f9, 0xb8d64b, 0x7fd4ff, 0xff6b5b],
+  customColours: [0xe879f9, 0xb8d64b, 0x7fd4ff, 0xff6b5b, 0xe5b33a],
   customRamp: [2, 0, 3],
 };
 
@@ -90,7 +97,7 @@ export function problems(config: Config): string[] {
   if (!(THEME_IDS as readonly number[]).includes(config.theme)) {
     out.push(`theme ${config.theme} is not one of ${THEME_IDS.join(", ")}`);
   }
-  for (const [key, high] of ENUM_FIELDS) {
+  for (const [key, high] of [...ENUM_FIELDS, ["ring5", SOURCE_MAX] as const]) {
     if (!isByteInRange(config[key], high)) out.push(`${key} ${config[key]} is outside 0..${high}`);
   }
   for (const key of ["tempAheadLow", "tempAheadHigh"] as const) {
@@ -99,11 +106,11 @@ export function problems(config: Config): string[] {
       out.push(`${key} ${value} is outside ${TEMP_MIN}..${TEMP_MAX}`);
     }
   }
-  if (config.customColours.length !== 4 || !config.customColours.every((c) => isByteInRange(c, 0xffffff))) {
-    out.push("customColours must be four 0xRRGGBB values");
+  if (config.customColours.length !== 5 || !config.customColours.every((c) => isByteInRange(c, 0xffffff))) {
+    out.push("customColours must be five 0xRRGGBB values");
   }
-  if (config.customRamp.length !== 3 || !config.customRamp.every((s) => isByteInRange(s, 3))) {
-    out.push("customRamp must be three indices 0..3");
+  if (config.customRamp.length !== 3 || !config.customRamp.every((s) => isByteInRange(s, 4))) {
+    out.push("customRamp must be three indices 0..4");
   }
   return out;
 }
@@ -119,16 +126,21 @@ export function toBytes(config: Config): Uint8Array {
   });
   bytes[11] = config.tempAheadLow + TEMP_OFFSET;
   bytes[12] = config.tempAheadHigh + TEMP_OFFSET;
-  config.customColours.forEach((colour, i) => {
-    bytes[13 + i * 3] = (colour >> 16) & 0xff;
-    bytes[14 + i * 3] = (colour >> 8) & 0xff;
-    bytes[15 + i * 3] = colour & 0xff;
-  });
+  const putColour = (colour: number, at: number) => {
+    bytes[at] = (colour >> 16) & 0xff;
+    bytes[at + 1] = (colour >> 8) & 0xff;
+    bytes[at + 2] = colour & 0xff;
+  };
+  config.customColours.slice(0, 4).forEach((colour, i) => putColour(colour, 13 + i * 3));
   const [cold, mid, hot] = config.customRamp;
-  bytes[25] = cold | (mid << 2) | (hot << 4);
+  // A stop's low two bits where version 1 had them; its third in byte 30.
+  bytes[25] = (cold & 3) | ((mid & 3) << 2) | ((hot & 3) << 4);
+  bytes[26] = config.ring5;
+  putColour(config.customColours[4], 27);
+  bytes[30] = (cold >> 2) | ((mid >> 2) << 1) | ((hot >> 2) << 2);
   const crc = crc16(bytes, PAYLOAD);
-  bytes[26] = crc >> 8;
-  bytes[27] = crc & 0xff;
+  bytes[31] = crc >> 8;
+  bytes[32] = crc & 0xff;
   return bytes;
 }
 
@@ -184,21 +196,30 @@ export function encode(config: Config): string {
 export function decode(code: string): Config {
   const bytes = fromText(code);
   if (bytes.length === 0) throw new ConfigCodeError("empty");
-  if (bytes[0] !== VERSION) throw new ConfigCodeError(`version ${bytes[0]} is not one this page reads (1)`);
-  if (bytes.length !== LENGTH) throw new ConfigCodeError(`${bytes.length} bytes, a version-1 code is ${LENGTH}`);
-  if (crc16(bytes, PAYLOAD) !== ((bytes[26] << 8) | bytes[27])) {
+  const version = bytes[0];
+  const length = version === VERSION ? LENGTH : version === 1 ? LENGTH_V1 : 0;
+  if (!length) throw new ConfigCodeError(`version ${version} is not one this page reads (1, 2)`);
+  if (bytes.length !== length) throw new ConfigCodeError(`${bytes.length} bytes, a version-${version} code is ${length}`);
+  const payload = version === VERSION ? PAYLOAD : PAYLOAD_V1;
+  if (crc16(bytes, payload) !== ((bytes[payload] << 8) | bytes[payload + 1])) {
     throw new ConfigCodeError("checksum does not match: the code is damaged or mistyped");
   }
   const ramp = bytes[25];
   if (ramp >> 6) throw new ConfigCodeError("the ramp byte sets its reserved top bits");
-  const colour = (i: number) => (bytes[13 + i * 3] << 16) | (bytes[14 + i * 3] << 8) | bytes[15 + i * 3];
+  // Version 2's fields, or their defaults for a version-1 code.
+  const v2 = version === VERSION;
+  const high = v2 ? bytes[30] : 0;
+  if (high >> 3) throw new ConfigCodeError("the ramp high byte sets its reserved bits");
+  const colour = (at: number) => (bytes[at] << 16) | (bytes[at + 1] << 8) | bytes[at + 2];
+  const stop = (s: number) => ((ramp >> (2 * s)) & 3) | (((high >> s) & 1) << 2);
   const config = {
     theme: bytes[1],
     ...Object.fromEntries(ENUM_FIELDS.map(([key], i) => [key, bytes[2 + i]])),
+    ring5: v2 ? bytes[26] : DEFAULT_CONFIG.ring5,
     tempAheadLow: bytes[11] - TEMP_OFFSET,
     tempAheadHigh: bytes[12] - TEMP_OFFSET,
-    customColours: [colour(0), colour(1), colour(2), colour(3)],
-    customRamp: [ramp & 3, (ramp >> 2) & 3, (ramp >> 4) & 3],
+    customColours: [colour(13), colour(16), colour(19), colour(22), v2 ? colour(27) : DEFAULT_CONFIG.customColours[4]],
+    customRamp: [stop(0), stop(1), stop(2)],
   } as Config;
   const issues = problems(config);
   if (issues.length) throw new ConfigCodeError(issues.join("; "));

@@ -138,7 +138,7 @@ try {
     input.value = "#050505";
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
-  const colours = [0xe879f9, 0x050505, 0x7fd4ff, 0xff6b5b];
+  const colours = [0xe879f9, 0x050505, 0x7fd4ff, 0xff6b5b, 0xe5b33a];
   check("a picked colour reaches the code",
     (await code()) === python({ ...PAGE_START, theme: 99, ring2: 7, customColours: colours }), await code());
   const warnings = await page.$$eval(".warnings p", (ps) => ps.map((p) => p.textContent));
@@ -166,7 +166,12 @@ try {
   check("Copy code puts the code on the clipboard",
     (await page.evaluate(() => navigator.clipboard.readText())) === (await code()));
 
-  const vector = "AWMCAQEAAgkKDQcARv___wAAABI0VqvN7wcDSQ";
+  // From the vectors all three codecs are held to: a version-2 code, another spelling of
+  // it, and the same face as a version-1 code, which the page reads and re-writes as 2.
+  const vectors = JSON.parse(readFileSync(resolve(repo, "tools/testdata/config-codes.json"), "utf8"));
+  const vector = vectors.valid.find((v) => v.name === "custom-theme-every-field-moved").code;
+  const spelled = vectors.aliases.find((a) => a.name === "standard-alphabet-with-padding").code;
+  const older = vectors.v1.find((v) => v.name === "custom-theme-every-field-moved").code;
   const loadCode = async () => {
     for (const button of await page.$$(".actions button")) {
       if ((await button.evaluate((el) => el.textContent.trim())) === "Load a code") return button;
@@ -174,10 +179,14 @@ try {
     throw new Error("no Load a code button");
   };
   await (await loadCode()).click();
-  await page.type("#paste", "AWMCAQEAAgkKDQcARv///wAAABI0VqvN7wcDSQ==");
+  await page.type("#paste", spelled);
   await page.click(".paste button");
   check("a pasted code loads, spelled either way", (await code()) === vector, await code());
   check("…and closes the paste box", (await page.$("#paste")) === null);
+  await (await loadCode()).click();
+  await page.type("#paste", older);
+  await page.click(".paste button");
+  check("a version-1 code loads, and comes back as version 2", (await code()) === vector, await code());
 
   const before = await code();
   await (await loadCode()).click();
@@ -297,7 +306,36 @@ try {
   await new Promise((r) => setTimeout(r, 200));
   check("on the Crossover a stored time style shows as Off, as the watch reads it",
     (await epix.$eval(".rings .ring:nth-child(1) select", (el) => el.value)) === "8");
+  check("…and four rings and four colours, with no centre ring",
+    (await epix.$$(".rings .ring")).length === 4);
   await epixContext.close();
+
+  // The 51mm has a fifth ring, its centre ball, and a fifth colour for it; both go in the
+  // version-2 code, which every watch reads.
+  const bigContext = await browser.createBrowserContext();
+  const big = await bigContext.newPage();
+  big.on("pageerror", (error) => errors.push(String(error)));
+  await big.goto(`${origin}/#w=epix2pro51mm`, { waitUntil: "networkidle0" });
+  const bigCode = () => big.$eval(".code output", (el) => el.textContent);
+  const ringLabels = await big.$$eval(".rings .ring label", (labels) => labels.map((l) => l.textContent.trim()));
+  check("the 51mm offers five rings, the last its centre ring",
+    ringLabels.length === 5 && ringLabels[4] === "Centre ring", JSON.stringify(ringLabels));
+  check("…which starts on Steps", decoded(await bigCode()).ring5 === 0, await bigCode());
+  await big.select(".rings .ring:nth-child(5) select", "2");
+  check("choosing the centre ring's source puts ring5 in the code", decoded(await bigCode()).ring5 === 2, await bigCode());
+  check("…in a version-2 code", (await bigCode()).length === 44, await bigCode());
+  await big.$$eval("label", (labels) => labels.find((l) => l.textContent.trim() === "Make your own")?.click());
+  await new Promise((r) => setTimeout(r, 200));
+  check("the colour builder has a fifth colour on the 51mm", (await big.$$(".builder .colour")).length === 5);
+  await big.$eval("#colour-4", (input) => {
+    input.value = "#123456";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  check("…which reaches the code", decoded(await bigCode()).customColours[4] === 0x123456, await bigCode());
+  await big.select("#stop-0", "4");
+  check("…and can be a ramp stop", decoded(await bigCode()).customRamp[0] === 4, await bigCode());
+  await big.screenshot({ path: join(shots, "desktop-51mm-five-rings.png") });
+  await bigContext.close();
 
   const phone = await browser.newPage();
   await phone.setViewport({ width: 390, height: 844, deviceScaleFactor: 3, isMobile: true, hasTouch: true });

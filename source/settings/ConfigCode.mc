@@ -17,10 +17,15 @@ import Toybox.StringUtil;
 //! a menu choice.
 module ConfigCode {
 
-    const VERSION = 1;
-    //! Bytes in a version-1 code: 26 of payload and a 16-bit CRC.
-    const LENGTH = 28;
-    const PAYLOAD = 26;
+    //! The version this watch writes. It reads version 1 too: a newer decoder
+    //! reads every older code, filling what it lacks with the defaults.
+    const VERSION = 2;
+    //! Bytes in a version-2 code: 31 of payload and a 16-bit CRC — version 1's
+    //! 26, then ring 5, colour 5 and the ramp stops' third bits.
+    const LENGTH = 33;
+    const PAYLOAD = 31;
+    const LENGTH_V1 = 28;
+    const PAYLOAD_V1 = 26;
     const TEMP_OFFSET = 20;
 
     const PROPERTY_CODE = "configCode";
@@ -28,19 +33,26 @@ module ConfigCode {
     const STORAGE_LAST_CODE = "lastCode";
 
     //! A config vector — what pack() takes and unpack() returns — is these
-    //! nineteen numbers, in code order and in the units the settings store:
-    //! theme, the nine one-byte settings, both temperature ends in °C, the four
-    //! custom colours and the three custom ramp stops.
-    const FIELDS = 19;
+    //! twenty-one numbers, in the units the settings store: theme, the nine
+    //! one-byte settings, both temperature ends in °C, custom colours 1 to 4,
+    //! the three custom ramp stops, then version 2's ring 5 and custom colour
+    //! 5 — appended, so no index version 1 had moves.
+    const FIELDS = 21;
     const FIELD_TEMP_LOW = 10;
     const FIELD_COLOURS = 12;
     const FIELD_RAMP = 16;
+    const FIELD_RING5 = 19;
+    const FIELD_COLOUR5 = 20;
 
-    //! What version 1 carries: four rings and four custom colours. The 454's
-    //! fifth ring and every theme's fifth colour are outside it, so a code
-    //! leaves them as they are rather than spilling into the fields after.
+    //! Rings and custom colours the code carries in its first block, version
+    //! 1's; the fifth of each is version 2's appendix.
     const CODE_RINGS = 4;
     const CODE_COLOURS = 4;
+
+    //! What a version-1 code applies for the fields it lacks: the 454's centre
+    //! ball shows Steps, and the custom theme's fifth colour is Terrain's gold.
+    const RING5_DEFAULT = 0;
+    const RING5_MAX = 15;
 
     //! The nine one-byte settings after the theme, and how high each may go.
     //! Literal, for the on-device const-array reason StatMap.THEME_IDS gives;
@@ -69,8 +81,8 @@ module ConfigCode {
         return crc;
     }
 
-    //! A config vector as the 28 bytes of a sealed code. Trusts its input:
-    //! only decode() is handed anything a wearer typed.
+    //! A config vector as the 33 bytes of a sealed version-2 code. Trusts its
+    //! input: only decode() is handed anything a wearer typed.
     function pack(config as Array<Number>) as Array<Number> {
         var bytes = new [LENGTH] as Array<Number>;
         bytes[0] = VERSION;
@@ -85,21 +97,37 @@ module ConfigCode {
             bytes[14 + c * 3] = (colour >> 8) & 0xFF;
             bytes[15 + c * 3] = colour & 0xFF;
         }
-        bytes[25] = config[FIELD_RAMP] | (config[FIELD_RAMP + 1] << 2) |
-                    (config[FIELD_RAMP + 2] << 4);
+        // A stop's low two bits where version 1 had them; its third in byte 30.
+        bytes[25] = (config[FIELD_RAMP] & 3) | ((config[FIELD_RAMP + 1] & 3) << 2) |
+                    ((config[FIELD_RAMP + 2] & 3) << 4);
+        bytes[26] = config[FIELD_RING5];
+        var fifth = config[FIELD_COLOUR5];
+        bytes[27] = (fifth >> 16) & 0xFF;
+        bytes[28] = (fifth >> 8) & 0xFF;
+        bytes[29] = fifth & 0xFF;
+        bytes[30] = (config[FIELD_RAMP] >> 2) | ((config[FIELD_RAMP + 1] >> 2) << 1) |
+                    ((config[FIELD_RAMP + 2] >> 2) << 2);
         var crc = crc16(bytes, PAYLOAD);
-        bytes[26] = (crc >> 8) & 0xFF;
-        bytes[27] = crc & 0xFF;
+        bytes[31] = (crc >> 8) & 0xFF;
+        bytes[32] = crc & 0xFF;
         return bytes;
     }
 
     //! The config vector a sealed code carries, or null when the code is
-    //! anything but a well-formed version-1 code with every field in range.
+    //! anything but a well-formed version-1 or version-2 code with every field
+    //! in range. A version-1 code's ring 5 and colour 5 are the defaults.
     function unpack(bytes as Array<Number>) as Array<Number>? {
-        if (bytes.size() != LENGTH || bytes[0] != VERSION) {
+        if (bytes.size() == 0) {
             return null;
         }
-        if (crc16(bytes, PAYLOAD) != ((bytes[26] << 8) | bytes[27])) {
+        var version = bytes[0];
+        var payload = (version == VERSION) ? PAYLOAD
+                    : ((version == 1) ? PAYLOAD_V1 : -1);
+        if (payload < 0 || bytes.size() != payload + 2) {
+            return null;
+        }
+        if (crc16(bytes, payload) !=
+                ((bytes[payload] << 8) | bytes[payload + 1])) {
             return null;
         }
         var theme = bytes[1];
@@ -133,9 +161,29 @@ module ConfigCode {
         if ((ramp >> 6) != 0) {
             return null;
         }
-        config[FIELD_RAMP] = ramp & 3;
-        config[FIELD_RAMP + 1] = (ramp >> 2) & 3;
-        config[FIELD_RAMP + 2] = (ramp >> 4) & 3;
+        var high = 0;
+        if (version == VERSION) {
+            if (bytes[26] > RING5_MAX) {
+                return null;
+            }
+            config[FIELD_RING5] = bytes[26];
+            config[FIELD_COLOUR5] = (bytes[27] << 16) | (bytes[28] << 8) |
+                                     bytes[29];
+            high = bytes[30];
+            if ((high >> 3) != 0) {
+                return null;
+            }
+        } else {
+            config[FIELD_RING5] = RING5_DEFAULT;
+            config[FIELD_COLOUR5] = StatMap.CUSTOM_FIFTH_DEFAULT;
+        }
+        for (var s = 0; s < Palette.RAMP_POINTS; s++) {
+            var stop = ((ramp >> (2 * s)) & 3) | (((high >> s) & 1) << 2);
+            if (stop >= Palette.THEME_COLOURS) {
+                return null;
+            }
+            config[FIELD_RAMP + s] = stop;
+        }
         return config;
     }
 
@@ -246,6 +294,14 @@ module ConfigCode {
         for (var s = 0; s < Palette.RAMP_POINTS; s++) {
             config[FIELD_RAMP + s] = custom[Palette.THEME_COLOURS + s];
         }
+        // Ring 5 as the face draws it on the 454, and as stored on a watch with
+        // four rings, which never reads it: a code passes through every watch
+        // unchanged, since it does not say which watch it is for.
+        config[FIELD_RING5] = (StatMap.RINGS > CODE_RINGS)
+            ? StatMap.rings[CODE_RINGS]
+            : StatMap.readNumber(StatMap.PROPERTY_RINGS[CODE_RINGS],
+                                 RING5_DEFAULT, 0, Source.COUNT - 1);
+        config[FIELD_COLOUR5] = custom[CODE_COLOURS];
         return config;
     }
 
@@ -259,11 +315,12 @@ module ConfigCode {
                             config[FIELD_TEMP_LOW]);
         Properties.setValue(StatMap.PROPERTY_TEMP_AHEAD_HIGH,
                             config[FIELD_TEMP_LOW + 1]);
-        // The code's four colours and three stops, around the fifth colour
-        // the watch already holds: version 1 does not carry it.
+        Properties.setValue(StatMap.PROPERTY_RINGS[CODE_RINGS],
+                            config[FIELD_RING5]);
+        // The custom theme as Storage holds it: five colours, then the stops.
         var custom = config.slice(FIELD_COLOURS, FIELD_RAMP);
-        custom.add(StatMap.customTheme[Palette.THEME_COLOURS - 1]);
-        custom.addAll(config.slice(FIELD_RAMP, FIELDS));
+        custom.add(config[FIELD_COLOUR5]);
+        custom.addAll(config.slice(FIELD_RAMP, FIELD_RING5));
         Storage.setValue(StatMap.STORAGE_CUSTOM_THEME,
                          custom as Array<Application.Storage.ValueType>);
     }

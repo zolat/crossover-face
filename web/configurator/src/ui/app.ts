@@ -25,8 +25,10 @@ const DEVICE_NAMES: Record<string, string> = {
   epix2pro51mm: "Epix Pro 51 mm",
 };
 
-const RING_KEYS = ["ring1", "ring2", "ring3", "ring4"] as const;
-const RING_NAMES = ["Outer ring", "Ring 2", "Ring 3", "Inner ring"];
+const RING_KEYS = ["ring1", "ring2", "ring3", "ring4", "ring5"] as const;
+/** The rings a watch has, by name: the last is the inner one, the 51mm's centre ball. */
+const ringNames = (count: number) =>
+  count === 5 ? ["Outer ring", "Ring 2", "Ring 3", "Ring 4", "Centre ring"] : ["Outer ring", "Ring 2", "Ring 3", "Inner ring"];
 const TEMP_HOURS = schema.sources.kinds.SOURCE_TEMP_HOURS;
 
 export function mountApp(root: HTMLElement, store: Store, devices: Device[]) {
@@ -242,10 +244,14 @@ export function mountApp(root: HTMLElement, store: Store, devices: Device[]) {
       (setting(key).options ?? []).map((option) => ({ value: option.value, label: drawn ? option.labelDrawn : option.label }));
     const set = (patch: Partial<Config>) => store.setConfig(patch);
     // What each ring shows on this watch, which is not always what is stored: see rings.ts.
-    const rings = effectiveRings(config, drawn);
+    const ringCount = device.rings;
+    const names = ringNames(ringCount);
+    const rings = effectiveRings(config, drawn, ringCount);
     const timed = tellsTime(drawn);
+    // ring5 is not in settings.xml (Garmin Connect never offers it), so the 51mm's centre
+    // ring offers what ring 4 does: Source.offeredFor() keeps blocks off both.
     const ringOptions = (ring: number) =>
-      timed && ring === schema.timeRing.ring ? schema.timeRing.styles : options(RING_KEYS[ring]);
+      timed && ring === schema.timeRing.ring ? schema.timeRing.styles : options(RING_KEYS[Math.min(ring, 3)]);
 
     const themeOptions = [
       ...schema.themes.map((theme) => ({ value: theme.id, label: theme.name, swatch: theme.colours })),
@@ -262,10 +268,10 @@ export function mountApp(root: HTMLElement, store: Store, devices: Device[]) {
         const theme = randomTheme();
         set({ theme: THEME_CUSTOM, customColours: theme.colours, customRamp: theme.ramp });
       } }, "Randomise colours"),
-      config.theme === THEME_CUSTOM ? builder(config) : null,
+      config.theme === THEME_CUSTOM ? builder(config, ringCount) : null,
       h("h2", {}, "Rings, outside in"),
-      h("div", { class: "rings" }, ...RING_KEYS.map((key, ring) =>
-        select(RING_NAMES[ring], ringOptions(ring), rings[ring], (value) => set({ [key]: value }),
+      h("div", { class: "rings" }, ...RING_KEYS.slice(0, ringCount).map((key, ring) =>
+        select(names[ring], ringOptions(ring), rings[ring], (value) => set({ [key]: value }),
           h("span", { class: "sw", style: `background:var(--r${ring + 1})`, "aria-hidden": "true" })))),
       timed ? h("p", { class: "note" }, "This watch tells the time in its outer ring. The preview shows ten past ten.") : null,
       rings.some((source) => source === TEMP_HOURS) ? tempAhead(config) : null,
@@ -287,8 +293,13 @@ export function mountApp(root: HTMLElement, store: Store, devices: Device[]) {
     drawWarnings(state);
   }
 
-  function builder(config: Config): HTMLElement {
-    const rows = config.customColours.map((colour, ring) => {
+  /**
+   * The custom theme's colours, one per ring this watch has. The code carries all five
+   * whichever watch is chosen; a four-ring watch just never draws the fifth.
+   */
+  function builder(config: Config, ringCount: number): HTMLElement {
+    const names = ringNames(ringCount);
+    const rows = config.customColours.slice(0, ringCount).map((colour, ring) => {
       const id = `colour-${ring}`;
       const picker = h("input", {
         id, type: "color", value: hex(colour), "data-key": id,
@@ -298,7 +309,7 @@ export function mountApp(root: HTMLElement, store: Store, devices: Device[]) {
           store.setConfig({ customColours: next });
         },
       });
-      return h("div", { class: "colour" }, picker, h("label", { for: id }, RING_NAMES[ring]));
+      return h("div", { class: "colour" }, picker, h("label", { for: id }, names[ring]));
     });
     const stopNames = ["Cold", "Middle", "Hot"];
     const stops = config.customRamp.map((stop, point) => {
@@ -311,13 +322,21 @@ export function mountApp(root: HTMLElement, store: Store, devices: Device[]) {
             next[point] = Number((event.target as HTMLSelectElement).value);
             store.setConfig({ customRamp: next });
           },
-        }, ...RING_NAMES.map((name, ring) => h("option", { value: String(ring), selected: ring === stop }, `${name} colour`))));
+        }, ...stopChoices(names, stop).map(([name, ring]) =>
+          h("option", { value: String(ring), selected: ring === stop }, `${name} colour`))));
     });
     return h("fieldset", { class: "builder" }, h("legend", {}, "Your colours"),
       h("div", { class: "colours" }, ...rows),
       h("p", { class: "hint" }, "Temperature runs through three of them, cold to hot."),
       h("div", { class: "stops" }, ...stops),
       warningsSlot);
+  }
+
+  /** A stop may name any colour this watch draws, and keeps one it already names. */
+  function stopChoices(names: string[], stop: number): [string, number][] {
+    const out = names.map((name, ring): [string, number] => [name, ring]);
+    if (stop >= names.length) out.push(["Centre ring", stop]);
+    return out;
   }
 
   function tempAhead(config: Config): HTMLElement {

@@ -15,6 +15,31 @@ module ConfigCodeTest {
 
     // --- generated from tools/testdata/config-codes.json: do not edit ---
     const VALID_CODES = [
+        "AgAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6ALwM",
+        "AmMCAQEAAgkKDQcARv___wAAABI0VqvN7wcA5bM6AIQ9",
+        "AggAAAABAQwLBQRGAOh5-bjWS3_U__9rWzIA5bM6AJVG",
+        "AgEAAAABAQABAgkUQeh5-bjWS3_U__9rWzIA5bM6ALyY",
+        "AgcAAAABAQAIAgMgIOh5-bjWS3_U__9rWwAA5bM6ADN1",
+        "AgABAAABAQ8IAgMUQeh5-bjWS3_U__9rWzIA5bM6AGHa",
+        "AgAAAAABAQ4NAg8UQeh5-bjWS3_U__9rWzIA5bM6AO_0",
+        "AmMAAAABAQAIAgMUQREiM0RVZneImaq7zAQHEjRWAaPZ",
+        "AgAAAAABAQAIAgMUQQAAAAAAAAAAAAAAAAAP____B7jr"
+    ] as Array<String>;
+    //! ConfigCode.FIELDS numbers per code, in VALID_CODES order.
+    const VALID_CONFIGS = [
+        0, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626,
+        99, 2, 1, 1, 0, 2, 9, 10, 13, 7, -20, 50, 16777215, 0, 1193046, 11259375, 3, 1, 0, 0, 15053626,
+        8, 0, 0, 0, 1, 1, 12, 11, 5, 4, 50, -20, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626,
+        1, 0, 0, 0, 1, 1, 0, 1, 2, 9, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626,
+        7, 0, 0, 0, 1, 1, 0, 8, 2, 3, 12, 12, 15235577, 12113483, 8377599, 16739163, 0, 0, 0, 0, 15053626,
+        0, 1, 0, 0, 1, 1, 15, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626,
+        0, 0, 0, 0, 1, 1, 14, 13, 2, 15, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626,
+        99, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 1122867, 4478310, 7833753, 11189196, 4, 1, 0, 7, 1193046,
+        0, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 0, 0, 0, 0, 4, 4, 4, 15, 16777215
+    ] as Array<Number>;
+    //! Version-1 codes, decode-only, and the ConfigCode.FIELDS numbers a
+    //! version-2 decoder makes of each: ring 5 and colour 5 at their defaults.
+    const V1_CODES = [
         "AQAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIEYw",
         "AWMCAQEAAgkKDQcARv___wAAABI0VqvN7wcDSQ",
         "AQgAAAABAQwLBQRGAOh5-bjWS3_U__9rWzKyZw",
@@ -23,19 +48,18 @@ module ConfigCodeTest {
         "AQABAAABAQ8IAgMUQeh5-bjWS3_U__9rWzKZQQ",
         "AQAAAAABAQ4NAg8UQeh5-bjWS3_U__9rWzLhnA"
     ] as Array<String>;
-    //! ConfigCode.FIELDS numbers per code, in VALID_CODES order.
-    const VALID_CONFIGS = [
-        0, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3,
-        99, 2, 1, 1, 0, 2, 9, 10, 13, 7, -20, 50, 16777215, 0, 1193046, 11259375, 3, 1, 0,
-        8, 0, 0, 0, 1, 1, 12, 11, 5, 4, 50, -20, 15235577, 12113483, 8377599, 16739163, 2, 0, 3,
-        1, 0, 0, 0, 1, 1, 0, 1, 2, 9, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3,
-        7, 0, 0, 0, 1, 1, 0, 8, 2, 3, 12, 12, 15235577, 12113483, 8377599, 16739163, 0, 0, 0,
-        0, 1, 0, 0, 1, 1, 15, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3,
-        0, 0, 0, 0, 1, 1, 14, 13, 2, 15, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3
+    const V1_CONFIGS = [
+        0, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626,
+        99, 2, 1, 1, 0, 2, 9, 10, 13, 7, -20, 50, 16777215, 0, 1193046, 11259375, 3, 1, 0, 0, 15053626,
+        8, 0, 0, 0, 1, 1, 12, 11, 5, 4, 50, -20, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626,
+        1, 0, 0, 0, 1, 1, 0, 1, 2, 9, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626,
+        7, 0, 0, 0, 1, 1, 0, 8, 2, 3, 12, 12, 15235577, 12113483, 8377599, 16739163, 0, 0, 0, 0, 15053626,
+        0, 1, 0, 0, 1, 1, 15, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626,
+        0, 0, 0, 0, 1, 1, 14, 13, 2, 15, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626
     ] as Array<Number>;
     const ALIAS_CODES = [
-        "AWMCAQEAAgkKDQcARv///wAAABI0VqvN7wcDSQ==",
-        "  AWMCAQEAAgkKDQcARv_\n __wAAABI0VqvN7wcDSQ\t"
+        "AmMCAQEAAgkKDQcARv///wAAABI0VqvN7wcA5bM6AIQ9",
+        "  AmMCAQEAAgkKDQcARv_\n __wAAABI0VqvN7wcA5bM6AIQ9\t"
     ] as Array<String>;
     //! Which VALID_CODES entry each alias spells.
     const ALIAS_OF = [1, 1] as Array<Number>;
@@ -51,7 +75,15 @@ module ConfigCodeTest {
         "AQAAAAABAQAIAgMUR-h5-bjWS3_U__9rWzIPBA",
         "AQAAAAABAQAIAgMUQeh5-bjWS3_U__9rW3JMpw",
         "",
-        "this is not a code!"
+        "this is not a code!",
+        "AgAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6ALwN",
+        "AwAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6ADIl",
+        "AgAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzLg4Q",
+        "AgAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AABqVw",
+        "AQAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AD5W",
+        "AgAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIQ5bM6ALhW",
+        "AgAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6CD0E",
+        "AgAAAAABAQAIAgMUQeh5-bjWS3_U__9rWwEA5bM6AU1B"
     ] as Array<String>;
     const CRC_CHECK = 10673;
     // --- end of generated vectors ---
@@ -79,6 +111,7 @@ module ConfigCodeTest {
     function snapshot() as Dictionary {
         var keys = ConfigCode.ENUM_KEYS.slice(0, null);
         keys.add(StatMap.PROPERTY_THEME);
+        keys.add(StatMap.PROPERTY_RINGS[ConfigCode.CODE_RINGS]);
         keys.add(StatMap.PROPERTY_TEMP_AHEAD_LOW);
         keys.add(StatMap.PROPERTY_TEMP_AHEAD_HIGH);
         keys.add(ConfigCode.PROPERTY_CODE);
@@ -143,8 +176,8 @@ module ConfigCodeTest {
             var code = ConfigCode.encode(configAt(i));
             Test.assertMessage(code.equals(VALID_CODES[i]),
                 "vector " + i + " encodes to " + code + ", not " + VALID_CODES[i]);
-            Test.assertEqualMessage(code.length(), 38,
-                "a version-1 code is 38 characters");
+            Test.assertEqualMessage(code.length(), 44,
+                "a version-2 code is 44 characters");
         }
         return true;
     }
@@ -155,6 +188,21 @@ module ConfigCodeTest {
             Test.assertMessage(
                 sameConfig(ConfigCode.decode(VALID_CODES[i]), configAt(i)),
                 "vector " + i + " does not decode to its config");
+        }
+        return true;
+    }
+
+    //! A version-1 code still applies, with ring 5 and colour 5 at their
+    //! defaults: a newer decoder reads every older code.
+    (:test)
+    function aVersion1CodeDecodesWithTheNewFieldsDefaulted(logger as Logger)
+            as Boolean {
+        for (var i = 0; i < V1_CODES.size(); i++) {
+            var expected = V1_CONFIGS.slice(i * ConfigCode.FIELDS,
+                                            (i + 1) * ConfigCode.FIELDS);
+            Test.assertMessage(
+                sameConfig(ConfigCode.decode(V1_CODES[i]), expected),
+                "version-1 vector " + i + " does not decode as version 2 reads it");
         }
         return true;
     }
@@ -211,9 +259,11 @@ module ConfigCodeTest {
             "a custom theme is five colours and three ramp stops");
         Test.assertEqualMessage(ConfigCode.FIELDS,
             1 + ConfigCode.ENUM_KEYS.size() + 2 + ConfigCode.CODE_COLOURS +
-                Palette.RAMP_POINTS,
+                Palette.RAMP_POINTS + 2,
             "a config vector is theme, settings, temperatures, four custom " +
-            "colours and the stops");
+            "colours, the stops, then ring 5 and colour 5");
+        Test.assertEqualMessage(StatMap.PROPERTY_RINGS[ConfigCode.CODE_RINGS],
+            "ring5", "the appended ring is ring5");
         return true;
     }
 
@@ -264,6 +314,8 @@ module ConfigCodeTest {
             Test.assertEqualMessage(carried[ConfigCode.FIELD_COLOURS + i],
                 colours[i], "custom colour " + i + " was dropped");
         }
+        Test.assertEqualMessage(carried[ConfigCode.FIELD_COLOUR5], colours[4],
+            "custom colour 5 was dropped");
         Test.assertEqualMessage(carried[ConfigCode.FIELD_TEMP_LOW],
             StatMap.tempAheadLow,
             "a fifth ring must not spill into the temperature field");
@@ -274,8 +326,8 @@ module ConfigCodeTest {
     }
 
     //! A custom theme stored before themes had five colours still loads, with
-    //! the default fifth slotted in ahead of its stops; and a version-1 code,
-    //! which carries four colours, leaves the watch's fifth colour alone.
+    //! the default fifth slotted in ahead of its stops; and a code carries the
+    //! fifth colour and ring 5 there and back.
     (:test)
     function aFourColourCustomThemeGainsAFifth(logger as Logger) as Boolean {
         var saved = snapshot();
@@ -301,7 +353,26 @@ module ConfigCodeTest {
         Test.assertEqualMessage(StatMap.customTheme[0], 0x777777,
             "the code's colours must apply");
         Test.assertEqualMessage(StatMap.customTheme[4], 0x5A5A5A,
-            "a version-1 code must leave the fifth colour as it was");
+            "the code must carry the fifth colour");
+
+        // A stop on the fifth colour, and ring 5, survive a round trip.
+        code = ConfigCode.current();
+        code[ConfigCode.FIELD_RAMP] = 4;
+        code[ConfigCode.FIELD_RING5] = Source.SOURCE_BATTERY;
+        var again = ConfigCode.decode(ConfigCode.encode(code));
+        Test.assertMessage(sameConfig(again, code),
+            "a stop on colour 5 and ring 5 must round-trip");
+        ConfigCode.apply(code);
+        Config.reload();
+        Test.assertEqualMessage(StatMap.customTheme[Palette.THEME_COLOURS], 4,
+            "a stop may name the fifth colour");
+        Test.assertEqualMessage(
+            Properties.getValue(StatMap.PROPERTY_RINGS[ConfigCode.CODE_RINGS]),
+            Source.SOURCE_BATTERY, "ring 5 must apply on every watch");
+        if (StatMap.RINGS == 5) {
+            Test.assertEqualMessage(StatMap.rings[4], Source.SOURCE_BATTERY,
+                "and draw on the 454");
+        }
         restore(saved);
         return true;
     }

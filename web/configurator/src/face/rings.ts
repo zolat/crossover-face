@@ -13,11 +13,10 @@ export const tellsTime = (drawnHands: boolean) => (drawnHands ? schema.timeRing.
 
 /**
  * Each ring's source, outermost first, as the watch loads them. `ringCount` is the
- * lattice's: the 51mm's fifth ring, its centre ball, is not in a version-1 code, so it
- * shows its default until the configurator can set it.
+ * lattice's: five on the 51mm, whose fifth ring is its centre ball.
  */
 export function effectiveRings(config: Config, drawnHands: boolean, ringCount = 4): number[] {
-  const stored = [config.ring1, config.ring2, config.ring3, config.ring4, ...schema.ringDefaults.slice(4)];
+  const stored = [config.ring1, config.ring2, config.ring3, config.ring4, config.ring5];
   const rings = stored.slice(0, ringCount).map((source, ring) => {
     if (source === SOURCE.SOURCE_RETIRED) return SOURCE.SOURCE_OFF;
     if (isBlockSource(source) && ring > schema.sources.blocksTopRing) return SOURCE.SOURCE_OFF;

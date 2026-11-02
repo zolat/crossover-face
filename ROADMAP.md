@@ -1,8 +1,8 @@
 # Roadmap
 
-**Current:** 51mm fifth ring, Phase 6.1 — config code v2 and the configurator. Epix time
-ring complete through Phase 4.1. The Epix tells the time in its outer
-ring, in its theme's colours, and no longer draws hands; the Crossover is unchanged.
+**Current:** 51mm fifth ring complete through Phase 6.1: five rings on the Epix 2 Pro 51mm,
+set from the watch or the configurator through the version-2 config code. Queued: Phase
+4.2, a time-colours control in the configurator.
 
 ## Out-of-band features
 
@@ -142,8 +142,15 @@ untouched.
   - Time-ring pins moved to 10:27 / 4:27 (10:29 put a 42mm dot inside `MAX_TURN_ERROR`).
   - 194/194 on all five; `make web-test` green with the 51mm preview drawing five rings; a
     2-minute simulator run with blocks, temperature range, seconds and the date, no trip.
-- [ ] Phase 6.1 — config code v2 and the configurator: ring 5, a fifth custom colour,
-  3-bit ramp stops; all three decoders read v1 and v2.
+- [x] Phase 6.1 — config code v2 and the configurator. Version 2 appends ring 5, custom
+  colour 5 and each ramp stop's third bit (33 bytes, 44 characters); all three codecs write
+  it and read version 1 too, filling ring 5 (Steps) and colour 5 (gold) — the spec's
+  defaults rule, which replaced Phase 6's keep-what-the-watch-holds. The vectors file moved
+  first: valid codes are version 2, the old ones decode-only under `v1`, and eight new
+  refusals. The page offers the 51mm five ring selects (the centre ring takes ring 4's list,
+  ring5 having no phone-side setting), a fifth colour row and the centre colour as a ramp
+  stop; Randomise colours draws five hues. 195/195 on all five, `make web-test` green with
+  six new browser checks, simctl OK.
 
 
 ## Epix 2 family

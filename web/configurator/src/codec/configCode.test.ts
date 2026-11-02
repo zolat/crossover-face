@@ -9,6 +9,7 @@ const vectors = JSON.parse(
 ) as {
   crc_check: { input: string; crc: number };
   valid: { name: string; config: Config; code: string }[];
+  v1: { name: string; config: Config; code: string }[];
   aliases: { name: string; code: string; same_as: string }[];
   invalid: { name: string; code: string }[];
 };
@@ -22,9 +23,16 @@ describe("config code", () => {
   for (const vector of vectors.valid) {
     it(`encodes ${vector.name}`, () => {
       expect(encode(vector.config)).toBe(vector.code);
-      expect(vector.code).toHaveLength(38);
+      expect(vector.code).toHaveLength(44);
     });
     it(`decodes ${vector.name}`, () => {
+      expect(decode(vector.code)).toEqual(vector.config);
+    });
+  }
+
+  for (const vector of vectors.v1) {
+    it(`reads the version-1 code ${vector.name}, defaulting what it lacks`, () => {
+      expect(vector.code).toHaveLength(38);
       expect(decode(vector.code)).toEqual(vector.config);
     });
   }

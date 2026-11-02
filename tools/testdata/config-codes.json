@@ -1,5 +1,5 @@
 {
-  "_comment": "Shared vectors for the three config-code codecs; see docs/config-code.md. Colours are 0xRRGGBB as decimal. 'why' is Python's message, informative only.",
+  "_comment": "Shared vectors for the three config-code codecs; see docs/config-code.md. Colours are 0xRRGGBB as decimal. 'why' is Python's message, informative only. 'valid' codes are version 2; 'v1' codes are decode-only, with the config a version-2 decoder makes of them (ring 5 and colour 5 at their defaults).",
   "crc_check": {
     "input": "123456789",
     "crc": 10673
@@ -18,13 +18,15 @@
         "ring2": 8,
         "ring3": 2,
         "ring4": 3,
+        "ring5": 0,
         "tempAheadLow": 0,
         "tempAheadHigh": 45,
         "customColours": [
           15235577,
           12113483,
           8377599,
-          16739163
+          16739163,
+          15053626
         ],
         "customRamp": [
           2,
@@ -32,7 +34,7 @@
           3
         ]
       },
-      "code": "AQAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIEYw"
+      "code": "AgAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6ALwM"
     },
     {
       "name": "custom-theme-every-field-moved",
@@ -47,13 +49,15 @@
         "ring2": 10,
         "ring3": 13,
         "ring4": 7,
+        "ring5": 0,
         "tempAheadLow": -20,
         "tempAheadHigh": 50,
         "customColours": [
           16777215,
           0,
           1193046,
-          11259375
+          11259375,
+          15053626
         ],
         "customRamp": [
           3,
@@ -61,7 +65,7 @@
           0
         ]
       },
-      "code": "AWMCAQEAAgkKDQcARv___wAAABI0VqvN7wcDSQ"
+      "code": "AmMCAQEAAgkKDQcARv___wAAABI0VqvN7wcA5bM6AIQ9"
     },
     {
       "name": "inverted-temperatures-are-carried-not-normalised",
@@ -76,13 +80,15 @@
         "ring2": 11,
         "ring3": 5,
         "ring4": 4,
+        "ring5": 0,
         "tempAheadLow": 50,
         "tempAheadHigh": -20,
         "customColours": [
           15235577,
           12113483,
           8377599,
-          16739163
+          16739163,
+          15053626
         ],
         "customRamp": [
           2,
@@ -90,7 +96,7 @@
           3
         ]
       },
-      "code": "AQgAAAABAQwLBQRGAOh5-bjWS3_U__9rWzKyZw"
+      "code": "AggAAAABAQwLBQRGAOh5-bjWS3_U__9rWzIA5bM6AJVG"
     },
     {
       "name": "values-statmap-cleans-are-still-in-range",
@@ -105,13 +111,15 @@
         "ring2": 1,
         "ring3": 2,
         "ring4": 9,
+        "ring5": 0,
         "tempAheadLow": 0,
         "tempAheadHigh": 45,
         "customColours": [
           15235577,
           12113483,
           8377599,
-          16739163
+          16739163,
+          15053626
         ],
         "customRamp": [
           2,
@@ -119,7 +127,7 @@
           3
         ]
       },
-      "code": "AQEAAAABAQABAgkUQeh5-bjWS3_U__9rWzIRZQ"
+      "code": "AgEAAAABAQABAgkUQeh5-bjWS3_U__9rWzIA5bM6ALyY"
     },
     {
       "name": "beacon-equal-temperatures",
@@ -134,13 +142,15 @@
         "ring2": 8,
         "ring3": 2,
         "ring4": 3,
+        "ring5": 0,
         "tempAheadLow": 12,
         "tempAheadHigh": 12,
         "customColours": [
           15235577,
           12113483,
           8377599,
-          16739163
+          16739163,
+          15053626
         ],
         "customRamp": [
           0,
@@ -148,7 +158,7 @@
           0
         ]
       },
-      "code": "AQcAAAABAQAIAgMgIOh5-bjWS3_U__9rWwBfYg"
+      "code": "AgcAAAABAQAIAgMgIOh5-bjWS3_U__9rWwAA5bM6ADN1"
     },
     {
       "name": "drawn-hands-time-ring",
@@ -163,13 +173,15 @@
         "ring2": 8,
         "ring3": 2,
         "ring4": 3,
+        "ring5": 0,
         "tempAheadLow": 0,
         "tempAheadHigh": 45,
         "customColours": [
           15235577,
           12113483,
           8377599,
-          16739163
+          16739163,
+          15053626
         ],
         "customRamp": [
           2,
@@ -177,7 +189,7 @@
           3
         ]
       },
-      "code": "AQABAAABAQ8IAgMUQeh5-bjWS3_U__9rWzKZQQ"
+      "code": "AgABAAABAQ8IAgMUQeh5-bjWS3_U__9rWzIA5bM6AGHa"
     },
     {
       "name": "time-styles-anywhere-are-in-range",
@@ -192,13 +204,15 @@
         "ring2": 13,
         "ring3": 2,
         "ring4": 15,
+        "ring5": 0,
         "tempAheadLow": 0,
         "tempAheadHigh": 45,
         "customColours": [
           15235577,
           12113483,
           8377599,
-          16739163
+          16739163,
+          15053626
         ],
         "customRamp": [
           2,
@@ -206,18 +220,299 @@
           3
         ]
       },
-      "code": "AQAAAAABAQ4NAg8UQeh5-bjWS3_U__9rWzLhnA"
+      "code": "AgAAAAABAQ4NAg8UQeh5-bjWS3_U__9rWzIA5bM6AO_0"
+    },
+    {
+      "name": "fifth-ring-and-a-fifth-colour",
+      "config": {
+        "theme": 99,
+        "handBacking": 0,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 0,
+        "ring2": 8,
+        "ring3": 2,
+        "ring4": 3,
+        "ring5": 7,
+        "tempAheadLow": 0,
+        "tempAheadHigh": 45,
+        "customColours": [
+          1122867,
+          4478310,
+          7833753,
+          11189196,
+          1193046
+        ],
+        "customRamp": [
+          4,
+          1,
+          0
+        ]
+      },
+      "code": "AmMAAAABAQAIAgMUQREiM0RVZneImaq7zAQHEjRWAaPZ"
+    },
+    {
+      "name": "every-version-2-field-at-its-top",
+      "config": {
+        "theme": 0,
+        "handBacking": 0,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 0,
+        "ring2": 8,
+        "ring3": 2,
+        "ring4": 3,
+        "ring5": 15,
+        "tempAheadLow": 0,
+        "tempAheadHigh": 45,
+        "customColours": [
+          0,
+          0,
+          0,
+          0,
+          16777215
+        ],
+        "customRamp": [
+          4,
+          4,
+          4
+        ]
+      },
+      "code": "AgAAAAABAQAIAgMUQQAAAAAAAAAAAAAAAAAP____B7jr"
+    }
+  ],
+  "v1": [
+    {
+      "name": "defaults",
+      "code": "AQAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIEYw",
+      "config": {
+        "theme": 0,
+        "handBacking": 0,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 0,
+        "ring2": 8,
+        "ring3": 2,
+        "ring4": 3,
+        "ring5": 0,
+        "tempAheadLow": 0,
+        "tempAheadHigh": 45,
+        "customColours": [
+          15235577,
+          12113483,
+          8377599,
+          16739163,
+          15053626
+        ],
+        "customRamp": [
+          2,
+          0,
+          3
+        ]
+      }
+    },
+    {
+      "name": "custom-theme-every-field-moved",
+      "code": "AWMCAQEAAgkKDQcARv___wAAABI0VqvN7wcDSQ",
+      "config": {
+        "theme": 99,
+        "handBacking": 2,
+        "alwaysOnFill": 1,
+        "dotRotation": 1,
+        "showDate": 0,
+        "dateOutline": 2,
+        "ring1": 9,
+        "ring2": 10,
+        "ring3": 13,
+        "ring4": 7,
+        "ring5": 0,
+        "tempAheadLow": -20,
+        "tempAheadHigh": 50,
+        "customColours": [
+          16777215,
+          0,
+          1193046,
+          11259375,
+          15053626
+        ],
+        "customRamp": [
+          3,
+          1,
+          0
+        ]
+      }
+    },
+    {
+      "name": "inverted-temperatures-are-carried-not-normalised",
+      "code": "AQgAAAABAQwLBQRGAOh5-bjWS3_U__9rWzKyZw",
+      "config": {
+        "theme": 8,
+        "handBacking": 0,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 12,
+        "ring2": 11,
+        "ring3": 5,
+        "ring4": 4,
+        "ring5": 0,
+        "tempAheadLow": 50,
+        "tempAheadHigh": -20,
+        "customColours": [
+          15235577,
+          12113483,
+          8377599,
+          16739163,
+          15053626
+        ],
+        "customRamp": [
+          2,
+          0,
+          3
+        ]
+      }
+    },
+    {
+      "name": "values-statmap-cleans-are-still-in-range",
+      "code": "AQEAAAABAQABAgkUQeh5-bjWS3_U__9rWzIRZQ",
+      "config": {
+        "theme": 1,
+        "handBacking": 0,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 0,
+        "ring2": 1,
+        "ring3": 2,
+        "ring4": 9,
+        "ring5": 0,
+        "tempAheadLow": 0,
+        "tempAheadHigh": 45,
+        "customColours": [
+          15235577,
+          12113483,
+          8377599,
+          16739163,
+          15053626
+        ],
+        "customRamp": [
+          2,
+          0,
+          3
+        ]
+      }
+    },
+    {
+      "name": "beacon-equal-temperatures",
+      "code": "AQcAAAABAQAIAgMgIOh5-bjWS3_U__9rWwBfYg",
+      "config": {
+        "theme": 7,
+        "handBacking": 0,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 0,
+        "ring2": 8,
+        "ring3": 2,
+        "ring4": 3,
+        "ring5": 0,
+        "tempAheadLow": 12,
+        "tempAheadHigh": 12,
+        "customColours": [
+          15235577,
+          12113483,
+          8377599,
+          16739163,
+          15053626
+        ],
+        "customRamp": [
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "name": "drawn-hands-time-ring",
+      "code": "AQABAAABAQ8IAgMUQeh5-bjWS3_U__9rWzKZQQ",
+      "config": {
+        "theme": 0,
+        "handBacking": 1,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 15,
+        "ring2": 8,
+        "ring3": 2,
+        "ring4": 3,
+        "ring5": 0,
+        "tempAheadLow": 0,
+        "tempAheadHigh": 45,
+        "customColours": [
+          15235577,
+          12113483,
+          8377599,
+          16739163,
+          15053626
+        ],
+        "customRamp": [
+          2,
+          0,
+          3
+        ]
+      }
+    },
+    {
+      "name": "time-styles-anywhere-are-in-range",
+      "code": "AQAAAAABAQ4NAg8UQeh5-bjWS3_U__9rWzLhnA",
+      "config": {
+        "theme": 0,
+        "handBacking": 0,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 14,
+        "ring2": 13,
+        "ring3": 2,
+        "ring4": 15,
+        "ring5": 0,
+        "tempAheadLow": 0,
+        "tempAheadHigh": 45,
+        "customColours": [
+          15235577,
+          12113483,
+          8377599,
+          16739163,
+          15053626
+        ],
+        "customRamp": [
+          2,
+          0,
+          3
+        ]
+      }
     }
   ],
   "aliases": [
     {
       "name": "standard-alphabet-with-padding",
-      "code": "AWMCAQEAAgkKDQcARv///wAAABI0VqvN7wcDSQ==",
+      "code": "AmMCAQEAAgkKDQcARv///wAAABI0VqvN7wcA5bM6AIQ9",
       "same_as": "custom-theme-every-field-moved"
     },
     {
       "name": "whitespace-and-line-breaks",
-      "code": "  AWMCAQEAAgkKDQcARv_\n __wAAABI0VqvN7wcDSQ\t",
+      "code": "  AmMCAQEAAgkKDQcARv_\n __wAAABI0VqvN7wcA5bM6AIQ9\t",
       "same_as": "custom-theme-every-field-moved"
     }
   ],
@@ -230,7 +525,7 @@
     {
       "name": "unknown-version",
       "code": "AgAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzLg4Q",
-      "why": "version 2 is not one this decoder reads (1)"
+      "why": "28 bytes, a version-2 code is 33"
     },
     {
       "name": "truncated",
@@ -281,6 +576,46 @@
       "name": "not-base64",
       "code": "this is not a code!",
       "why": "not base64: contains characters outside the alphabet"
+    },
+    {
+      "name": "v2-checksum-mismatch",
+      "code": "AgAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6ALwN",
+      "why": "checksum does not match: the code is damaged or mistyped"
+    },
+    {
+      "name": "unknown-version-3",
+      "code": "AwAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6ADIl",
+      "why": "version 3 is not one this decoder reads (1, 2)"
+    },
+    {
+      "name": "v2-truncated",
+      "code": "AgAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzLg4Q",
+      "why": "28 bytes, a version-2 code is 33"
+    },
+    {
+      "name": "v2-one-byte-too-long",
+      "code": "AgAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AABqVw",
+      "why": "34 bytes, a version-2 code is 33"
+    },
+    {
+      "name": "version-1-at-version-2-length",
+      "code": "AQAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AD5W",
+      "why": "33 bytes, a version-1 code is 28"
+    },
+    {
+      "name": "ring5-out-of-range",
+      "code": "AgAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIQ5bM6ALhW",
+      "why": "ring5=16 is outside 0..15"
+    },
+    {
+      "name": "ramp-high-reserved-bits",
+      "code": "AgAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6CD0E",
+      "why": "ramp high byte 0x08 sets its reserved bits"
+    },
+    {
+      "name": "ramp-stop-above-the-fifth-colour",
+      "code": "AgAAAAABAQAIAgMUQeh5-bjWS3_U__9rWwEA5bM6AU1B",
+      "why": "customRamp=[5, 0, 0] must be three indices 0..4"
     }
   ]
 }

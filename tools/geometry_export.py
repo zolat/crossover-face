@@ -137,8 +137,8 @@ def devices() -> list[dict]:
     # `drawnHands` is the configurator's name for a watch the face tells the time
     # on itself — once with drawn hands, now with the time ring. That is a watch
     # with no hands of its own.
-    for device, (size, *_rest, hands) in mockup.LATTICES.items():
-        rows.append({"id": device, "screen": size, "lattice": lattice_key(size, hands),
+    for device, (size, _cols, _radius, _hub, rings, *_rest, hands) in mockup.LATTICES.items():
+        rows.append({"id": device, "screen": size, "lattice": lattice_key(size, hands), "rings": rings,
                      "drawnHands": not hands,
                      "displayMm": round(DISPLAY_INCHES[device] * 25.4, 2)})
     return rows

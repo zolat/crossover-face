@@ -1,4 +1,4 @@
-// A random custom theme that is still a good one: four hues spread round the wheel by
+// A random custom theme that is still a good one: five hues spread round the wheel by
 // one of a few schemes, bright enough to show in always-on and not so pale that a lap
 // past the goal disappears, with neighbouring rings clearly apart. A draw that any of
 // themeWarnings() would flag is thrown away and drawn again.
@@ -9,19 +9,23 @@ import { build } from "./palette";
 import { distance, themeWarnings } from "./warnings";
 
 export interface RandomTheme {
-  colours: [number, number, number, number];
+  /** Five, outermost first; the fifth is the 51mm's centre ball. */
+  colours: [number, number, number, number, number];
   ramp: [number, number, number];
 }
 
 type Random = () => number;
 
-/** Hue offsets, in degrees, for four rings. Each is shuffled across the rings. */
+/**
+ * Hue offsets, in degrees, for five colours. Each is shuffled across the rings, so every
+ * pair is kept at least 45 degrees apart: any two may end up neighbours.
+ */
 const SCHEMES = [
-  [0, 90, 180, 270], // square
-  [0, 120, 240, 60], // triad plus a between
-  [0, 30, 180, 210], // two complementary pairs
-  [0, 150, 210, 300], // split
-  [0, 45, 90, 200], // analogous run and an accent
+  [0, 72, 144, 216, 288], // pentagon
+  [0, 60, 150, 210, 300], // two pairs and an accent
+  [0, 90, 150, 240, 300], // square, split
+  [0, 45, 120, 200, 280], // a near pair and a spread
+  [0, 100, 160, 220, 300], // an accent and a run
 ];
 
 /** Neighbours this far apart read clearly; themeWarnings' floor is only 15. */

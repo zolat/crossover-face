@@ -23,6 +23,8 @@ export interface Device {
   screen: number;
   /** The lattice file: the screen size, and `-hands` where the hub is kept clear for hands. */
   lattice: string;
+  /** Lattice.RINGS: five on the 51mm, four elsewhere. */
+  rings: number;
   drawnHands: boolean;
   /** The display's published diameter, for the real-size view. */
   displayMm: number;

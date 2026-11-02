@@ -197,11 +197,17 @@ class ConfigCodeVectors(unittest.TestCase):
         for vector in self.vectors["valid"]:
             with self.subTest(vector["name"]):
                 self.assertEqual(configcode.encode(vector["config"]), vector["code"])
-                self.assertEqual(len(vector["code"]), 38)
+                self.assertEqual(len(vector["code"]), 44)
 
     def test_every_valid_code_decodes_to_its_config(self):
         for vector in self.vectors["valid"]:
             with self.subTest(vector["name"]):
+                self.assertEqual(dict(configcode.decode(vector["code"])), vector["config"])
+
+    def test_a_version_1_code_decodes_with_the_version_2_fields_defaulted(self):
+        for vector in self.vectors["v1"]:
+            with self.subTest(vector["name"]):
+                self.assertEqual(len(vector["code"]), 38)
                 self.assertEqual(dict(configcode.decode(vector["code"])), vector["config"])
 
     def test_other_spellings_of_a_code_decode_the_same(self):
@@ -273,7 +279,7 @@ class WatchConfigPush(unittest.TestCase):
     """make push-config TO=watch, against the settings file a real watch wrote."""
 
     WATCH_FILE = (Path(__file__).resolve().parent / "testdata" / "CrossoverFace-watch.SET").read_bytes()
-    CODE = "AWMAAAAAAAQMCQAUQXDugLVV6Y7V3qvgjx5DUg"
+    CODE = "AmMAAAAAAAQMCQAUQXDugLVV6Y7V3qvgjx4A5bM6AJDt"
 
     def setUp(self):
         self.backups = Path(tempfile.mkdtemp())

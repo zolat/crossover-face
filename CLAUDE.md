@@ -79,8 +79,10 @@ The 454 alone has five: the largest screen, and since the drawn hands went the o
 frame budget to spare. Its fifth ring is the centre ball, set by `ring5` (default Steps,
 because the outer ring tells the time there). Every watch carries `ring5` and only the 454
 reads it, the way only the Crossover reads `handBacking`; it is not in `settings.xml`, so
-Garmin Connect never offers a ring a watch cannot draw, and the version-1 config code does
-not carry it (`ConfigCode.CODE_RINGS`). `onlyThe454HasAFifthRing` holds all of that.
+Garmin Connect never offers a ring a watch cannot draw. The version-2 config code carries
+it (`ConfigCode.FIELD_RING5`) on every watch, since a code does not say which watch it is
+for: a four-ring watch publishes what it stores. `onlyThe454HasAFifthRing` holds all of
+that.
 
 **The hub has dots on a watch with no hands, and rings are measured from the centre
 there.** `DotGrid.CLEAR_SQ` is `HUB²` where hands cover the hub and 0 where none do, so on
@@ -875,8 +877,15 @@ The menu republishes after each choice. Three things are easy to break:
   fails while it is stale.
 - **The custom theme (ID 99) lives in `Application.Storage`, not Properties**, because it
   has no phone-side field and a property Garmin Connect does not know about is one a
-  phone save has no reason to keep. `Palette.build()` picks a working set of four colours
+  phone save has no reason to keep. `Palette.build()` picks a working set of five colours
   and three stops from `THEMES` or from Storage; nothing per-frame changed.
+- **Version 2 appends the 51mm's fields: ring 5, custom colour 5, and each ramp stop's third
+  bit** (33 bytes, 44 characters). Every decoder reads version 1 too and fills what it
+  lacks with the defaults — ring 5 Steps, colour 5 Terrain's gold — so an old code still
+  applies, and resets those two. The watch, the web and the tooling always write version 2.
+  In a config vector the two new fields are appended (`FIELD_RING5` 19, `FIELD_COLOUR5`
+  20), so no version-1 index moved. `tools/testdata/config-codes.json` keeps the old codes
+  under `v1`, decode-only.
 - **No colours can cross the always-on budget**: all-white measures 8.99% at 390 and 9.10%
   at 454 with every mark and sun dot. `anAllWhiteCustomThemeFitsTheAlwaysOnBudget` holds
   it, which is why the watch has no clamp. Raise the dot count or `LIFT` and that stops
@@ -984,9 +993,9 @@ the theme lacked and its neighbour does not crowd:
 
 The custom theme is five colours and three stops too (`CUSTOM_THEME_SIZE` 8). One stored
 before that, four and three, is read with `CUSTOM_FIFTH_DEFAULT` (Terrain's gold) slotted in.
-The version-1 config code carries four colours (`ConfigCode.CODE_COLOURS`) and `apply()`
-keeps the watch's fifth, and a stop stays at most 3 (`CUSTOM_STOP_MAX`) because the code
-packs it into two bits.
+A stop may name any of the five (`CUSTOM_STOP_MAX` 4): the version-2 code carries each
+stop's third bit. A four-colour theme's stops still index four colours, so a 4 there is
+malformed.
 
 The temperature ramp names three **indices into the theme, not colours**: a ramp stop *is* a
 ring colour, and writing the value a second time is how the two drift apart. Terrain runs ice

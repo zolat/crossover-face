@@ -38,11 +38,23 @@ The format is also the payload a later background sync would carry, unchanged.
     25    custom ramp        cold | mid << 2 | hot << 4     top two bits 0
     26    CRC-16             big-endian, over bytes 0..25
 
-**Version 1 does not carry the 51mm's fifth ring or any fifth theme colour.** The Epix 2
-Pro 51mm has five rings (`ring5` is its centre ball) and every theme has a fifth colour for
-it. A version-1 code leaves both as the watch holds them: `ConfigCode.CODE_RINGS` and
-`CODE_COLOURS` are 4, and `apply()` keeps the stored fifth custom colour. Version 2
-(ROADMAP, 51mm fifth ring, Phase 6.1) appends them.
+## v2
+
+33 bytes, **44 characters**. Version 1's 26 bytes of payload in place — byte 0 is now `2` —
+then three appended fields, then the CRC:
+
+    byte  field              stored as                      valid
+    26    ring5              Source.Kind (the 51mm's ball)  0..15
+    27    custom colour 5    R, G, B (the 51mm's ball)      any
+    30    ramp high bits     cold>>2 | mid>>2 << 1 | hot>>2 << 2   top five bits 0
+    31    CRC-16             big-endian, over bytes 0..30
+
+A ramp stop is byte 25's two bits for it plus its bit in byte 30, so it can name any of the
+five custom colours, 0..4. Every watch carries ring 5 and colour 5, since a code does not
+say which watch it is for; only the Epix 2 Pro 51mm draws them.
+
+**A version-1 code is still read**, with ring 5 at Steps (`0`) and colour 5 at Terrain's
+gold (`0xE5B33A`) — the defaults, as *Versions* below requires. Everything writes version 2.
 
 The CRC is CRC-16/CCITT-FALSE: polynomial `0x1021`, initial value `0xFFFF`, no reflection,
 no final XOR. `"123456789"` checks to `0x29B1`.
@@ -51,14 +63,14 @@ Theme `99` is **Custom**: the rings take bytes 13–25. It sits outside the prod
 sequence on purpose — the next shipping theme is still `9`. The custom theme is carried
 whichever theme is selected, so switching to a shipping theme and back never loses it.
 
-A ramp stop is an index into the theme's four colours, exactly as `Palette.RAMP_STOPS` is.
+A ramp stop is an index into the theme's colours, exactly as `Palette.RAMP_STOPS` is.
 
 ## Decoding
 
 - Strip whitespace. Accept either base64 alphabet (`-_` or `+/`) and optional `=` padding,
   because a code pasted through a phone's clipboard or an e-mail can come back either way.
 - Reject — apply nothing — on a wrong length for the version, a bad CRC, an unknown
-  version, or any field outside its range. A code is all-or-nothing: a half-applied one
+  version (anything but 1 or 2), or any field outside its range. A code is all-or-nothing: a half-applied one
   would leave the wearer with a face that matches neither what they had nor what they
   pasted.
 - Ring sources are range-checked only. Which ring may carry which source, and the retired

@@ -100,10 +100,10 @@ module StatMap {
                             2, 0, 3] as Array<Number>;
     const CUSTOM_FIFTH_DEFAULT = 0xE5B33A;
 
-    //! The highest ramp stop a custom theme may name. Four, not five: the
-    //! version-1 config code packs a stop into two bits, and a stop it cannot
-    //! write would corrupt the code the watch publishes.
-    const CUSTOM_STOP_MAX = 3;
+    //! The highest ramp stop a custom theme may name: any of its five colours.
+    //! The version-2 config code carries a stop's third bit, so the 454's
+    //! centre colour can be a stop too.
+    const CUSTOM_STOP_MAX = 4;
     // Literal values because Monkey C const arrays have failed on-device when
     // their initialisers refer to other consts. The tests pin these to the enum.
     const THEME_IDS = [0, 1, 7, 8] as Array<Number>;
@@ -277,6 +277,13 @@ module StatMap {
         // Stored before themes had five colours: slot the default fifth in
         // after the four, ahead of the stops.
         if (stored.size() == CUSTOM_THEME_SIZE_V1) {
+            // Its stops index four colours, so a 4 there was never valid.
+            for (var i = Palette.THEME_COLOURS - 1; i < CUSTOM_THEME_SIZE_V1; i++) {
+                var stop = stored[i];
+                if (!(stop instanceof Number) || stop >= Palette.THEME_COLOURS - 1) {
+                    return CUSTOM_DEFAULT;
+                }
+            }
             var widened = stored.slice(0, Palette.THEME_COLOURS - 1);
             widened.add(CUSTOM_FIFTH_DEFAULT);
             widened.addAll(stored.slice(Palette.THEME_COLOURS - 1, null));
