@@ -40,9 +40,9 @@
       "key": "handBacking",
       "type": "list",
       "title": "Behind hands",
-      "titleDrawn": "Hands",
+      "titleDrawn": "Behind hands",
       "prompt": "Clears the dots under the hands while the watch is awake",
-      "promptDrawn": "Draws the hour and minute hands; touch and hold to hide them temporarily",
+      "promptDrawn": "Clears the dots under the hands while the watch is awake",
       "options": [
         {
           "value": 0,
@@ -52,7 +52,7 @@
         {
           "value": 1,
           "label": "White",
-          "labelDrawn": "White and grey"
+          "labelDrawn": "White"
         },
         {
           "value": 2,
@@ -107,12 +107,12 @@
       "title": "Date",
       "titleDrawn": "Date",
       "prompt": "The day of the month, drawn in by joining the dots when the watch wakes; always-on shows the plain field",
-      "promptDrawn": "The day of the month, drawn in by joining the dots while the hands are hidden; touch and hold to hide them",
+      "promptDrawn": "The day of the month, drawn in by joining the dots when the watch wakes; always-on shows the plain field",
       "options": [
         {
           "value": 1,
           "label": "On",
-          "labelDrawn": "On while hands are hidden"
+          "labelDrawn": "On"
         },
         {
           "value": 0,
@@ -472,7 +472,19 @@
     "configCode": ""
   },
   "defaultsDrawn": {
-    "handBacking": 2
+    "theme": 0,
+    "handBacking": 0,
+    "alwaysOnFill": 0,
+    "dotRotation": 0,
+    "showDate": 1,
+    "dateOutline": 1,
+    "ring1": 0,
+    "ring2": 1,
+    "ring3": 2,
+    "ring4": 3,
+    "tempAheadLow": 0,
+    "tempAheadHigh": 45,
+    "configCode": ""
   },
   "themes": [
     {
@@ -550,7 +562,6 @@
     "SUN_TINT": 0.7,
     "BACKING_WHITE": 16777215,
     "BACKING_DARK": 1052688,
-    "HAND_MINUTE": 8421504,
     "RAMP_STEPS": 32,
     "SUN_HUES": [
       16770688,

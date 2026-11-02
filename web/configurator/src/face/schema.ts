@@ -42,7 +42,6 @@ export interface PaletteFactors {
   SUN_HUES: number[];
   BACKING_WHITE: number;
   BACKING_DARK: number;
-  HAND_MINUTE: number;
   RAMP_STEPS: number;
 }
 

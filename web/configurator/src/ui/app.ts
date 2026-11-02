@@ -270,7 +270,8 @@ export function mountApp(root: HTMLElement, store: Store, devices: Device[]) {
       timed ? h("p", { class: "note" }, "This watch tells the time in its outer ring. The preview shows ten past ten.") : null,
       rings.some((source) => source === TEMP_HOURS) ? tempAhead(config) : null,
       h("h2", {}, "Details"),
-      choices(label("handBacking"), options("handBacking"), config.handBacking, (value) => set({ handBacking: Number(value) })),
+      // Only where there are hands to back; a watch with none ignores the setting.
+      drawn ? null : choices(label("handBacking"), options("handBacking"), config.handBacking, (value) => set({ handBacking: Number(value) })),
       choices(label("alwaysOnFill"), options("alwaysOnFill"), config.alwaysOnFill, (value) => set({ alwaysOnFill: Number(value) })),
       choices(label("dotRotation"), options("dotRotation"), config.dotRotation, (value) => set({ dotRotation: Number(value) })),
       choices(label("showDate"), options("showDate"), config.showDate, (value) => set({ showDate: Number(value) })),
@@ -278,7 +279,7 @@ export function mountApp(root: HTMLElement, store: Store, devices: Device[]) {
         ? choices(label("dateOutline"), options("dateOutline"), config.dateOutline, (value) => set({ dateOutline: Number(value) }))
         : null,
       h("p", { class: "note" }, drawn
-        ? "The preview shows typical readings, with the hands hidden. Every ring fills clockwise from twelve."
+        ? "The preview shows typical readings. Every ring fills clockwise from twelve."
         : "The preview shows typical readings, under where the watch's own hands sit. Every ring fills clockwise from twelve."),
     ];
     panel.replaceChildren(...sections.filter((node): node is Node => node !== null), saved.element);

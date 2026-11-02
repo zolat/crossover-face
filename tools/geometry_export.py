@@ -125,8 +125,11 @@ def lattices() -> dict[int, dict]:
 
 def devices() -> list[dict]:
     rows = []
-    for device, (size, *_rest, drawn) in mockup.LATTICES.items():
-        rows.append({"id": device, "screen": size, "drawnHands": drawn,
+    # `drawnHands` is the configurator's name for a watch the face tells the time
+    # on itself — once with drawn hands, now with the time ring. That is a watch
+    # with no hands of its own.
+    for device, (size, *_rest, hands) in mockup.LATTICES.items():
+        rows.append({"id": device, "screen": size, "drawnHands": not hands,
                      "displayMm": round(DISPLAY_INCHES[device] * 25.4, 2)})
     return rows
 

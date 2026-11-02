@@ -8,9 +8,9 @@ the settings have to be kept in step. So it is read from them:
 - ``resources/settings/settings.xml``: every setting, its type, its values in picker
   order and its bounds. The ring lists are what the phone offers per ring, which is
   ``Source.offeredFor()``.
-- ``resources/strings/strings.xml`` and ``resources-drawn-hands/strings/strings.xml``:
-  the labels, twice over, because a watch with drawn hands names some of them
-  differently.
+- ``resources/strings/strings.xml``: the labels. The schema still carries a second,
+  "drawn" copy for the watches that tell the time in a ring; since those lost their drawn
+  hands they name everything as the Crossover does, so it is the same strings.
 - ``source/render/Palette.mc``: the shipping themes, their ramp stops and every tier
   factor.
 - ``source/data/Source.mc``: which sources draw blocks and which a temperature range.
@@ -114,11 +114,10 @@ def palette() -> dict:
     factors = {name: _number(source, name) for name in (
         "WEAK_ACTIVE", "WEAK_ALWAYS_ON", "WEAK_HELD_BACK", "WEAK_UNKNOWN", "LIFT",
         "MARKER", "MARKER_TINT", "SOFT_MARK_TINT", "OVER_TINT", "SUN_TINT",
-        "BACKING_WHITE", "BACKING_DARK", "HAND_MINUTE", "RAMP_STEPS")}
+        "BACKING_WHITE", "BACKING_DARK", "RAMP_STEPS")}
     factors["MARKER"] = int(factors["MARKER"])
     factors["BACKING_WHITE"] = int(factors["BACKING_WHITE"])
     factors["BACKING_DARK"] = int(factors["BACKING_DARK"])
-    factors["HAND_MINUTE"] = int(factors["HAND_MINUTE"])
     factors["RAMP_STEPS"] = int(factors["RAMP_STEPS"])
     factors["SUN_HUES"] = _array(source, "SUN_HUES")
     return {
@@ -164,7 +163,7 @@ def time_ring(kinds: dict[str, int], drawn: dict[str, str]) -> dict:
     styles = re.findall(r"SOURCE_[A-Z_]+", _const(source, "TIME_STYLES").split(" as ")[0])
     return {
         "ring": int(_number(statmap, "TIME_RING")),
-        "drawn": hands("drawn"),
+        "drawn": hands("none"),
         "physical": hands("physical"),
         "styles": [{"value": kinds[name], "label": drawn[_camel(name)]} for name in styles],
         "default": kinds[_const(source, "TIME_DEFAULT")],
@@ -196,7 +195,6 @@ def property_defaults(path: Path) -> dict[str, int | str]:
 def build() -> dict:
     base = strings(REPO / "resources" / "strings" / "strings.xml")
     drawn = dict(base)
-    drawn.update(strings(REPO / "resources-drawn-hands" / "strings" / "strings.xml"))
     entries = settings(base, drawn)
     paint = palette()
     statmap = (REPO / "source" / "matrix" / "StatMap.mc").read_text()
@@ -205,7 +203,7 @@ def build() -> dict:
                     "resources and sources. Do not edit.",
         "settings": entries,
         "defaults": property_defaults(REPO / "resources" / "properties.xml"),
-        "defaultsDrawn": property_defaults(REPO / "resources-drawn-hands" / "properties.xml"),
+        "defaultsDrawn": property_defaults(REPO / "resources" / "properties.xml"),
         "themes": themes(entries, paint),
         "themeCustom": int(_number(statmap, "THEME_CUSTOM")),
         "palette": paint["factors"],

@@ -264,7 +264,8 @@ try {
   await page.reload({ waitUntil: "networkidle0" });
   check("a link opens on its code", (await code()) === vector);
   check("…and its watch", (await page.$eval("canvas.face", (c) => c.width % 454 === 0)));
-  check("…with the drawn-hands labels", (await page.content()).includes("White and grey"));
+  check("…and no Hands setting, since the Epix has no hands to back",
+    !(await page.content()).includes("Behind hands"));
 
   // The Epix tells the time in its outer ring: placed, not chosen, and in the code as
   // the watch itself publishes it.

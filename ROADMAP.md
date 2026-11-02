@@ -99,6 +99,12 @@ untouched.
   is Crossover-only, and `SettingsMenu.onShow()` refreshes by id rather than by row.
   `resources-no-hands/` keeps only the 60x60 icon. 174/174 on all five.
 - [ ] Phase 3 — docs ← current
+- [ ] Phase 4 — the overlap's colours from the theme. The ring's own configured colour is
+  the overlap ("both have passed"), and the hour and minute are two distinct colours that
+  read as combining into it — e.g. its hue split either side, as blue and red make purple —
+  instead of the fixed blue/red/purple. Mockup every theme first (Custom included); check the
+  pair stays distinct from each other, from the overlap and from the grey, and re-price the
+  always-on budget per theme.
 
 ## Epix 2 family
 
