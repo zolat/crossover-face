@@ -1,41 +1,70 @@
 // HueSplit.pair(): two colours that read as mixing into a third, its hue turned the same
-// way each side. The overlapping time ring's hour and minute are this split of the ring's
-// own colour. HSV as Python's colorsys does it, rounded half up, so the face, the mockup
-// and this agree to a unit per channel.
+// way each side in OKLCH at its own lightness, giving up chroma where the screen cannot
+// show it. The overlapping time ring's hour and minute are this split of the ring's own
+// colour. Same constants and rounding as the watch and tools/mockup.py, which agree to a
+// unit per channel.
 
-function toHsv(colour: number): [number, number, number] {
-  const r = ((colour >> 16) & 0xff) / 255;
-  const g = ((colour >> 8) & 0xff) / 255;
-  const b = (colour & 0xff) / 255;
-  const high = Math.max(r, g, b);
-  const low = Math.min(r, g, b);
-  if (high === low) return [0, 0, high];
-  const span = high - low;
-  const rc = (high - r) / span;
-  const gc = (high - g) / span;
-  const bc = (high - b) / span;
-  const h = r === high ? bc - gc : g === high ? 2 + rc - bc : 4 + gc - rc;
-  return [wrap(h / 6), span / high, high];
+type Lch = [number, number, number];
+
+const linear = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+const cbrt = (x: number) => (x <= 0 ? 0 : x ** (1 / 3));
+
+function toOklch(colour: number): Lch {
+  const r = linear(((colour >> 16) & 0xff) / 255);
+  const g = linear(((colour >> 8) & 0xff) / 255);
+  const b = linear((colour & 0xff) / 255);
+  const l = cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  const L = 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s;
+  const A = 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s;
+  const B = 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s;
+  return [L, Math.hypot(A, B), wrap((Math.atan2(B, A) * 180) / Math.PI)];
 }
 
-function fromHsv(h: number, s: number, v: number): number {
-  const sixth = h * 6;
-  const i = Math.floor(sixth) % 6;
-  const f = sixth - Math.floor(sixth);
-  const p = v * (1 - s);
-  const q = v * (1 - s * f);
-  const t = v * (1 - s * (1 - f));
-  const rgb = [[v, t, p], [q, v, p], [p, v, t], [p, q, v], [t, p, v], [v, p, q]][i];
-  return (toByte(rgb[0]) << 16) | (toByte(rgb[1]) << 8) | toByte(rgb[2]);
+function linearRgb(L: number, C: number, h: number): Lch {
+  const a = C * Math.cos((h * Math.PI) / 180);
+  const b = C * Math.sin((h * Math.PI) / 180);
+  const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
+  const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
+  const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
+  return [
+    4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+    -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s,
+  ];
 }
 
-const toByte = (x: number) => Math.max(0, Math.min(255, Math.floor(x * 255 + 0.5)));
-const wrap = (h: number) => ((h % 1) + 1) % 1;
+const inGamut = (rgb: Lch) => rgb.every((x) => x >= -1e-4 && x <= 1 + 1e-4);
 
-/** [turned back, turned on]: the hour and the minute. Saturation floored, value kept. */
+function fit(L: number, C: number, h: number): number {
+  if (inGamut(linearRgb(L, C, h))) return C;
+  let low = 0;
+  let high = C;
+  for (let i = 0; i < 24; i++) {
+    const mid = (low + high) / 2;
+    if (inGamut(linearRgb(L, mid, h))) low = mid;
+    else high = mid;
+  }
+  return low;
+}
+
+function toByte(x: number): number {
+  const c = Math.min(1, Math.max(0, x));
+  const encoded = c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055;
+  return Math.max(0, Math.min(255, Math.floor(encoded * 255 + 0.5)));
+}
+
+const wrap = (h: number) => ((h % 360) + 360) % 360;
+
+/** [turned back, turned on]: the hour and the minute. Chroma floored, lightness kept. */
 export function hueSplit(colour: number, degrees: number, floor: number): [number, number] {
-  const [h, s, v] = toHsv(colour);
-  const sat = Math.max(s, floor);
-  const turn = degrees / 360;
-  return [fromHsv(wrap(h - turn), sat, v), fromHsv(wrap(h + turn), sat, v)];
+  const [L, C, h] = toOklch(colour);
+  const chroma = Math.max(C, floor);
+  const side = (d: number) => {
+    const hue = wrap(h + d);
+    const [r, g, b] = linearRgb(L, fit(L, chroma, hue), hue);
+    return (toByte(r) << 16) | (toByte(g) << 8) | toByte(b);
+  };
+  return [side(-degrees), side(degrees)];
 }

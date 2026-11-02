@@ -60,8 +60,8 @@ export function timeSlot(source: number, radiusSq: number, edgeSq: number, turn:
  * the hour and minute (Palette.timeOverlap), over a neutral grey.
  */
 export function timeColours(source: number, tiers: { band: number; dim: number }): [number, number, number, number] {
-  const { colours, splitDegrees, splitSaturation } = schema.timeRing;
+  const { colours, splitDegrees, splitChroma } = schema.timeRing;
   if (source === schema.timeRing.split) return [tiers.dim, colours.lit, colours.lit, colours.lit];
-  const [hour, minute] = hueSplit(tiers.band, splitDegrees, splitSaturation);
+  const [hour, minute] = hueSplit(tiers.band, splitDegrees, splitChroma);
   return [colours.unlit, hour, minute, tiers.band];
 }

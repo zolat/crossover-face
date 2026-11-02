@@ -158,8 +158,11 @@ Two styles, chosen on the ring 1 row:
 
 - **Overlap** (`SOURCE_TIME_OVERLAP = 15`, the default): each fill covers the whole ring.
   Where both have passed is the ring's own theme colour; the hour and minute are its hue
-  turned 60° back and on (`HueSplit`, HSV, saturation floored at 0.6), built once into
-  `Palette.timeOverlap`; grey where neither has. Whichever colour sticks out past the
+  turned 60° back and on **in OKLCH at its own lightness** (`HueSplit`, chroma floored at
+  0.08 and bisected down where the screen cannot show it), built once into
+  `Palette.timeOverlap`; grey where neither has. OKLCH rather than HSV because HSV keeps the
+  brightest channel, not perceived lightness — Activity's red split into a magenta hour and
+  a far brighter yellow minute. The maths runs in Doubles so the mirrors agree to a unit. Whichever colour sticks out past the
   ring's own is the one ahead. `tools/mockup.py` and the web configurator mirror the split,
   and `TimeRingTest.SPLIT_PINS` holds all three to a unit per channel.
 - **Split** (`SOURCE_TIME = 14`): the hour fills the innermost sub-band and the minute the

@@ -73,7 +73,7 @@ export interface FaceSchema {
     colours: { lit: number; unlit: number };
     /** Palette.TIME_SPLIT_*: how the overlap's hour and minute split from the ring's colour. */
     splitDegrees: number;
-    splitSaturation: number;
+    splitChroma: number;
   };
 }
 

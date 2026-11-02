@@ -626,6 +626,6 @@
       "unlit": 3815994
     },
     "splitDegrees": 60.0,
-    "splitSaturation": 0.6
+    "splitChroma": 0.08
   }
 }

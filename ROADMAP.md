@@ -1,6 +1,6 @@
 # Roadmap
 
-**Current:** Epix time ring complete through Phase 4. The Epix tells the time in its outer
+**Current:** Epix time ring complete through Phase 4.1. The Epix tells the time in its outer
 ring, in its theme's colours, and no longer draws hands; the Crossover is unchanged.
 
 ## Out-of-band features
@@ -109,6 +109,14 @@ untouched.
   blue / pink-red; Activity and Pulse red into magenta / yellow; Beacon cyan into green /
   indigo. Mirrored in `tools/mockup.py` and the web configurator, pinned per theme to a unit
   per channel. 191/191 on all five; `make web-test` green.
+- [x] Phase 4.1 — the split in OKLCH. Hue turned at the ring's own perceptual lightness,
+  chroma floored at 0.08 and bisected down to the screen's gamut, after a colour-split
+  playground from the concept brainstorm. Balanced where HSV was not (Activity's yellow
+  minute outshone its magenta hour); softer: Terrain light blue / salmon, Activity and Pulse
+  magenta / mustard, Beacon mint / lavender. Chosen on the mockups over HSV and an
+  OKLCH-keep-saturation hybrid.
+- [ ] Phase 4.2 — a "time colours" control in the configurator (spread, maybe lightness
+  offset), as the playground had. Needs a setting and a config-code version.
 
 ## Epix 2 family
 

@@ -268,12 +268,12 @@ module TimeRingTest {
 
     //! The overlapping ring's hour and minute for each shipping theme, in
     //! StatMap.THEME_IDS order, as tools/mockup.py's hue_split() gives them:
-    //! the outer ring's colour turned 60 degrees back and on.
+    //! the outer ring's colour turned 60 degrees back and on in OKLCH.
     const SPLIT_PINS = [
-        0x6477F9, 0xF96477,     // Terrain: orchid -> blue, pink-red
-        0xFE46FE, 0xFEFE46,     // Activity: red -> magenta, yellow
-        0x5CF073, 0x735CF0,     // Beacon: cyan -> green, indigo
-        0xFE46FE, 0xFEFE46      // Pulse: red -> magenta, yellow
+        0x80ACFF, 0xFF8281,     // Terrain: orchid -> light blue, salmon
+        0xD456DB, 0xB98C00,     // Activity: red -> magenta, mustard
+        0x8BDBA0, 0xB1C3FF,     // Beacon: cyan -> mint, lavender
+        0xD456DB, 0xB98C00      // Pulse: red -> magenta, mustard
     ] as Array<Number>;
 
     function near255(a as Number, b as Number) as Boolean {
@@ -319,21 +319,21 @@ module TimeRingTest {
         return true;
     }
 
-    //! A grey has no hue to turn; the saturation floor still splits it into
-    //! two colours rather than two greys.
+    //! A grey has no hue to turn; the chroma floor still splits it into two
+    //! colours rather than two greys.
     (:test)
     function aPaleRingStillSplitsIntoTwoColours(logger as Logger) as Boolean {
         var grey = 0x9AA8C0;
         var pair = HueSplit.pair(grey, Palette.TIME_SPLIT_DEGREES,
-                                 Palette.TIME_SPLIT_SATURATION);
+                                 Palette.TIME_SPLIT_CHROMA);
         logger.debug("pale " + grey.format("%06X") + " -> " +
                      pair[0].format("%06X") + ", " + pair[1].format("%06X"));
-        Test.assertMessage(near255(pair[0], 0x4DC096) && near255(pair[1], 0x964DC0),
+        Test.assertMessage(near255(pair[0], 0x65B7BC) && near255(pair[1], 0xBF97C6),
             "the pale split has drifted from tools/mockup.py");
         var flat = HueSplit.pair(0x808080, Palette.TIME_SPLIT_DEGREES,
-                                 Palette.TIME_SPLIT_SATURATION);
-        Test.assertMessage(flat[0] != flat[1],
-            "even a pure grey must split into two colours");
+                                 Palette.TIME_SPLIT_CHROMA);
+        Test.assertMessage(near255(flat[0], 0xAB6E64) && near255(flat[1], 0x5D8E67),
+            "even a pure grey must split into two colours, as the mockup does");
         return true;
     }
 

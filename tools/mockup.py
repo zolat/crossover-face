@@ -423,26 +423,74 @@ TIME_UNLIT = 0.25
 
 #: The overlapping style: where both have passed is the ring's own theme
 #: colour, and the hour and minute are its hue turned TIME_SPLIT_DEGREES either
-#: way, saturation floored at TIME_SPLIT_SATURATION. Mirrors Palette.TIME_* and
+#: way in OKLCH at its own lightness, chroma floored at TIME_SPLIT_CHROMA and
+#: given up where the screen cannot show it. Mirrors Palette.TIME_* and
 #: HueSplit.pair; unfilled is a neutral grey.
 TIME_SPLIT_DEGREES = 60.0
-TIME_SPLIT_SATURATION = 0.6
+TIME_SPLIT_CHROMA = 0.08
 TIME_OVERLAP_UNLIT = (0x3A, 0x3A, 0x3A)
 
 
+def _linear(c: float) -> float:
+    return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+
+
 def _byte(x: float) -> int:
-    """Rounded half up, as HueSplit.toByte: Python's round() is banker's."""
-    return max(0, min(255, math.floor(x * 255.0 + 0.5)))
+    """A linear channel as an sRGB byte, rounded half up, as HueSplit.toByte."""
+    x = min(1.0, max(0.0, x))
+    encoded = 12.92 * x if x <= 0.0031308 else 1.055 * x ** (1 / 2.4) - 0.055
+    return max(0, min(255, math.floor(encoded * 255.0 + 0.5)))
 
 
-def hue_split(colour, degrees=TIME_SPLIT_DEGREES, floor=TIME_SPLIT_SATURATION):
+def to_oklch(colour):
+    """(lightness, chroma, hue in degrees). Mirrors HueSplit.toOklch."""
+    r, g, b = (_linear(c / 255.0) for c in colour)
+    cbrt = lambda x: 0.0 if x <= 0 else x ** (1 / 3)
+    l = cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b)
+    m_ = cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b)
+    s = cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b)
+    L = 0.2104542553 * l + 0.7936177850 * m_ - 0.0040720468 * s
+    A = 1.9779984951 * l - 2.4285922050 * m_ + 0.4505937099 * s
+    B = 0.0259040371 * l + 0.7827717662 * m_ - 0.8086757660 * s
+    return L, math.hypot(A, B), math.degrees(math.atan2(B, A)) % 360
+
+
+def _linear_rgb(L, C, h):
+    a, b = C * math.cos(math.radians(h)), C * math.sin(math.radians(h))
+    l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3
+    m_ = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3
+    s = (L - 0.0894841775 * a - 1.2914855480 * b) ** 3
+    return (4.0767416621 * l - 3.3077115913 * m_ + 0.2309699292 * s,
+            -1.2684380046 * l + 2.6097574011 * m_ - 0.3413193965 * s,
+            -0.0041960863 * l - 0.7034186147 * m_ + 1.7076147010 * s)
+
+
+def _in_gamut(rgb) -> bool:
+    return all(-1e-4 <= x <= 1 + 1e-4 for x in rgb)
+
+
+def _fit(L, C, h):
+    """The most chroma up to C the screen can show here. Mirrors HueSplit.fit."""
+    if _in_gamut(_linear_rgb(L, C, h)):
+        return C
+    lo, hi = 0.0, C
+    for _ in range(24):
+        mid = (lo + hi) / 2
+        if _in_gamut(_linear_rgb(L, mid, h)):
+            lo = mid
+        else:
+            hi = mid
+    return lo
+
+
+def hue_split(colour, degrees=TIME_SPLIT_DEGREES, floor=TIME_SPLIT_CHROMA):
     """[turned back, turned on] for an RGB colour. Mirrors HueSplit.pair."""
-    h, s, v = colorsys.rgb_to_hsv(*(c / 255.0 for c in colour))
-    s = max(s, floor)
+    L, C, h = to_oklch(colour)
+    C = max(C, floor)
     out = []
     for d in (-degrees, degrees):
-        rgb = colorsys.hsv_to_rgb((h + d / 360.0) % 1.0, s, v)
-        out.append(tuple(_byte(c) for c in rgb))
+        hue = (h + d) % 360
+        out.append(tuple(_byte(x) for x in _linear_rgb(L, _fit(L, C, hue), hue)))
     return out
 
 

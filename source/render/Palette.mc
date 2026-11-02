@@ -223,17 +223,18 @@ module Palette {
 
     //! The overlapping time ring's colours come from the theme: where hour and
     //! minute have both passed is the ring's own colour, and the hour and
-    //! minute are its hue turned TIME_SPLIT_DEGREES either way (HueSplit), so
-    //! the three read as mixing — Terrain's orchid splits into a blue hour and
-    //! a pink-red minute, the way blue and red make purple. 60 rather than 45,
+    //! minute are its hue turned TIME_SPLIT_DEGREES either way in OKLCH at its
+    //! own lightness (HueSplit), so the three read as mixing — Terrain's orchid
+    //! splits into a light blue hour and a salmon minute, the way blue and red
+    //! make purple. 60 rather than 45,
     //! chosen on the mockups: at 45 the pair is hard to tell apart on the red
     //! themes. A fixed rule rather than steering clear of the other rings'
     //! colours, so a custom theme's ring splits predictably.
     const TIME_SPLIT_DEGREES = 60.0;
 
-    //! The least saturation the split pair takes, so a pale ring still splits
-    //! into two colours rather than two greys.
-    const TIME_SPLIT_SATURATION = 0.6;
+    //! The least OKLCH chroma the split pair takes, so a pale ring still
+    //! splits into two colours rather than two greys.
+    const TIME_SPLIT_CHROMA = 0.08;
 
     //! Unfilled dots on the overlapping ring: a neutral grey rather than the
     //! ring's colour, because a dim copy of the ring beside its own hue reads
@@ -388,7 +389,7 @@ module Palette {
 
         var both = themeColour(StatMap.TIME_RING);
         var split = HueSplit.pair(both, TIME_SPLIT_DEGREES,
-                                  TIME_SPLIT_SATURATION);
+                                  TIME_SPLIT_CHROMA);
         timeOverlap = [TIME_UNLIT, split[0], split[1], both] as Array<Number>;
 
         var ramp = [] as Array<Number>;
