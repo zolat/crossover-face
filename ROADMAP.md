@@ -54,18 +54,18 @@ source of truth. `docs/config-code.md` is the format.
 - [x] Phase 4 — `make push-config` to the simulator, end-to-end
 - [x] Phase 5 — saved configs: a named library in the browser (load, rename, delete with
   undo), exported and imported as a JSON file; nothing reaches the watch
-- [ ] Phase 0 — on the wrist, **needs the user** ← current: a private beta build shows the
-  watch-written code in Garmin Connect and applies a pasted one; the custom theme survives
-  a phone-side save. Then decide whether `push-config` gets a watch target — a pushed
-  `.SET` replaces every setting at once, so that waits on seeing a real watch's file.
-  - [x] Over the cable, on an Instinct Crossover AMOLED (2026-11-01): after a menu change
-    the watch's own `.SET` carried a canonical code agreeing with every value beside it,
-    and a `.SET` pushed with a new `configCode` applied in full the moment the cable came
-    out, then persisted. `make push-config TO=watch` does that now.
-  - [ ] Garmin Connect, through a private beta: the field shows the watch's code, a pasted
-    code applies, and the custom theme survives a phone-side save.
-  - If the Garmin Connect round trip fails, there are other routes to weigh later (an API,
-    rather than the phone's settings field).
+- [x] Phase 0 — on the wrist, over the cable, on an Instinct Crossover AMOLED (2026-11-01):
+  after a menu change the watch's own `.SET` carried a canonical code agreeing with every
+  value beside it, and a `.SET` pushed with a new `configCode` applied in full the moment
+  the cable came out, then persisted. `make push-config TO=watch` does that now, and was
+  run against the watch on 2026-11-02.
+
+### Backlog
+
+- [ ] Garmin Connect, through a private beta: the field shows the watch's code, a pasted
+  code applies, and the custom theme survives a phone-side save. Picked up when the face
+  is prepared for Garmin Connect. If the round trip fails there, an API is the route to
+  weigh rather than the phone's settings field.
 
 ## Epix 2 family
 
