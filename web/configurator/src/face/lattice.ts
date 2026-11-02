@@ -36,7 +36,7 @@ const cache = new Map<string, Promise<Lattice>>();
 export function loadLattice(key: string, base = import.meta.env.BASE_URL): Promise<Lattice> {
   let found = cache.get(key);
   if (!found) {
-    found = fetch(`${base}geometry/${key}.json`).then((response) => {
+    found = fetch(`${base}geometry/${key}.json?v=${__GEOMETRY_VERSION__}`).then((response) => {
       if (!response.ok) throw new Error(`no lattice ${key}: ${response.status}`);
       return response.json() as Promise<Lattice>;
     });
@@ -46,6 +46,6 @@ export function loadLattice(key: string, base = import.meta.env.BASE_URL): Promi
 }
 
 export async function loadDevices(base = import.meta.env.BASE_URL): Promise<Device[]> {
-  const response = await fetch(`${base}geometry/devices.json`);
+  const response = await fetch(`${base}geometry/devices.json?v=${__GEOMETRY_VERSION__}`);
   return (await response.json()) as Device[];
 }
