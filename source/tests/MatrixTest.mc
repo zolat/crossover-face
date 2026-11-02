@@ -298,6 +298,17 @@ module MatrixTest {
         return true;
     }
 
+    //! What a ring stored as `stored` loads as. The same as stored, except on a
+    //! watch with no hands, whose time ring keeps a stored time style and
+    //! takes the default style for anything else — so a loader test asserts
+    //! this rather than `stored`.
+    function loadedAs(ring as Number, stored as Number) as Number {
+        if (HandStyle.TIME_RING && ring == StatMap.TIME_RING) {
+            return Source.isTime(stored) ? stored : Source.TIME_DEFAULT;
+        }
+        return stored;
+    }
+
     //! Every ring can be assigned any source, and an unassigned ring is dark.
     (:test)
     function ringsAreIndependentlyAssignable(logger as Logger) as Boolean {
@@ -307,13 +318,15 @@ module MatrixTest {
         }
         Config.reload();
         for (var ring = 0; ring < StatMap.RINGS; ring++) {
-            Test.assertEqualMessage(StatMap.rings[ring], Source.SOURCE_TEMPERATURE,
+            Test.assertEqualMessage(StatMap.rings[ring],
+                loadedAs(ring, Source.SOURCE_TEMPERATURE),
                 "ring assignment did not survive a reload");
         }
 
         Properties.setValue(StatMap.PROPERTY_RINGS[0], 99);
         Config.reload();
-        Test.assertEqualMessage(StatMap.rings[0], Source.SOURCE_STEPS,
+        Test.assertEqualMessage(StatMap.rings[0],
+            loadedAs(0, Source.SOURCE_STEPS),
             "an out-of-range source must fall back to the default");
 
         Test.assertEqualMessage(Source.span(Source.SOURCE_OFF, true)[1], 0.0,
@@ -418,8 +431,12 @@ module MatrixTest {
         StatMap.fillNoOvers(overs);
         StatMap.fillNoMarkers(marks);
         for (var ring = 0; ring < StatMap.RINGS; ring++) {
-            Test.assertEqualMessage(spans[ring][0], StatMap.NEVER_LIT[0],
-                "held-back ring " + ring + " retained a live span");
+            // The time is the one span held back keeps; heldBackKeepsTheTime
+            // asserts it is the live one.
+            if (!Source.isTime(StatMap.rings[ring])) {
+                Test.assertEqualMessage(spans[ring][0], StatMap.NEVER_LIT[0],
+                    "held-back ring " + ring + " retained a live span");
+            }
             Test.assertMessage(!overs[ring],
                 "held-back ring " + ring + " retained an overflow flag");
             Test.assertEqualMessage(marks[ring], Source.NO_MARKER,
@@ -566,12 +583,18 @@ module MatrixTest {
             "temperature next 12h must stay 12");
         Test.assertEqualMessage(Source.SOURCE_TEMP_SUN, 13,
             "temperature range with sun must stay 13");
-        Test.assertEqualMessage(Source.COUNT, 14,
+        Test.assertEqualMessage(Source.SOURCE_TIME, 14,
+            "the time ring must stay 14");
+        Test.assertEqualMessage(Source.SOURCE_TIME_OVERLAP, 15,
+            "the overlapping time ring must stay 15");
+        Test.assertEqualMessage(Source.COUNT, 16,
             "COUNT counts slots, not offers — the tables are indexed by it");
 
-        // The retired slot is never offered.
-        Test.assertEqualMessage(Source.OFFERED.size(), Source.COUNT - 1,
-            "the picker must offer every source but the retired one");
+        // The retired slot is never offered, and neither are the two time
+        // styles, which only a hands-free watch's time ring offers.
+        Test.assertEqualMessage(Source.OFFERED.size(), Source.COUNT - 3,
+            "the picker must offer every source but the retired one and " +
+            "the time styles");
         for (var i = 0; i < Source.OFFERED.size(); i++) {
             Test.assertMessage(Source.OFFERED[i] != Source.SOURCE_RETIRED,
                 "the picker must not offer the retired source");
@@ -726,7 +749,9 @@ module MatrixTest {
     //! wrong choice, (0, 0), lights any dot sitting exactly at the origin.
     (:test)
     function heldBackFillsLightNothingAnywhere(logger as Logger) as Boolean {
-        var nothing = StatMap.noSpans();
+        // The span itself on every ring, not noSpans(): that keeps a time
+        // ring's live span, which is meant to light.
+        var nothing = everySpan(StatMap.NEVER_LIT[0], StatMap.NEVER_LIT[1]);
         Test.assertMessage(!(StatMap.NEVER_LIT[0] > StatMap.NEVER_LIT[1]),
             "the empty span must not read as wrapping, or it lights everything");
 
@@ -2269,19 +2294,24 @@ module MatrixTest {
     //! Same staleness, same fix, for the ring assignment menu.
     (:test)
     function ringMenuRefreshesItsSubLabels(logger as Logger) as Boolean {
-        Properties.setValue(StatMap.PROPERTY_RINGS[0], Source.SOURCE_STEPS);
+        // Ring 1, because ring 0 is the time on a watch with no hands and its
+        // label never changes.
+        var ring = 1;
+        var saved = StatMap.rings[ring];
+        Properties.setValue(StatMap.PROPERTY_RINGS[ring], Source.SOURCE_STEPS);
         Config.reload();
         var menu = new RingMenu();
-        var before = subLabelOf(menu, 0);
+        var before = subLabelOf(menu, ring);
 
-        Properties.setValue(StatMap.PROPERTY_RINGS[0], Source.SOURCE_RAIN);
+        Properties.setValue(StatMap.PROPERTY_RINGS[ring], Source.SOURCE_RAIN);
         Config.reload();
         menu.onShow();
-        logger.debug("was '" + before + "', now '" + subLabelOf(menu, 0) + "'");
-        Test.assertMessage(!subLabelOf(menu, 0).equals(before),
+        logger.debug("was '" + before + "', now '" + subLabelOf(menu, ring) +
+                     "'");
+        Test.assertMessage(!subLabelOf(menu, ring).equals(before),
             "onShow must refresh the ring's sub-label");
 
-        Properties.setValue(StatMap.PROPERTY_RINGS[0], Source.SOURCE_STEPS);
+        Properties.setValue(StatMap.PROPERTY_RINGS[ring], saved);
         Config.reload();
         return true;
     }
@@ -6187,7 +6217,7 @@ module MatrixTest {
     //! on screen that the settings say is gone.
     //!
     //! Asserted on painted counts, which is safe here precisely because it is
-    //! an all-or-nothing claim: a full repaint is `ringSize(0)` at any hour,
+    //! an all-or-nothing claim: a full repaint is `ringSize(1)` at any hour,
     //! wherever the hands happen to be pointing. A test that counted *backed*
     //! dots instead would pass or vacuously pass depending on the wall clock,
     //! and on which of the three lattices it ran.
@@ -6209,13 +6239,14 @@ module MatrixTest {
         var spans = everySpan(0.0, 0.5);
         var hours = emptyBlocks();
 
-        // Settled with no hands, so a delta is live and this test can show
+        // Ring 1 rather than 0, which is the time on a watch with no hands and
+        // never deltas. Settled with no hands, so a delta is live and this test can show
         // that turning them on stops it. ringSize() reads the dot cache, so it
         // cannot be asked before something has built it.
         settleBuffer(dc, spans, overs, null);
-        var whole = ringSize(0);
+        var whole = ringSize(1);
         MatrixRenderer.draw(dc, spans, marks, overs, hours, Palette.active,
-                            Palette.rampActive, null, onlyRingDirty(0), false);
+                            Palette.rampActive, null, onlyRingDirty(1), false);
         Test.assertMessage(MatrixRenderer.painted < whole,
             "the hands-off ring must be deltaing by now, or this test cannot " +
             "show that turning them on stops it");
@@ -6223,14 +6254,14 @@ module MatrixTest {
         // Hands on. One write replaces the authoritative buffer ring.
         MatrixRenderer.draw(dc, spans, marks, overs, hours,
                             Palette.active, Palette.rampActive,
-                            Palette.BACKING_WHITE, onlyRingDirty(0), false);
+                            Palette.BACKING_WHITE, onlyRingDirty(1), false);
         Test.assertEqualMessage(MatrixRenderer.painted, whole,
             "turning the hands on must repaint the ring whole");
 
         // Hands off again. This is the direction that would rot.
         MatrixRenderer.draw(dc, spans, marks, overs, hours,
                             Palette.active, Palette.rampActive, null,
-                            onlyRingDirty(0), false);
+                            onlyRingDirty(1), false);
         Test.assertEqualMessage(MatrixRenderer.painted, whole,
             "turning the hands off must repaint the ring whole, or a hand " +
             "stays in the buffer");
@@ -6238,7 +6269,7 @@ module MatrixTest {
         // And the next draw with nothing moving is deltaing again, so the
         // repaints above were the change and not a permanent loss of the delta.
         MatrixRenderer.draw(dc, spans, marks, overs, hours, Palette.active,
-                            Palette.rampActive, null, onlyRingDirty(0), false);
+                            Palette.rampActive, null, onlyRingDirty(1), false);
         Test.assertMessage(MatrixRenderer.painted < whole,
             "the delta must come back once the backing has settled");
         logger.debug("hands on/off repainted " + whole + " dots each way");
@@ -6324,6 +6355,11 @@ module MatrixTest {
             Test.assertEqualMessage(labels.size(), offered.size(),
                 "ring " + ring + "'s picker labels and values disagree, so " +
                 "it would store the wrong source with no symptom");
+            // A hands-free watch's time ring offers the time styles instead;
+            // TimeRingTest holds that picker.
+            if (HandStyle.TIME_RING && ring == StatMap.TIME_RING) {
+                continue;
+            }
 
             var carried = 0;
             for (var i = 0; i < offered.size(); i++) {
@@ -6379,8 +6415,8 @@ module MatrixTest {
             }
             Config.reload();
             for (var ring = 0; ring < StatMap.RINGS; ring++) {
-                var expected = (ring <= Source.BLOCKS_TOP_RING)
-                    ? source : Source.SOURCE_OFF;
+                var expected = loadedAs(ring,
+                    (ring <= Source.BLOCKS_TOP_RING) ? source : Source.SOURCE_OFF);
                 Test.assertEqualMessage(StatMap.rings[ring], expected,
                     "ring " + ring + " stored as block source " + source +
                     " read back as " + StatMap.rings[ring]);

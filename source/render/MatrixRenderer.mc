@@ -525,6 +525,18 @@ module MatrixRenderer {
 
             var isRamp = Source.isTemperatureRange(rings[ring]);
             var isBlocks = Source.usesBlocks(rings[ring]);
+            // A ring telling the time draws white over its colour at the
+            // unknown-hour rung, in every power mode. Swapped into the ring's
+            // two tiers before the delta key reads them, so a ring that starts
+            // or stops telling the time is repainted whole like any recolour.
+            //
+            // Asked of Source three times a ring rather than held in a local:
+            // drawAt()'s frame is at the test runner's stack limit, and one
+            // more local overflowed it. Three calls a ring cost nothing.
+            if (Source.isTime(rings[ring])) {
+                weak = dimColour[ring];
+                strong = Palette.TIME_LIT;
+            }
             var last = ringStart[ring + 1];
 
             // Twelve blocks resolved once, not once per dot. A level fills
@@ -599,7 +611,11 @@ module MatrixRenderer {
                 lastColour = -1;    //! the erase moved the pen
             }
 
-            var delta = !clears && !isBlocks && !sunMoved &&
+            // The time ring opts out for the block ring's reason: its print
+            // moves once a minute, and its lit test reads a radius as well as
+            // a position, which the span delta below cannot say.
+            var delta = !clears && !isBlocks && !Source.isTime(rings[ring]) &&
+                        !sunMoved &&
                         stableFor[ring] >= 1 &&
                         lastWeak[ring] == weak && lastStrong[ring] == strong &&
                         lastOver[ring] == overs[ring] &&
@@ -657,6 +673,12 @@ module MatrixRenderer {
             // `continue` is safe here because markAt is already assigned and
             // nothing else follows the dot loop inside the ring loop; the marks
             // are drawn in their own pass afterwards.
+            if (Source.isTime(rings[ring])) {
+                drew += TimeRing.draw(dc, ring, centreX, centreY, from, to,
+                                      rings[ring], weak);
+                lastColour = -1;    //! TimeRing moved the pen
+                continue;
+            }
             if (isBlocks) {
                 for (var i = ringStart[ring]; i < last; i++) {
                     var dx = xs[i];

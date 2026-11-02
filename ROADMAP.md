@@ -67,6 +67,29 @@ source of truth. `docs/config-code.md` is the format.
   is prepared for Garmin Connect. If the round trip fails there, an API is the route to
   weigh rather than the phone's settings field.
 
+## Epix time ring
+
+Out-of-band. The Epix stops drawing hands out of the dot field and tells the time in its
+outermost ring instead: the hour fills the inner sub-band, the minute the outer two, both
+clockwise from twelve, elapsed in white over the ring's colour at 25%. The Crossover is
+untouched.
+
+- [x] Phase 0 — mockup (`14-time-ring*.png`). Ring-coloured tiers at the usual 0.55 did not
+  read at 1:1; white over 0.25 did, and was chosen. Worst always-on frame, every ring full at
+  11:59, measures 7.06% (Terrain, 416) against 5.75% with no time ring.
+- [x] Phase 1 — `SOURCE_TIME` and its `TimeRing` renderer. The time rides the ring's span
+  as `[hourEnd, minuteEnd]` rather than a channel of its own, so the ring print, the gate and
+  held-back needed no new slots; `drawAt` hands the ring to `TimeRing` and keeps it out of the
+  delta. On Epix ring 0 is forced to Time whatever `ring1` stores. 172/172 on all five.
+- [x] Phase 1.1 — overlap style (`SOURCE_TIME_OVERLAP = 15`): hour blue, minute red, both
+  purple, unlit grey, each filling the whole ring; mocked up in `14d-time-overlap.png` and
+  chosen from four variants. The ring 1 row picks between the two styles and nothing else;
+  Overlap is the Epix default. `TimeRing` walks both styles in one loop, with a four-slot
+  colour table and two radius bounds set before the walk. Always-on at 11:59: 4.22% on the
+  454. 174/174 on all five.
+- [ ] Phase 2 — remove drawn hands, the peek and the date deferral from the Epix ← current
+- [ ] Phase 3 — docs
+
 ## Epix 2 family
 
 Out-of-band device work, not a phase of the performance roadmap that follows.

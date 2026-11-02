@@ -228,6 +228,28 @@ module Palette {
     const HAND_HOUR = BACKING_WHITE;
     const HAND_MINUTE = 0x808080;
 
+    //! The time ring's elapsed dots. White, because that is the Crossover's own
+    //! hour hand and the one colour no theme uses, so it reads as the clock
+    //! rather than as a fifth reading. What has not elapsed draws from dimOf —
+    //! the ring's colour at WEAK_UNKNOWN — because at the ordinary unfilled
+    //! tier the split between the two halves did not read at 1:1 (ROADMAP,
+    //! Epix time ring, Phase 0). The same colours in every power mode: the
+    //! time is never held back.
+    const TIME_LIT = BACKING_WHITE;
+
+    //! The overlapping time ring's three fills and its unfilled dots.
+    //!
+    //! Blue and red are the watch's own accent pair — Activity's blue and red,
+    //! read off the device's widgets — and purple is where they meet: a mix you
+    //! read as "both", bluer than an additive magenta so it stays clear of
+    //! Terrain's and Pulse's orchid. Unfilled is a neutral grey rather than
+    //! the ring's colour, because on a red outer ring a dim red beside the red
+    //! minute reads as more minute. Chosen from the 14d mockup sheet.
+    const TIME_HOUR = 0x1F8FFE;
+    const TIME_MINUTE = 0xFE4646;
+    const TIME_BOTH = 0x9B5CFF;
+    const TIME_UNLIT = 0x3A3A3A;
+
     //! Temperature is drawn on a ramp so its band reads as a temperature and
     //! not just a length. Cold through a middle to hot, and every stop is one
     //! of the theme's own four colours, so it stays inside the palette.

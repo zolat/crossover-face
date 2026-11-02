@@ -42,4 +42,29 @@ module ClockData {
     function minuteSweep() as Float {
         return fraction(System.getClockTime().sec);
     }
+
+    const MINUTES_PER_HOUR = 60.0;
+    const HOURS_PER_DIAL = 12;
+
+    //! The time ring's two ends, into `out`: how far round the dial the hour
+    //! has come, then the minute. Both 0.0 up to below 1.0.
+    //!
+    //! These read like hands, which is the job, so the minute does **not** take
+    //! fraction()'s `+ 1`. That convention is right for a fill that completes on
+    //! the last second; here the half-ring is where a minute hand would point,
+    //! so it is empty on the hour and exactly a quarter at :15. The hour moves
+    //! on with the minutes the way an hour hand does, rather than jumping on
+    //! the hour, so its end sits between the hour marks just as a hand would.
+    function timeFractions(hour as Number, minute as Number,
+                           out as Array<Float>) as Void {
+        var withinHour = minute / MINUTES_PER_HOUR;
+        out[0] = ((hour % HOURS_PER_DIAL) + withinHour) / HOURS_PER_DIAL;
+        out[1] = withinHour;
+    }
+
+    //! The time ring's two ends, right now.
+    function fillTime(out as Array<Float>) as Void {
+        var clock = System.getClockTime();
+        timeFractions(clock.hour, clock.min, out);
+    }
 }

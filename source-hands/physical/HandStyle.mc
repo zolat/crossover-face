@@ -23,6 +23,9 @@ module HandStyle {
     //! whether the face lights the dots behind them or not.
     const ALWAYS_ON = false;
 
+    //! False: the brass hands tell the time, so no ring is given over to it.
+    const TIME_RING = false;
+
     //! Colour for each slot `HandBacking.handAt()` can return: nothing, the
     //! hour hand, the minute hand.
     //!

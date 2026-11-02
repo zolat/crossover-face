@@ -165,7 +165,7 @@ install: build
 		echo "mass storage detected: $$apps"; \
 		cp $(PRG) "$$apps/" && sync; \
 		echo "Copied. Eject the volume, then on the watch hold MENU ->"; \
-		echo "Watch Face -> Crossover Face"; \
+		echo "Watch Face -> Cross Matrix"; \
 		exit 0; \
 	fi; \
 	if ! ioreg -p IOUSB -w0 -l 2>/dev/null | grep -q '"idVendor" = 2334'; then \
@@ -203,7 +203,7 @@ push-built:
 		osascript -e 'quit app "OpenMTP"' >/dev/null 2>&1; /bin/sleep 2; \
 	fi
 	@python3 $(PUSH) $(PRG)
-	@echo "On the watch: hold MENU -> Watch Face -> Crossover Face"
+	@echo "On the watch: hold MENU -> Watch Face -> Cross Matrix"
 
 ## The old manual route, kept as the fallback: open OpenMTP and reveal the
 ## .prg so it can be dragged into GARMIN/Apps by hand.
