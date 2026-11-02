@@ -203,6 +203,31 @@ The exceptions are the files that are shared by design — `Makefile`, `monkey.j
 next section), and one-line hotfixes to a broken `main`. Everything else, including
 "just a quick change", gets a worktree.
 
+## Every change asks whether the web configurator follows
+
+`web/configurator/` is a second face: it previews the dots, offers every setting and
+writes the code the watch applies. It is published from `main` to
+https://zolat.github.io/crossover-face/, so a face change that leaves it behind ships a page
+that is wrong about the watch. **Before calling any work in this repo done, decide whether
+the configurator needs to change too, and say which way you decided in the final report.**
+Most of it is generated, but generation only carries data, not behaviour:
+
+- **Regenerated, nothing else to do:** labels, themes, tier factors and setting values
+  (`tools/face_schema_export.py`), lattices (`tools/geometry_export.py`). `make
+  test-simctl` fails while either is stale.
+- **Needs code in `web/configurator/src/`:** anything that changes what a ring *draws* or
+  which source a ring *loads* (`StatMap.load()`, `MatrixRenderer`, `TimeRing`, `HourBands`,
+  `DateGlyph`, marks and sun dots), a new `Source` kind (the codecs' `SOURCE_MAX` too), a
+  new setting (a new code version — see the config code section), anything that moves the
+  always-on figure, and per-device behaviour such as `HandStyle`. Mirror it in the preview,
+  pin it to the Monkey C test that defines it, and add an `e2e/run.mjs` check.
+- **Verify with `make web-test`** (unit tests plus a real-browser run, whose expected codes
+  come from the Python codec) alongside the face's own gates.
+
+The Epix time ring is the worked example: it reached `main` with no configurator change,
+and every Epix's published code was then refused by all three decoders, because the codecs
+capped sources at 13.
+
 ## Parallel sessions share three things
 
 Several agents work this repo at once, in worktrees under `.claude/worktrees/`.
