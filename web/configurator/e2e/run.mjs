@@ -1,0 +1,352 @@
+// End-to-end check of the built configurator in the machine's own Chrome.
+//
+// Every expected code is produced by the *Python* codec (tools/simctl/configcode.py),
+// not by the page's own TypeScript, so a check that passes means two independent codecs
+// agree on what the page produced. Run with `npm run e2e`; screenshots land in
+// E2E_SHOTS (default: e2e/shots, gitignored).
+import { execFileSync, spawn } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import puppeteer from "puppeteer-core";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const repo = resolve(here, "../../..");
+const shots = process.env.E2E_SHOTS ?? join(here, "shots");
+const chrome = process.env.CHROME ?? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+const port = 4319;
+const origin = `http://localhost:${port}`;
+mkdirSync(shots, { recursive: true });
+
+const PAGE_START = { ring2: 6 };
+function python(config) {
+  return execFileSync("python3", ["-m", "simctl.configcode", "encode", JSON.stringify(config)], {
+    cwd: repo, env: { ...process.env, PYTHONPATH: join(repo, "tools") }, encoding: "utf8",
+  }).trim();
+}
+
+function decoded(code) {
+  return JSON.parse(execFileSync("python3", ["-m", "simctl.configcode", "decode", code], {
+    cwd: repo, env: { ...process.env, PYTHONPATH: join(repo, "tools") }, encoding: "utf8",
+  }));
+}
+
+let failures = 0;
+function check(name, ok, detail = "") {
+  console.log(`${ok ? "PASS" : "FAIL"}  ${name}${ok || !detail ? "" : `  (${detail})`}`);
+  if (!ok) failures++;
+}
+
+const server = spawn("npx", ["vite", "preview", "--port", String(port), "--strictPort"], { cwd: resolve(here, ".."), stdio: "ignore" });
+for (let i = 0; i < 50; i++) {
+  try { if ((await fetch(origin)).ok) break; } catch { /* not up yet */ }
+  await new Promise((r) => setTimeout(r, 200));
+}
+
+const browser = await puppeteer.launch({ executablePath: chrome, headless: true, args: ["--no-first-run"] });
+try {
+  await browser.defaultBrowserContext().overridePermissions(origin, ["clipboard-read", "clipboard-write", "clipboard-sanitized-write"]);
+  const page = await browser.newPage();
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(String(error)));
+  page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
+  page.on("response", (response) => { if (response.status() >= 400) errors.push(`${response.status()} ${response.url()}`); });
+  await page.setViewport({ width: 1440, height: 1000, deviceScaleFactor: 2 });
+  // Start from an empty browser once; reloads below must keep what the page saved.
+  await page.goto(origin + "/", { waitUntil: "networkidle0" });
+  await page.evaluate(() => localStorage.clear());
+  await page.reload({ waitUntil: "networkidle0" });
+
+  const code = () => page.$eval(".code output", (el) => el.textContent);
+  const pickLabel = async (text) => {
+    const labels = await page.$$("label");
+    for (const label of labels) {
+      if ((await label.evaluate((el) => el.textContent.trim())) === text) { await label.click(); return; }
+    }
+    throw new Error(`no label ${text}`);
+  };
+  // Read the face at the watch's resolution, whatever the canvas is scaled by.
+  const pixel = (x, y) => page.$eval("canvas.face", (canvas, x, y) => {
+    const k = canvas.width / 390;
+    const [r, g, b] = canvas.getContext("2d").getImageData(x * k, y * k, 1, 1).data;
+    return (r << 16) | (g << 8) | b;
+  }, x, y);
+  // The outermost row's dot at dx=5, dy=-185: ring 0, a hair past twelve, lit by Steps.
+  const topDot = [195 + 5, 195 - 185];
+
+  check("opens on the page's starting config", (await code()) === python(PAGE_START), await code());
+  check("draws the 390 lattice for the Crossover", (await page.$eval("canvas.face", (c) => c.width % 390 === 0 && c.width / c.height === 1)));
+  check("ring 1 lit dot is Terrain orchid", (await pixel(...topDot)) === 0xe879f9);
+  await page.screenshot({ path: join(shots, "desktop-terrain.png") });
+
+  const litPixels = () => page.$eval("canvas.face", (canvas) => {
+    const { data } = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height);
+    let count = 0;
+    for (let i = 0; i < data.length; i += 4) if (data[i] | data[i + 1] | data[i + 2]) count++;
+    return count;
+  });
+  const pickIn = async (legend, text) => {
+    const fieldsets = await page.$$("fieldset");
+    for (const fieldset of fieldsets) {
+      if ((await fieldset.$eval("legend", (el) => el.textContent.trim()).catch(() => "")) !== legend) continue;
+      for (const label of await fieldset.$$("label")) {
+        if ((await label.evaluate((el) => el.textContent.trim())) === text) { await label.click(); return; }
+      }
+    }
+    throw new Error(`no ${legend}: ${text}`);
+  };
+  const withDate = await litPixels();
+  await pickIn("Date", "Off");
+  const withoutDate = await litPixels();
+  check("the date's outline is drawn, and goes with the setting", withDate > withoutDate, `${withDate} vs ${withoutDate}`);
+  await pickIn("Date", "On");
+  await pickLabel("Always-on");
+  const asleepWith = await litPixels();
+  await pickIn("Date", "Off");
+  check("always-on carries no date", (await litPixels()) === asleepWith);
+  await pickIn("Date", "On");
+  await pickLabel("Awake");
+
+  const faceWidth = () => page.$eval("canvas.face", (c) => c.getBoundingClientRect().width);
+  check("a large face is a whole number of device pixels per watch pixel", Number.isInteger((await faceWidth()) * 2 / 390), `${await faceWidth()}`);
+  await pickLabel("Real size");
+  const estimated = await faceWidth();
+  check("real size draws the 30.48 mm display at the estimate", Math.abs(estimated - 30.48 * 120 / 25.4) < 0.5, `${estimated}`);
+  await page.click(".size button");
+  check("setting it shows a card outline", await page.$eval(".card", (el) => !el.hidden && el.getBoundingClientRect().width > 300));
+  await page.$eval("#calibrate", (input) => { input.value = "6"; input.dispatchEvent(new Event("input", { bubbles: true })); });
+  await page.click(".size .primary");
+  check("a card calibration sets the real size", Math.abs((await faceWidth()) - 30.48 * 6) < 0.5, `${await faceWidth()}`);
+  await pickLabel("Large");
+
+  await pickLabel("Beacon");
+  check("choosing Beacon changes the code", (await code()) === python({ ...PAGE_START, theme: 7 }), await code());
+  check("…and the drawn colour", (await pixel(...topDot)) === 0x5cd9f0);
+
+  await page.select(".rings .ring:nth-child(2) select", "7");
+  check("ring 2 to Seconds", (await code()) === python({ ...PAGE_START, theme: 7, ring2: 7 }), await code());
+
+  await pickLabel("Always-on");
+  check("always-on keeps a lit dot at full band", (await pixel(...topDot)) === 0x5cd9f0);
+  check("always-on leaves the code alone", (await code()) === python({ ...PAGE_START, theme: 7, ring2: 7 }));
+  await pickLabel("Awake");
+
+  await pickLabel("Make your own");
+  check("Make your own selects theme 99", (await code()) === python({ ...PAGE_START, theme: 99, ring2: 7 }), await code());
+  const picker = await page.$("#colour-1");
+  await page.$eval("#colour-1", (input) => {
+    input.value = "#050505";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  const colours = [0xe879f9, 0x050505, 0x7fd4ff, 0xff6b5b];
+  check("a picked colour reaches the code",
+    (await code()) === python({ ...PAGE_START, theme: 99, ring2: 7, customColours: colours }), await code());
+  const warnings = await page.$$eval(".warnings p", (ps) => ps.map((p) => p.textContent));
+  check("a too-dark colour is warned about", warnings.some((text) => text.includes("ring 2 is very dark")), warnings.join(" | "));
+  check("the colour picker is not rebuilt under the cursor", await picker.evaluate((el) => el.isConnected));
+  await page.select("#stop-0", "1");
+  check("a ramp stop reaches the code",
+    (await code()) === python({ ...PAGE_START, theme: 99, ring2: 7, customColours: colours, customRamp: [1, 0, 3] }), await code());
+  await page.screenshot({ path: join(shots, "desktop-custom.png") });
+
+  const beforeRandom = await code();
+  await page.click(".randomise");
+  const randomised = await code();
+  const decodedRandom = JSON.parse(execFileSync("python3", ["-m", "simctl.configcode", "decode", randomised], {
+    cwd: repo, env: { ...process.env, PYTHONPATH: join(repo, "tools") }, encoding: "utf8" }));
+  check("Randomise colours gives a new custom theme", randomised !== beforeRandom && decodedRandom.theme === 99, randomised);
+  check("…that nothing warns about", (await page.$$(".warnings p")).length === 0);
+  check("…and keeps focus on the button", await page.evaluate(() => document.activeElement?.classList.contains("randomise")));
+  check("…and changes nothing but the colours", randomised !== beforeRandom &&
+    python({ ...decodedRandom, customColours: colours, customRamp: [1, 0, 3] }) === beforeRandom);
+  await page.screenshot({ path: join(shots, "desktop-random.png") });
+
+  await page.click(".actions .primary");
+  await new Promise((r) => setTimeout(r, 200));
+  check("Copy code puts the code on the clipboard",
+    (await page.evaluate(() => navigator.clipboard.readText())) === (await code()));
+
+  const vector = "AWMCAQEAAgkKDQcARv___wAAABI0VqvN7wcDSQ";
+  const loadCode = async () => {
+    for (const button of await page.$$(".actions button")) {
+      if ((await button.evaluate((el) => el.textContent.trim())) === "Load a code") return button;
+    }
+    throw new Error("no Load a code button");
+  };
+  await (await loadCode()).click();
+  await page.type("#paste", "AWMCAQEAAgkKDQcARv///wAAABI0VqvN7wcDSQ==");
+  await page.click(".paste button");
+  check("a pasted code loads, spelled either way", (await code()) === vector, await code());
+  check("…and closes the paste box", (await page.$("#paste")) === null);
+
+  const before = await code();
+  await (await loadCode()).click();
+  await page.type("#paste", vector.slice(0, -1) + "x");
+  await page.click(".paste button");
+  const error = await page.$eval(".error", (el) => el.textContent).catch(() => "");
+  check("a damaged code is refused with a reason", error.includes("checksum"), error);
+  check("…and changes nothing", (await code()) === before);
+
+  // --- saved configs ---------------------------------------------------------
+  const savedNames = () => page.$$eval(".saved .entry .name", (els) => els.map((el) => el.textContent));
+  const savedCode = await code();
+  await page.click('[data-key="save"]');
+  await page.$eval("#save-name", (input) => { input.value = ""; });
+  await page.type("#save-name", "Mine");
+  await page.keyboard.press("Enter");
+  check("Save keeps the config in the list", JSON.stringify(await savedNames()) === '["Mine"]', JSON.stringify(await savedNames()));
+  await page.reload({ waitUntil: "networkidle0" });
+  check("…and it is still there after a reload", JSON.stringify(await savedNames()) === '["Mine"]');
+  await pickLabel("Activity");
+  await page.select(".rings .ring:nth-child(1) select", "4");
+  check("…while the page has moved on", (await code()) !== savedCode);
+  await page.click(".saved .entry .load");
+  check("Load restores the exact code", (await code()) === savedCode, await code());
+  check("…marks the row as showing", (await page.$$(".saved .entry.showing")).length === 1);
+
+  await page.click('.saved [data-key^="rename-btn-"]');
+  await page.$eval(".rename input", (input) => { input.value = ""; });
+  await page.type(".rename input", "Renamed");
+  await page.keyboard.press("Enter");
+  check("Rename renames", JSON.stringify(await savedNames()) === '["Renamed"]', JSON.stringify(await savedNames()));
+  await page.click('.saved [data-key^="delete-"]');
+  check("Delete removes it", (await savedNames()).length === 0);
+  await page.click('.saved [data-key="undo"]');
+  check("…and Undo puts it back", JSON.stringify(await savedNames()) === '["Renamed"]');
+
+  // A second entry, on another watch, so the file carries more than one.
+  await page.goto(`${origin}/#c=${vector}&w=epix2pro51mm`, { waitUntil: "networkidle0" });
+  await page.reload({ waitUntil: "networkidle0" });
+  await page.click('[data-key="save"]');
+  await page.keyboard.press("Enter");
+  const library = await page.evaluate(() => JSON.parse(localStorage.getItem("crossover-face-library")));
+  check("a second save lands on top, with its watch", library.length === 2 && library[0].device === "epix2pro51mm" && library[0].code === vector);
+
+  const downloads = join(shots, "downloads");
+  rmSync(downloads, { recursive: true, force: true });
+  mkdirSync(downloads, { recursive: true });
+  const cdp = await page.createCDPSession();
+  await cdp.send("Browser.setDownloadBehavior", { behavior: "allow", downloadPath: downloads });
+  await page.click('.saved [data-key="export"]');
+  const exported = join(downloads, "crossover-face-configs.json");
+  for (let i = 0; i < 50 && !existsSync(exported); i++) await new Promise((r) => setTimeout(r, 100));
+  const file = existsSync(exported) ? JSON.parse(readFileSync(exported, "utf8")) : null;
+  check("Export all downloads the library as a file", file?.format === "crossover-face-library" && file.configs.length === 2);
+  const pythonAgrees = file?.configs.every((entry) => {
+    const config = JSON.parse(execFileSync("python3", ["-m", "simctl.configcode", "decode", entry.code], {
+      cwd: repo, env: { ...process.env, PYTHONPATH: join(repo, "tools") }, encoding: "utf8" }));
+    return python(config) === entry.code;
+  });
+  check("…whose codes the Python codec reads back exactly", pythonAgrees === true);
+
+  const fresh = await browser.createBrowserContext();
+  const other = await fresh.newPage();
+  other.on("pageerror", (error) => errors.push(String(error)));
+  await other.goto(origin + "/", { waitUntil: "networkidle0" });
+  check("a fresh browser starts with nothing saved", (await other.$$(".saved .entry")).length === 0);
+  await (await other.$("#import-file")).uploadFile(exported);
+  await other.waitForSelector(".saved .entry:nth-child(2)", { timeout: 3000 }).catch(() => {});
+  const imported = await other.evaluate(() => JSON.parse(localStorage.getItem("crossover-face-library") ?? "[]"));
+  check("Import restores every entry, codes identical",
+    JSON.stringify(imported.map(({ name, code, device }) => [name, code, device])) ===
+    JSON.stringify(file?.configs.map(({ name, code, device }) => [name, code, device])), JSON.stringify(imported));
+  const status = await other.$eval(".saved .status", (el) => el.textContent);
+  check("…and says what it did", status === "Added 2 configs.", status);
+  await (await other.$("#import-file")).uploadFile(exported);
+  await new Promise((r) => setTimeout(r, 300));
+  check("importing again skips what is already saved",
+    (await other.$eval(".saved .status", (el) => el.textContent)).includes("2 were already saved") &&
+    (await other.$$(".saved .entry")).length === 2);
+  await other.screenshot({ path: join(shots, "desktop-saved.png"), fullPage: true });
+  await fresh.close();
+
+  await page.goto(`${origin}/#c=${vector}&w=epix2pro51mm`, { waitUntil: "networkidle0" });
+  await page.reload({ waitUntil: "networkidle0" });
+  check("a link opens on its code", (await code()) === vector);
+  check("…and its watch", (await page.$eval("canvas.face", (c) => c.width % 454 === 0)));
+  check("…with the drawn-hands labels", (await page.content()).includes("White and grey"));
+
+  // The Epix tells the time in its outer ring: placed, not chosen, and in the code as
+  // the watch itself publishes it.
+  const epixContext = await browser.createBrowserContext();
+  const epix = await epixContext.newPage();
+  epix.on("pageerror", (error) => errors.push(String(error)));
+  await epix.goto(`${origin}/#w=epix2`, { waitUntil: "networkidle0" });
+  const epixCode = () => epix.$eval(".code output", (el) => el.textContent);
+  check("a fresh Epix starts on the overlap time style", decoded(await epixCode()).ring1 === 15, await epixCode());
+  const timeOptions = await epix.$$eval(".rings .ring:nth-child(1) option", (options) => options.map((o) => o.textContent));
+  check("its outer ring offers the time styles and nothing else",
+    JSON.stringify(timeOptions) === JSON.stringify(["Time: overlap", "Time: split"]), JSON.stringify(timeOptions));
+  // A ring-0 dot just past twelve: inside both fills at ten past ten.
+  const grid416 = JSON.parse(readFileSync(resolve(here, "../public/geometry/416.json"), "utf8"));
+  const [tdx, tdy] = grid416.dots.filter(([, , ring, , turn]) => ring === 0 && turn > 0.02 && turn < 0.1)[0];
+  const epixPixel = () => epix.$eval("canvas.face", (canvas, x, y) => {
+    const k = canvas.width / 416;
+    const [r, g, b] = canvas.getContext("2d").getImageData((208 + x) * k, (208 + y) * k, 1, 1).data;
+    return (r << 16) | (g << 8) | b;
+  }, tdx, tdy);
+  check("the preview draws the time: purple where hour and minute have both passed", (await epixPixel()) === 0x9b5cff, (await epixPixel()).toString(16));
+  await epix.select(".rings .ring:nth-child(1) select", "14");
+  check("choosing split puts 14 in the code", decoded(await epixCode()).ring1 === 14);
+  check("…and draws it white", (await epixPixel()) === 0xffffff, (await epixPixel()).toString(16));
+  await epix.screenshot({ path: join(shots, "desktop-epix-time.png") });
+  await epix.select(".rings .ring:nth-child(1) select", "15");
+  await epix.$$eval("label", (labels) => labels.find((l) => l.textContent.trim().startsWith("Instinct"))?.click());
+  await new Promise((r) => setTimeout(r, 200));
+  check("on the Crossover a stored time style shows as Off, as the watch reads it",
+    (await epix.$eval(".rings .ring:nth-child(1) select", (el) => el.value)) === "8");
+  await epixContext.close();
+
+  const phone = await browser.newPage();
+  await phone.setViewport({ width: 390, height: 844, deviceScaleFactor: 3, isMobile: true, hasTouch: true });
+  await phone.goto(`${origin}/#c=${vector}&w=instinctcrossoveramoled`, { waitUntil: "networkidle0" });
+  const width = await phone.evaluate(() => document.documentElement.scrollWidth);
+  check("no sideways scroll at phone width", width <= 390, `${width}px`);
+  const bar = await phone.$eval(".code", (el) => el.getBoundingClientRect().bottom);
+  check("the code stays on screen at phone width", bar <= 844 + 1, `${bar}`);
+  const meter = await phone.$eval(".meter", (el) => {
+    const box = el.getBoundingClientRect();
+    const stage = el.closest(".stage").getBoundingClientRect();
+    return box.top >= stage.top && box.bottom <= stage.bottom;
+  });
+  check("the brightness meter sits under the face at phone width", meter);
+  const faceBox = await phone.$eval("canvas.face", (el) => { const r = el.getBoundingClientRect(); return [r.left, r.right]; });
+  check("the face fills the phone's width", faceBox[0] >= 15.5 && faceBox[1] <= 374.5 && faceBox[1] - faceBox[0] > 340, `${faceBox}`);
+  await phone.screenshot({ path: join(shots, "phone-top.png") });
+  await phone.screenshot({ path: join(shots, "phone-full.png"), fullPage: true });
+  // Scrolled down to the controls, the face shrinks into a strip at the top and stays.
+  const faceOnScreen = () => phone.$eval("canvas.face", (el) => {
+    const r = el.getBoundingClientRect();
+    return { top: r.top, bottom: r.bottom, size: r.width };
+  });
+  const fullFace = await faceOnScreen();
+  await phone.$eval(".rings", (el) => el.scrollIntoView({ block: "center" }));
+  await new Promise((r) => setTimeout(r, 150));
+  const shrunk = await faceOnScreen();
+  check("scrolled to the rings, the face stays on screen", shrunk.top >= 0 && shrunk.bottom <= 844, JSON.stringify(shrunk));
+  check("…shrunk, but not too small to read", shrunk.size < fullFace.size * 0.5 && shrunk.size >= 100, `${shrunk.size} of ${fullFace.size}`);
+  const ringClear = await phone.$eval(".rings .ring:nth-child(1) select", (el) => {
+    const r = el.getBoundingClientRect();
+    return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2) === el;
+  });
+  check("…and the controls are not under it", ringClear);
+  await phone.select(".rings .ring:nth-child(1) select", "7");
+  await new Promise((r) => setTimeout(r, 150));
+  check("a change made down there shows in the shrunk face", (await phone.$eval(".code output", (el) => el.textContent)) !== vector &&
+    (await faceOnScreen()).top >= 0);
+  await phone.screenshot({ path: join(shots, "phone-scrolled.png") });
+  await phone.evaluate(() => window.scrollTo(0, 0));
+  await new Promise((r) => setTimeout(r, 150));
+  check("back at the top, the face is full size again", Math.abs((await faceOnScreen()).size - fullFace.size) < 1);
+  check("the desktop face does not stick or shrink", await page.$eval(".stage", (el) => el.style.top === "") &&
+    await page.$eval(".face-box", (el) => el.style.transform === ""));
+  const savedFits = await phone.$$eval(".saved .entry", (rows) => rows.length > 0 && rows.every((row) => row.getBoundingClientRect().right <= 390 - 16 + 0.5));
+  check("saved configs fit at phone width", savedFits);
+
+  check("no console errors", errors.length === 0, errors.join(" | "));
+} finally {
+  await browser.close();
+  server.kill();
+}
+console.log(failures ? `${failures} check(s) failed` : "all checks passed");
+process.exit(failures ? 1 : 0);

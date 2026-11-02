@@ -9,8 +9,10 @@ rather than value equality — that is what proves nothing in the format is bein
 
 import importlib
 import fcntl
+import json
 import os
 import re
+import shutil
 import signal
 import struct
 import subprocess
@@ -26,12 +28,13 @@ from xml.etree import ElementTree
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from simctl import instance as instances
-from simctl import paths, setfile
+from simctl import configcode, paths, setfile, watch
 from simctl import lock as simctl_lock
 from simctl.session import LEASE_FILE, SessionInstances
 from simctl.runner import Runner, parse_tests, read_crash
 from simctl.settings import Schema, SettingsError, describe, read, reset, write
 
+STRING_FIXTURE = Path(__file__).resolve().parent / "testdata" / "CROSSOVERFACE-string.SET"
 FIXTURE = Path(__file__).resolve().parent / "testdata" / "CROSSOVERFACE.SET"
 REPO = Path(__file__).resolve().parent.parent
 
@@ -50,6 +53,12 @@ SCHEMA_ENTRIES = [
         "key": "ring1", "valueType": "number", "defaultValue": 0,
         "configTitle": "RingTitle", "configType": "number",
         "configOptions": None, "configMin": 0, "configMax": 7,
+    },
+    {
+        "key": "configCode", "valueType": "string", "defaultValue": "",
+        "configTitle": "ConfigCodeTitle", "configType": "alphaNumeric",
+        "configOptions": None, "configMin": None, "configMax": None,
+        "configMaxLength": 255,
     },
 ]
 SCHEMA_STRINGS = {"BackingOff": "Off", "BackingWhite": "White", "BackingTitle": "Behind hands"}
@@ -72,7 +81,7 @@ class BuildVersion(unittest.TestCase):
 
 
 class ThemeResources(unittest.TestCase):
-    def test_phone_settings_offer_the_shipping_themes(self):
+    def test_phone_settings_offer_the_shipping_themes_then_custom(self):
         settings = ElementTree.parse(
             REPO / "resources" / "settings" / "settings.xml"
         ).getroot()
@@ -85,10 +94,12 @@ class ThemeResources(unittest.TestCase):
                 ("1", "@Strings.ThemeActivity"),
                 ("7", "@Strings.ThemeBeacon"),
                 ("8", "@Strings.ThemePulse"),
+                # Not a shipping theme: the colours a config code delivered.
+                ("99", "@Strings.ThemeCustom"),
             ],
         )
 
-    def test_only_shipping_themes_have_selectable_resource_labels(self):
+    def test_only_shipping_themes_and_custom_have_selectable_resource_labels(self):
         strings = ElementTree.parse(
             REPO / "resources" / "strings" / "strings.xml"
         ).getroot()
@@ -100,7 +111,7 @@ class ThemeResources(unittest.TestCase):
         }
         self.assertEqual(
             theme_labels,
-            {"ThemeTerrain", "ThemeActivity", "ThemeBeacon", "ThemePulse"},
+            {"ThemeTerrain", "ThemeActivity", "ThemeBeacon", "ThemePulse", "ThemeCustom"},
         )
 
 
@@ -147,6 +158,198 @@ class SetFileCodec(unittest.TestCase):
         with self.assertRaises(setfile.SetFileError):
             setfile.encode(OrderedDict([("handBacking", True)]))
 
+    def test_round_trips_a_real_file_carrying_a_string_byte_for_byte(self):
+        # Taken from the simulator after the face wrote configCode at run time: the
+        # value sits in the string table right after its key, referenced by offset.
+        original = STRING_FIXTURE.read_bytes()
+        self.assertEqual(setfile.encode(setfile.decode(original)), original)
+
+    def test_decodes_a_string_value_as_text(self):
+        values = setfile.decode(STRING_FIXTURE.read_bytes())
+        self.assertEqual(values["configCode"], "hello-world+/=")
+        self.assertEqual(values["tempAheadHigh"], 45)
+
+    def test_strings_and_numbers_mix_in_any_order(self):
+        values = OrderedDict([("a", 1), ("code", "xyz"), ("b", -20), ("empty", "")])
+        self.assertEqual(setfile.decode(setfile.encode(values)), values)
+
+    def test_rejects_a_string_offset_that_is_not_in_the_table(self):
+        data = bytearray(setfile.encode(OrderedDict([("code", "xyz")])))
+        keys_length = struct.unpack_from(">I", data, 4)[0]
+        first_entry = 8 + keys_length + 13
+        struct.pack_into(">i", data, first_entry + 6, 3)  # mid-way through a name
+        with self.assertRaises(setfile.SetFileError):
+            setfile.decode(bytes(data))
+
+
+class ConfigCodeVectors(unittest.TestCase):
+    """The Python codec against the vectors all three codecs are held to."""
+
+    vectors = json.loads(
+        (Path(__file__).resolve().parent / "testdata" / "config-codes.json").read_text()
+    )
+
+    def test_the_crc_is_ccitt_false(self):
+        check = self.vectors["crc_check"]
+        self.assertEqual(configcode.crc16(check["input"].encode()), check["crc"])
+
+    def test_every_valid_config_encodes_to_its_code(self):
+        for vector in self.vectors["valid"]:
+            with self.subTest(vector["name"]):
+                self.assertEqual(configcode.encode(vector["config"]), vector["code"])
+                self.assertEqual(len(vector["code"]), 38)
+
+    def test_every_valid_code_decodes_to_its_config(self):
+        for vector in self.vectors["valid"]:
+            with self.subTest(vector["name"]):
+                self.assertEqual(dict(configcode.decode(vector["code"])), vector["config"])
+
+    def test_other_spellings_of_a_code_decode_the_same(self):
+        by_name = {vector["name"]: vector for vector in self.vectors["valid"]}
+        for alias in self.vectors["aliases"]:
+            with self.subTest(alias["name"]):
+                self.assertEqual(dict(configcode.decode(alias["code"])),
+                                 by_name[alias["same_as"]]["config"])
+
+    def test_every_invalid_code_is_refused_whole(self):
+        for vector in self.vectors["invalid"]:
+            with self.subTest(vector["name"]):
+                with self.assertRaises(configcode.ConfigCodeError):
+                    configcode.decode(vector["code"])
+
+    def test_encoding_refuses_a_config_the_decoder_would_refuse(self):
+        config = dict(self.vectors["valid"][0]["config"])
+        config["theme"] = 5
+        with self.assertRaises(configcode.ConfigCodeError):
+            configcode.encode(config)
+
+    def test_the_top_source_is_the_faces_last_kind(self):
+        # Source.COUNT - 1, read off Source.mc: a new source the codec has not been
+        # widened for would make a watch publish a code no decoder accepts.
+        source = (Path(__file__).resolve().parent.parent / "source" / "data" / "Source.mc").read_text()
+        count = int(re.search(r"\bconst COUNT = (\d+);", source).group(1))
+        self.assertEqual(configcode.SOURCE_MAX, count - 1)
+
+    def test_the_monkey_c_copy_of_the_vectors_is_current(self):
+        self.assertTrue(configcode.sync_monkeyc(check=True),
+                        "run `PYTHONPATH=tools python3 -m simctl.configcode vectors-mc`")
+
+    def test_a_stray_character_is_refused_not_dropped(self):
+        code = self.vectors["valid"][0]["code"]
+        with self.assertRaises(configcode.ConfigCodeError):
+            configcode.decode(code[:10] + "!" + code[10:])
+
+
+class FakeWatch:
+    """The slice of the MTP binding watch.push_code uses, over a dict of files."""
+
+    def __init__(self, files: dict[str, bytes], corrupt_uploads: bool = False):
+        self.files = dict(files)
+        self.uploads = 0
+        self.corrupt_uploads = corrupt_uploads
+
+    def storages(self):
+        return [{"Sid": 131073}]
+
+    def walk(self, storage, path):
+        assert path == watch.SETTINGS_DIR
+        return [{"name": name, "size": len(data), "isFolder": False} for name, data in self.files.items()]
+
+    def download(self, storage, sources, destination):
+        Path(destination).mkdir(parents=True, exist_ok=True)
+        for source in sources:
+            name = source.rsplit("/", 1)[1]
+            (Path(destination) / name).write_bytes(self.files[name])
+
+    def upload(self, storage, sources, destination):
+        assert destination == watch.SETTINGS_DIR
+        self.uploads += 1
+        for source in sources:
+            data = Path(source).read_bytes()
+            self.files[Path(source).name] = data[:-1] + bytes([data[-1] ^ 0xFF]) if self.corrupt_uploads else data
+
+
+class WatchConfigPush(unittest.TestCase):
+    """make push-config TO=watch, against the settings file a real watch wrote."""
+
+    WATCH_FILE = (Path(__file__).resolve().parent / "testdata" / "CrossoverFace-watch.SET").read_bytes()
+    CODE = "AWMAAAAAAAQMCQAUQXDugLVV6Y7V3qvgjx5DUg"
+
+    def setUp(self):
+        self.backups = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.backups, ignore_errors=True)
+
+    def test_the_watch_file_round_trips_byte_for_byte(self):
+        values = setfile.decode(self.WATCH_FILE)
+        self.assertEqual(setfile.encode(values), self.WATCH_FILE)
+        # The watch wrote its own code, and it agrees with every value beside it.
+        decoded = configcode.decode(values["configCode"])
+        for key, value in values.items():
+            if key in decoded:
+                self.assertEqual(decoded[key], value, key)
+
+    def test_only_the_code_changes_and_the_old_file_is_kept(self):
+        fake = FakeWatch({"CrossoverFace.SET": self.WATCH_FILE})
+        result = watch.push_code(self.CODE, fake, self.backups)
+        before = setfile.decode(self.WATCH_FILE)
+        after = setfile.decode(fake.files["CrossoverFace.SET"])
+        self.assertEqual(after["configCode"], self.CODE)
+        self.assertEqual({k: v for k, v in after.items() if k != "configCode"},
+                         {k: v for k, v in before.items() if k != "configCode"})
+        self.assertEqual(Path(result["backup"]).read_bytes(), self.WATCH_FILE)
+        self.assertEqual(result["previous"], before["configCode"])
+
+    def test_a_code_is_written_in_its_canonical_spelling(self):
+        fake = FakeWatch({"CrossoverFace.SET": self.WATCH_FILE})
+        padded = self.CODE.replace("-", "+").replace("_", "/") + "=="
+        self.assertEqual(watch.push_code(padded, fake, self.backups)["code"], self.CODE)
+
+    def test_the_file_is_found_whatever_its_case(self):
+        fake = FakeWatch({"CROSSOVERFACE.SET": self.WATCH_FILE})
+        watch.push_code(self.CODE, fake, self.backups)
+        self.assertIn("CROSSOVERFACE.SET", fake.files)
+        self.assertEqual(len(fake.files), 1)
+
+    def test_a_damaged_code_touches_nothing(self):
+        fake = FakeWatch({"CrossoverFace.SET": self.WATCH_FILE})
+        with self.assertRaises(configcode.ConfigCodeError):
+            watch.push_code(self.CODE[:10] + "A" + self.CODE[11:], fake, self.backups)
+        self.assertEqual(fake.uploads, 0)
+
+    def test_a_watch_without_a_settings_file_is_refused(self):
+        fake = FakeWatch({})
+        with self.assertRaisesRegex(watch.WatchError, "no settings file"):
+            watch.push_code(self.CODE, fake, self.backups)
+        self.assertEqual(fake.uploads, 0)
+
+    def test_a_face_that_predates_codes_is_refused(self):
+        values = setfile.decode(self.WATCH_FILE)
+        del values["configCode"]
+        fake = FakeWatch({"CrossoverFace.SET": setfile.encode(values)})
+        with self.assertRaisesRegex(watch.WatchError, "predates config codes"):
+            watch.push_code(self.CODE, fake, self.backups)
+        self.assertEqual(fake.uploads, 0)
+
+    def test_a_write_that_does_not_read_back_is_reported(self):
+        fake = FakeWatch({"CrossoverFace.SET": self.WATCH_FILE}, corrupt_uploads=True)
+        with self.assertRaisesRegex(watch.WatchError, "not the one written"):
+            watch.push_code(self.CODE, fake, self.backups)
+
+
+class GeneratedForTheWeb(unittest.TestCase):
+    """The web configurator reads files generated from the face; they must be current."""
+
+    def _check(self, script):
+        result = subprocess.run([sys.executable, str(REPO / "tools" / script), "--check"],
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_the_exported_lattices_are_current(self):
+        self._check("geometry_export.py")
+
+    def test_the_exported_face_schema_is_current(self):
+        self._check("face_schema_export.py")
+
 
 class SchemaValidation(unittest.TestCase):
     def test_rejects_a_value_outside_the_list(self):
@@ -181,6 +384,25 @@ class SettingsOnDisk(unittest.TestCase):
     def test_write_then_read_returns_the_value(self):
         write(self.root, {"handBacking": 1}, schema())
         self.assertEqual(read(self.root)["handBacking"], 1)
+
+    def test_a_text_setting_is_written_as_text(self):
+        write(self.root, {"configCode": "AQAAAAABAQAIAgMU", "handBacking": 1}, schema())
+        self.assertEqual(read(self.root)["configCode"], "AQAAAAABAQAIAgMU")
+        self.assertEqual(read(self.root)["handBacking"], 1)
+
+    def test_a_text_setting_keeps_to_its_length_limit(self):
+        with self.assertRaises(SettingsError):
+            write(self.root, {"configCode": "x" * 256}, schema())
+
+    def test_a_number_setting_refuses_text_and_the_reverse(self):
+        with self.assertRaises(SettingsError):
+            write(self.root, {"handBacking": "1"}, schema())
+        with self.assertRaises(SettingsError):
+            write(self.root, {"configCode": 1}, schema())
+
+    def test_the_command_line_parses_by_the_settings_type(self):
+        self.assertEqual(schema().coerce("configCode", "0012"), "0012")
+        self.assertEqual(schema().coerce("handBacking", "2"), 2)
 
     def test_writing_one_setting_leaves_the_others_alone(self):
         write(self.root, {"handBacking": 1, "ring1": 5}, schema())

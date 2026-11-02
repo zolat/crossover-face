@@ -1,0 +1,286 @@
+{
+  "_comment": "Shared vectors for the three config-code codecs; see docs/config-code.md. Colours are 0xRRGGBB as decimal. 'why' is Python's message, informative only.",
+  "crc_check": {
+    "input": "123456789",
+    "crc": 10673
+  },
+  "valid": [
+    {
+      "name": "defaults",
+      "config": {
+        "theme": 0,
+        "handBacking": 0,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 0,
+        "ring2": 8,
+        "ring3": 2,
+        "ring4": 3,
+        "tempAheadLow": 0,
+        "tempAheadHigh": 45,
+        "customColours": [
+          15235577,
+          12113483,
+          8377599,
+          16739163
+        ],
+        "customRamp": [
+          2,
+          0,
+          3
+        ]
+      },
+      "code": "AQAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIEYw"
+    },
+    {
+      "name": "custom-theme-every-field-moved",
+      "config": {
+        "theme": 99,
+        "handBacking": 2,
+        "alwaysOnFill": 1,
+        "dotRotation": 1,
+        "showDate": 0,
+        "dateOutline": 2,
+        "ring1": 9,
+        "ring2": 10,
+        "ring3": 13,
+        "ring4": 7,
+        "tempAheadLow": -20,
+        "tempAheadHigh": 50,
+        "customColours": [
+          16777215,
+          0,
+          1193046,
+          11259375
+        ],
+        "customRamp": [
+          3,
+          1,
+          0
+        ]
+      },
+      "code": "AWMCAQEAAgkKDQcARv___wAAABI0VqvN7wcDSQ"
+    },
+    {
+      "name": "inverted-temperatures-are-carried-not-normalised",
+      "config": {
+        "theme": 8,
+        "handBacking": 0,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 12,
+        "ring2": 11,
+        "ring3": 5,
+        "ring4": 4,
+        "tempAheadLow": 50,
+        "tempAheadHigh": -20,
+        "customColours": [
+          15235577,
+          12113483,
+          8377599,
+          16739163
+        ],
+        "customRamp": [
+          2,
+          0,
+          3
+        ]
+      },
+      "code": "AQgAAAABAQwLBQRGAOh5-bjWS3_U__9rWzKyZw"
+    },
+    {
+      "name": "values-statmap-cleans-are-still-in-range",
+      "config": {
+        "theme": 1,
+        "handBacking": 0,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 0,
+        "ring2": 1,
+        "ring3": 2,
+        "ring4": 9,
+        "tempAheadLow": 0,
+        "tempAheadHigh": 45,
+        "customColours": [
+          15235577,
+          12113483,
+          8377599,
+          16739163
+        ],
+        "customRamp": [
+          2,
+          0,
+          3
+        ]
+      },
+      "code": "AQEAAAABAQABAgkUQeh5-bjWS3_U__9rWzIRZQ"
+    },
+    {
+      "name": "beacon-equal-temperatures",
+      "config": {
+        "theme": 7,
+        "handBacking": 0,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 0,
+        "ring2": 8,
+        "ring3": 2,
+        "ring4": 3,
+        "tempAheadLow": 12,
+        "tempAheadHigh": 12,
+        "customColours": [
+          15235577,
+          12113483,
+          8377599,
+          16739163
+        ],
+        "customRamp": [
+          0,
+          0,
+          0
+        ]
+      },
+      "code": "AQcAAAABAQAIAgMgIOh5-bjWS3_U__9rWwBfYg"
+    },
+    {
+      "name": "drawn-hands-time-ring",
+      "config": {
+        "theme": 0,
+        "handBacking": 1,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 15,
+        "ring2": 8,
+        "ring3": 2,
+        "ring4": 3,
+        "tempAheadLow": 0,
+        "tempAheadHigh": 45,
+        "customColours": [
+          15235577,
+          12113483,
+          8377599,
+          16739163
+        ],
+        "customRamp": [
+          2,
+          0,
+          3
+        ]
+      },
+      "code": "AQABAAABAQ8IAgMUQeh5-bjWS3_U__9rWzKZQQ"
+    },
+    {
+      "name": "time-styles-anywhere-are-in-range",
+      "config": {
+        "theme": 0,
+        "handBacking": 0,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 14,
+        "ring2": 13,
+        "ring3": 2,
+        "ring4": 15,
+        "tempAheadLow": 0,
+        "tempAheadHigh": 45,
+        "customColours": [
+          15235577,
+          12113483,
+          8377599,
+          16739163
+        ],
+        "customRamp": [
+          2,
+          0,
+          3
+        ]
+      },
+      "code": "AQAAAAABAQ4NAg8UQeh5-bjWS3_U__9rWzLhnA"
+    }
+  ],
+  "aliases": [
+    {
+      "name": "standard-alphabet-with-padding",
+      "code": "AWMCAQEAAgkKDQcARv///wAAABI0VqvN7wcDSQ==",
+      "same_as": "custom-theme-every-field-moved"
+    },
+    {
+      "name": "whitespace-and-line-breaks",
+      "code": "  AWMCAQEAAgkKDQcARv_\n __wAAABI0VqvN7wcDSQ\t",
+      "same_as": "custom-theme-every-field-moved"
+    }
+  ],
+  "invalid": [
+    {
+      "name": "checksum-mismatch",
+      "code": "AQAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIEYg",
+      "why": "checksum does not match: the code is damaged or mistyped"
+    },
+    {
+      "name": "unknown-version",
+      "code": "AgAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzLg4Q",
+      "why": "version 2 is not one this decoder reads (1)"
+    },
+    {
+      "name": "truncated",
+      "code": "AQAAAAABAQAIAgMUQeh5-bjWS38",
+      "why": "20 bytes, a version-1 code is 28"
+    },
+    {
+      "name": "one-byte-too-long",
+      "code": "AQAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIEYwA",
+      "why": "29 bytes, a version-1 code is 28"
+    },
+    {
+      "name": "retired-theme-id",
+      "code": "AQUAAAABAQAIAgMUQeh5-bjWS3_U__9rWzJHJg",
+      "why": "theme=5 is not one of (0, 1, 7, 8, 99)"
+    },
+    {
+      "name": "hand-backing-out-of-range",
+      "code": "AQADAAABAQAIAgMUQeh5-bjWS3_U__9rWzJdZg",
+      "why": "handBacking=3 is outside 0..2"
+    },
+    {
+      "name": "rotation-retired-value",
+      "code": "AQAAAAIBAQAIAgMUQeh5-bjWS3_U__9rWzLf0w",
+      "why": "dotRotation=2 is outside 0..1"
+    },
+    {
+      "name": "source-out-of-range",
+      "code": "AQAAAAABARAIAgMUQeh5-bjWS3_U__9rWzI0Pg",
+      "why": "ring1=16 is outside 0..15"
+    },
+    {
+      "name": "temperature-above-50",
+      "code": "AQAAAAABAQAIAgMUR-h5-bjWS3_U__9rWzIPBA",
+      "why": "tempAheadHigh=51 is outside -20..50"
+    },
+    {
+      "name": "ramp-reserved-bits",
+      "code": "AQAAAAABAQAIAgMUQeh5-bjWS3_U__9rW3JMpw",
+      "why": "ramp byte 0x72 sets its reserved top bits"
+    },
+    {
+      "name": "empty",
+      "code": "",
+      "why": "empty"
+    },
+    {
+      "name": "not-base64",
+      "code": "this is not a code!",
+      "why": "not base64: contains characters outside the alphabet"
+    }
+  ]
+}

@@ -375,6 +375,29 @@ app. `AppBase.getSettingsView()` provides this (`source/settings/`); watch faces
 normally accept input, and that hook is the sanctioned exception. The same settings appear
 in Garmin Connect or Garmin Express if the face is ever installed from the store.
 
+### Config code and the web configurator
+
+**Settings → Config code** holds the whole configuration — every setting below plus a
+custom theme — as one 38-character code. Paste a code there in Garmin Connect and the
+face applies it; the field always shows the watch's current setup, so it can be copied
+back out. `web/configurator/` builds codes in a browser, with a preview drawn on the
+watch's own dot layout. It is published at **https://zolat.github.io/crossover-face/**,
+rebuilt by `.github/workflows/configurator-pages.yml` whenever `main` changes it or the
+settings it mirrors. To run it locally:
+
+```sh
+cd web/configurator && npm ci && npm run dev     # the configurator
+make push-config CODE=<code>                      # apply a code on the simulator
+make push-config TO=watch CODE=<code>             # write it to the watch on the cable
+make web-test                                     # unit tests + a real-browser run
+```
+
+The format is `docs/config-code.md`. A sideloaded face gets no Garmin Connect settings,
+so there the code goes over the cable: `make push-config TO=watch` writes it into the
+face's settings file on the watch, and the face applies it when you unplug. The face must
+be a build with config codes (`make install`) and must have saved a setting once — change
+anything in its menu — so the watch has a settings file to write into.
+
 ### Colour theme
 
 Which set of colours the rings carry. Every colour on the face comes from the theme's four —

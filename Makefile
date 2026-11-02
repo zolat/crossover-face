@@ -34,7 +34,7 @@ MONKEYDO := $(SDK)bin/monkeydo
 SIMULATOR := $(SDK)bin/ConnectIQ.app/Contents/MacOS/simulator
 
 .PHONY: all build test test-lock test-simctl sim simulator-up install push push-built \
-        reveal package clean sdk-info
+        reveal package clean sdk-info push-config web-test
 
 all: build
 
@@ -110,6 +110,36 @@ sim: build
 	trap '$(SIM_LOCK) release $$$$' EXIT INT TERM; \
 	$(MAKE) -s simulator-up; \
 	"$(MONKEYDO)" $(PRG) $(DEVICE)
+
+## Apply a config code (docs/config-code.md) on the simulator: writes it into the
+## configCode setting and restarts the face, which applies it through the same
+## ConfigCode.sync() a code pasted into Garmin Connect takes. Shared simulator by
+## default, under the simulator lock; INSTANCE=<name> drives a private one.
+##   make push-config CODE=AQAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIEYw
+##
+## TO=watch writes it into the settings file on the watch on the cable instead, and
+## the face applies it when the watch is unplugged (tools/simctl/watch.py). Only the
+## code changes; the watch's previous file is kept under build/watch-settings/. The
+## face must already be the build with config codes (make install) and have saved a
+## setting once. Like make push, it quits OpenMTP: only one process may claim the watch.
+##   make push-config TO=watch CODE=AQAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIEYw
+push-config: $(if $(filter watch,$(TO)),,build)
+	@test -n "$(CODE)" || { echo "usage: make push-config CODE=<config code> [TO=watch] [DEVICE=] [INSTANCE=]"; exit 2; }
+ifeq ($(TO),watch)
+	@if pgrep -f 'OpenMTP.app/Contents/MacOS/OpenMTP' >/dev/null; then \
+		echo "Quitting OpenMTP — only one process may claim the watch."; \
+		osascript -e 'quit app "OpenMTP"' >/dev/null 2>&1; /bin/sleep 2; \
+	fi
+	@PYTHONPATH=tools python3 -m simctl.configcode push "$(CODE)" --watch
+else
+	@PYTHONPATH=tools python3 -m simctl.configcode push "$(CODE)" \
+	    --device $(DEVICE) --instance $(or $(INSTANCE),shared)
+endif
+
+## The web configurator: unit tests, type check, then a real-browser run of the
+## built page (puppeteer-core against the installed Chrome; it downloads none).
+web-test:
+	@cd web/configurator && npm ci --silent && npm test && npm run typecheck && npm run e2e
 
 ## Get the built face onto the watch.
 ## Modern Garmin devices are MTP-only — macOS cannot mount them, so there is

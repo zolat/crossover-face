@@ -34,6 +34,44 @@ block sources since.
   - [ ] Epix: the 416 with drawn hands fits one block ring, not two; the 454 trips on
     defaults. Both predate ring 3.
 
+## Web configurator
+
+Out-of-band. Every setting plus a custom theme, edited in a browser and carried to the
+watch as a **config code**: a 38-character string in one text setting. No server; the
+code format is the payload a later background sync would carry unchanged. The watch writes
+its live config back into the same field, so Garmin Connect shows it and it can be pasted
+back into the web. The code is a transport, not a store: the numeric Properties stay the
+source of truth. `docs/config-code.md` is the format.
+
+- [x] Phase 1 — codec: format spec, shared vectors, Python / Monkey C / TypeScript codecs,
+  string values in `setfile`
+- [x] Phase 2 — watch: custom theme (ID 99, in Storage), `ConfigCode` apply/publish, menu
+  and phone-side entries, all-white budget proof
+- [x] Phase 3 — configurator: geometry and schema exports, `web/configurator/` ("Lit field"),
+  preview, settings, theme builder, code in/out, `#c=` link
+- [x] Phase 3.1 — preview: the date's outline, a real-size view calibrated with a bank
+  card, whole-number scaling, Randomise colours
+- [x] Phase 4 — `make push-config` to the simulator, end-to-end
+- [x] Phase 5 — saved configs: a named library in the browser (load, rename, delete with
+  undo), exported and imported as a JSON file; nothing reaches the watch
+- [x] Phase 5.1 — the Epix time ring, on merging it from `main`: codes carry sources up to
+  15, so a drawn-hands watch's published `ring1` (a time style) decodes everywhere; the
+  outer ring offers only the two styles there and reads a stored one as Off on the
+  Crossover, as `StatMap.load()` does; the preview draws it at ten past ten, pinned to
+  `TimeRingTest`'s 10:29 dot counts; the brightness figure prices its brightest fill
+- [x] Phase 0 — on the wrist, over the cable, on an Instinct Crossover AMOLED (2026-11-01):
+  after a menu change the watch's own `.SET` carried a canonical code agreeing with every
+  value beside it, and a `.SET` pushed with a new `configCode` applied in full the moment
+  the cable came out, then persisted. `make push-config TO=watch` does that now, and was
+  run against the watch on 2026-11-02.
+
+### Backlog
+
+- [ ] Garmin Connect, through a private beta: the field shows the watch's code, a pasted
+  code applies, and the custom theme survives a phone-side save. Picked up when the face
+  is prepared for Garmin Connect. If the round trip fails there, an API is the route to
+  weigh rather than the phone's settings field.
+
 ## Epix time ring
 
 Out-of-band. The Epix stops drawing hands out of the dot field and tells the time in its

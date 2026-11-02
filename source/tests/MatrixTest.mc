@@ -43,6 +43,17 @@ module MatrixTest {
     const LUMA_G = 0.7152;
     const LUMA_B = 0.0722;
 
+    //! For a test about the tier *factors* rather than about one theme. Tests
+    //! like that used to measure whichever theme was persisted, which was safe
+    //! while every persistable theme shipped; a custom theme can be any colour,
+    //! black included, and black is neither lifted nor dimmed by any factor.
+    //! Terrain is what every theme test here restores, so this changes nothing
+    //! a following test can see.
+    function pinShippingTheme() as Void {
+        Properties.setValue(StatMap.PROPERTY_THEME, StatMap.THEME_TERRAIN);
+        Config.reload();
+    }
+
     function everySpan(start as Float, end as Float) as Array<Array<Float> > {
         var out = new [StatMap.RINGS] as Array<Array<Float> >;
         for (var i = 0; i < StatMap.RINGS; i++) {
@@ -776,7 +787,9 @@ module MatrixTest {
     //! matter how far the field is lifted to make it readable.
     (:test)
     function heldBackFillsCutAlwaysOnLuminance(logger as Logger) as Boolean {
-        Config.reload();
+        // A shipping theme, not whatever is persisted: a custom theme can be
+        // black, which no tier factor lifts or dims. See pinShippingTheme().
+        pinShippingTheme();
         var busy = everySpan(0.0, 0.82);
         var withFills = frameLuminance(busy, Palette.alwaysOn);
         var heldBack = frameLuminance(StatMap.noSpans(), Palette.heldBack);
@@ -794,7 +807,7 @@ module MatrixTest {
     //! the lift is a no-op and nothing here would notice.
     (:test)
     function theHeldBackFieldIsBrighterThanPlainAlwaysOn(logger as Logger) as Boolean {
-        Config.reload();
+        pinShippingTheme();
         Test.assertMessage(Palette.WEAK_HELD_BACK > Palette.WEAK_ALWAYS_ON,
             "the held-back tier must be brighter than the ordinary always-on one");
         for (var ring = 0; ring < StatMap.RINGS; ring++) {
@@ -886,6 +899,10 @@ module MatrixTest {
         Test.assertEqualMessage(StatMap.rotation, StatMap.ROTATION_UPRIGHT,
             "upright must be honoured");
 
+        // The date is kept by showDate's default of On, which is what a watch
+        // still carrying the retired value has. Set it rather than trust the
+        // persisted one: the menu, or a config code, may have turned it off.
+        Properties.setValue(StatMap.PROPERTY_DATE, StatMap.DATE_ON);
         Properties.setValue(StatMap.PROPERTY_ROTATION,
                             StatMap.ROTATION_RETIRED_DATE);
         Config.reload();
@@ -988,10 +1005,15 @@ module MatrixTest {
         Test.assertEqualMessage(StatMap.THEME_NEXT_ID, 9,
             "the next production theme must use ID 9");
 
-        Properties.setValue(StatMap.PROPERTY_THEME, 99);
+        // 99 is Custom (ConfigCodeTest); one past it is out of range.
+        Properties.setValue(StatMap.PROPERTY_THEME, StatMap.THEME_CUSTOM + 1);
         Config.reload();
         Test.assertEqualMessage(StatMap.theme, StatMap.THEME_TERRAIN,
             "an out-of-range value must fall back to Terrain");
+        Properties.setValue(StatMap.PROPERTY_THEME, StatMap.THEME_NEXT_ID);
+        Config.reload();
+        Test.assertEqualMessage(StatMap.theme, StatMap.THEME_TERRAIN,
+            "an unassigned ID below Custom must fall back to Terrain");
 
         for (var retired = StatMap.THEME_RETIRED_FIRST;
              retired <= StatMap.THEME_RETIRED_LAST; retired++) {

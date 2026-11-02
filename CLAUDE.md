@@ -203,6 +203,31 @@ The exceptions are the files that are shared by design — `Makefile`, `monkey.j
 next section), and one-line hotfixes to a broken `main`. Everything else, including
 "just a quick change", gets a worktree.
 
+## Every change asks whether the web configurator follows
+
+`web/configurator/` is a second face: it previews the dots, offers every setting and
+writes the code the watch applies. It is published from `main` to
+https://zolat.github.io/crossover-face/, so a face change that leaves it behind ships a page
+that is wrong about the watch. **Before calling any work in this repo done, decide whether
+the configurator needs to change too, and say which way you decided in the final report.**
+Most of it is generated, but generation only carries data, not behaviour:
+
+- **Regenerated, nothing else to do:** labels, themes, tier factors and setting values
+  (`tools/face_schema_export.py`), lattices (`tools/geometry_export.py`). `make
+  test-simctl` fails while either is stale.
+- **Needs code in `web/configurator/src/`:** anything that changes what a ring *draws* or
+  which source a ring *loads* (`StatMap.load()`, `MatrixRenderer`, `TimeRing`, `HourBands`,
+  `DateGlyph`, marks and sun dots), a new `Source` kind (the codecs' `SOURCE_MAX` too), a
+  new setting (a new code version — see the config code section), anything that moves the
+  always-on figure, and per-device behaviour such as `HandStyle`. Mirror it in the preview,
+  pin it to the Monkey C test that defines it, and add an `e2e/run.mjs` check.
+- **Verify with `make web-test`** (unit tests plus a real-browser run, whose expected codes
+  come from the Python codec) alongside the face's own gates.
+
+The Epix time ring is the worked example: it reached `main` with no configurator change,
+and every Epix's published code was then refused by all three decoders, because the codecs
+capped sources at 13.
+
 ## Parallel sessions share three things
 
 Several agents work this repo at once, in worktrees under `.claude/worktrees/`.
@@ -778,6 +803,47 @@ There is no jungle to pick a `Lattice` in a script, so `mockup.LATTICES` is one 
 field rather than composited over it, and `composite()` skips the overlay because those
 profiles carry no `analogHands`.
 
+### The config code carries every setting, and the web configurator reads them
+
+`configCode` is a text setting holding the whole configuration — every setting plus the
+custom theme — as a 38-character code; `docs/config-code.md` is the format. It is a
+**transport, not a store**: `ConfigCode.sync()` runs at start and on every phone-side
+change, applies the field when it differs from `Storage` `lastCode` (a paste), and then
+rewrites the field from `StatMap` so Garmin Connect always shows the live configuration.
+The menu republishes after each choice. Three things are easy to break:
+
+- **A new setting is a new code version.** Fields are only ever appended, and the codec
+  exists three times — `source/settings/ConfigCode.mc`, `tools/simctl/configcode.py`,
+  `web/configurator/src/codec/configCode.ts` — all held to
+  `tools/testdata/config-codes.json`. Change that file first; `python3 -m
+  simctl.configcode vectors-mc` regenerates `ConfigCodeTest.mc`'s copy, and a simctl test
+  fails while it is stale.
+- **The custom theme (ID 99) lives in `Application.Storage`, not Properties**, because it
+  has no phone-side field and a property Garmin Connect does not know about is one a
+  phone save has no reason to keep. `Palette.build()` picks a working set of four colours
+  and three stops from `THEMES` or from Storage; nothing per-frame changed.
+- **No colours can cross the always-on budget**: all-white measures 8.99% at 390 and 9.10%
+  at 454 with every mark and sun dot. `anAllWhiteCustomThemeFitsTheAlwaysOnBudget` holds
+  it, which is why the watch has no clamp. Raise the dot count or `LIFT` and that stops
+  being true.
+
+The web configurator (`web/configurator/`, `make web-test`) never carries a hand copy of
+the face: `tools/face_schema_export.py` reads settings, labels, themes and tier factors from
+the files below, and `tools/geometry_export.py` writes each lattice the way `DotGrid` builds
+it (pinned by `GeometryTest.mc`). Both refuse to be stale under `make test-simctl`, so a
+settings change means re-running them. `make push-config CODE=...` applies a code on the
+simulator through the face's own `sync()`.
+
+**`make push-config TO=watch` puts a code on the watch on the cable**, and that was
+measured, not assumed: a real watch keeps the face's settings in
+`/GARMIN/Apps/SETTINGS/CrossoverFace.SET` — mixed case, unlike the simulator's — in the
+same format `setfile` already decodes byte for byte, and the watch restarts the face when
+the cable comes out, so the code applies on unplugging with no face switch or reboot.
+`tools/simctl/watch.py` changes only `configCode` and backs the old file up under
+`build/watch-settings/`. It refuses a watch with no settings file rather than writing one
+it did not make, because whether a watch reads a file it never wrote is still untested.
+`tools/testdata/CrossoverFace-watch.SET` is a file the watch wrote, pinned byte for byte.
+
 ### Settings live in five places that must stay in step
 
 Stored values are **list indices**, so `resources/properties.xml`, `resources/settings/settings.xml`,
@@ -866,6 +932,7 @@ branching while it constructs the ramp.
 Persisted theme IDs are deliberately sparse. Terrain remains `0`, Activity remains `1`, and
 IDs `2` through `6` are retired forever. Any watch still storing one of them falls back to
 Terrain. Beacon uses `7`, Pulse uses `8`, and the next production theme must use `9`.
+`99` is Custom — the wearer's colours from a config code — and is not a production theme.
 `StatMap.THEME_IDS` maps those sparse persisted IDs to dense Palette table slots. Never reuse a
 retired ID or index a palette table directly by the persisted ID.
 

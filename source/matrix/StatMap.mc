@@ -75,6 +75,24 @@ module StatMap {
     const THEME_RETIRED_FIRST = 2;
     const THEME_RETIRED_LAST = 6;
     const THEME_NEXT_ID = 9;
+
+    //! The wearer's own four colours, set only by a config code (see
+    //! ConfigCode). Far outside the production sequence on purpose: the next
+    //! shipping theme is still THEME_NEXT_ID, and a custom theme is not one of
+    //! THEME_IDS, which lists what Palette's const tables hold.
+    const THEME_CUSTOM = 99;
+
+    //! Where the custom theme lives: Application.Storage, as
+    //! [colour1, colour2, colour3, colour4, cold, mid, hot]. Not Properties,
+    //! because it has no phone-side field, and a property Garmin Connect does
+    //! not know about is one a phone-side save has no reason to preserve.
+    const STORAGE_CUSTOM_THEME = "customTheme";
+    const CUSTOM_THEME_SIZE = 7;
+
+    //! Terrain, so a face that never received a custom theme still has a
+    //! sensible one to switch to.
+    const CUSTOM_DEFAULT = [0xE879F9, 0xB8D64B, 0x7FD4FF, 0xFF6B5B, 2, 0, 3]
+                           as Array<Number>;
     // Literal values because Monkey C const arrays have failed on-device when
     // their initialisers refer to other consts. The tests pin these to the enum.
     const THEME_IDS = [0, 1, 7, 8] as Array<Number>;
@@ -105,6 +123,9 @@ module StatMap {
     const RING_THICKNESS = (DotGrid.RADIUS - DotGrid.HUB) / RINGS;
 
     var theme as Number = THEME_TERRAIN;
+    //! The custom theme, always loaded whichever theme is in force, so a
+    //! config code can carry it while a shipping theme is selected.
+    var customTheme as Array<Number> = CUSTOM_DEFAULT;
     var backing as Number = BACKING_OFF;
     var alwaysOnFill as Number = ALWAYS_ON_FILL_SHOWN;
     var rotation as Number = ROTATION_RADIAL;
@@ -126,8 +147,11 @@ module StatMap {
     //! range falls back to its default rather than throwing.
     function load() as Void {
         var storedTheme = readNumber(PROPERTY_THEME, THEME_TERRAIN,
-                                     THEME_TERRAIN, THEME_NEXT_ID);
-        theme = THEME_IDS[themeIndex(storedTheme)];
+                                     THEME_TERRAIN, THEME_CUSTOM);
+        theme = (storedTheme == THEME_CUSTOM)
+            ? THEME_CUSTOM
+            : THEME_IDS[themeIndex(storedTheme)];
+        customTheme = readCustomTheme();
         backing = readNumber(PROPERTY_BACKING, BACKING_OFF,
                              BACKING_OFF, BACKING_DARK);
         alwaysOnFill = readNumber(PROPERTY_ALWAYS_ON_FILL, ALWAYS_ON_FILL_SHOWN,
@@ -217,6 +241,32 @@ module StatMap {
         }
         tempAheadLow = low;
         tempAheadHigh = high;
+    }
+
+    //! The stored custom theme, or the default when it is missing or malformed
+    //! — whole, never partly, for the reason a config code is all-or-nothing.
+    function readCustomTheme() as Array<Number> {
+        var stored = null;
+        try {
+            stored = Storage.getValue(STORAGE_CUSTOM_THEME);
+        } catch (ex) {
+            stored = null;
+        }
+        if (!(stored instanceof Array) || stored.size() != CUSTOM_THEME_SIZE) {
+            return CUSTOM_DEFAULT;
+        }
+        for (var i = 0; i < CUSTOM_THEME_SIZE; i++) {
+            var value = stored[i];
+            if (!(value instanceof Number)) {
+                return CUSTOM_DEFAULT;
+            }
+            var high = (i < Palette.THEME_COLOURS) ? 0xFFFFFF
+                                                   : Palette.THEME_COLOURS - 1;
+            if (value < 0 || value > high) {
+                return CUSTOM_DEFAULT;
+            }
+        }
+        return stored as Array<Number>;
     }
 
     function readNumber(key as String, fallback as Number,

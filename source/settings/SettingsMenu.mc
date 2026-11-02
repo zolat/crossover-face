@@ -114,7 +114,7 @@ class SettingsMenu extends WatchUi.Menu2 {
     }
 
     private function themeLabel() as ResourceId {
-        return THEME_LABELS[StatMap.themeIndex(StatMap.theme)];
+        return themeLabelFor(StatMap.theme);
     }
 
     private function alwaysOnFillLabel() as ResourceId {
@@ -163,7 +163,7 @@ class SettingsMenuDelegate extends WatchUi.Menu2InputDelegate {
                              WatchUi.SLIDE_LEFT);
         } else if (id == :theme) {
             push(new ChoiceMenu(Rez.Strings.ThemeTitle, StatMap.PROPERTY_THEME,
-                THEME_LABELS, StatMap.THEME_IDS, StatMap.theme));
+                themeChoiceLabels(), themeChoiceValues(), StatMap.theme));
         } else if (id == :backing) {
             push(new ChoiceMenu(Rez.Strings.BackingTitle, StatMap.PROPERTY_BACKING,
                 [Rez.Strings.BackingOff,
@@ -319,6 +319,29 @@ function temperatureMenu(title as ResourceId, property as String,
     return new ChoiceMenu(title, property, labels, values, current);
 }
 
+//! The theme picker offers every shipping theme and then Custom, which takes
+//! whatever four colours a config code last delivered — Terrain's until one
+//! has. Built here rather than stored, because THEME_LABELS and THEME_IDS are
+//! the *shipping* lists the palette tables are sized by, and Custom is not in
+//! those tables.
+function themeChoiceValues() as Array<Number> {
+    var values = StatMap.THEME_IDS.slice(0, null);
+    values.add(StatMap.THEME_CUSTOM);
+    return values;
+}
+
+function themeChoiceLabels() as Array<ResourceId> {
+    var labels = THEME_LABELS.slice(0, null);
+    labels.add(Rez.Strings.ThemeCustom);
+    return labels;
+}
+
+function themeLabelFor(theme as Number) as ResourceId {
+    return (theme == StatMap.THEME_CUSTOM)
+        ? Rez.Strings.ThemeCustom
+        : THEME_LABELS[StatMap.themeIndex(theme)];
+}
+
 //! Values 0..count-1, for contiguous settings whose every value is offered.
 //! Themes and ring sources use explicit arrays because their stored IDs have
 //! retired gaps.
@@ -400,6 +423,8 @@ class ChoiceMenuDelegate extends WatchUi.Menu2InputDelegate {
         if (view instanceof ChoiceMenu && chosen != null) {
             Properties.setValue(view.property(), chosen as Number);
             Config.reload();
+            // Keep the code field in step, so Garmin Connect shows this change.
+            ConfigCode.publish();
             WatchUi.requestUpdate();
         }
         WatchUi.popView(WatchUi.SLIDE_RIGHT);
