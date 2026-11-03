@@ -3,6 +3,7 @@ bin/
 *.prg
 *.prg.debug.xml
 *.iq
+.beta.jungle
 
 # Developer signing key — never commit
 *.der

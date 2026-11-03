@@ -34,7 +34,7 @@ MONKEYDO := $(SDK)bin/monkeydo
 SIMULATOR := $(SDK)bin/ConnectIQ.app/Contents/MacOS/simulator
 
 .PHONY: all build test test-lock test-simctl sim simulator-up install push push-built \
-        reveal package clean sdk-info push-config web-test
+        reveal package package-beta clean sdk-info push-config web-test
 
 all: build
 
@@ -216,6 +216,29 @@ reveal: build
 package:
 	@mkdir -p bin
 	"$(MONKEYC)" -f monkey.jungle -o $(IQ) -y "$(KEY)" -e -r -w
+
+## The same package as a store *beta*: private to the developer account and
+## unreviewed, and the only way to try Garmin Connect's settings on this face,
+## since a sideload gets none. It carries its own app id because a beta keeps
+## its store identity — uploading the production id as one would spend it.
+## BETA_ID is pinned so every beta upload is the same app; nothing else differs
+## from `make package`. Each upload still needs a higher manifest version.
+##
+## monkeyc refuses to layer a jungle over monkey.jungle ("Attempting to reset
+## project property 'manifest'") and resolves a jungle's paths from its own
+## folder, so a copy is written beside it for the build and removed after. The
+## default resourcePath follows the manifest, so the copy names it.
+BETA_ID := d246d010-687a-4a04-9eda-12bfd2ae6029
+BETA_IQ := bin/beta/$(NAME).iq
+
+package-beta:
+	@mkdir -p bin/beta build/beta
+	@sed -E 's/(<iq:application id=")[^"]*/\1$(BETA_ID)/' manifest.xml > build/beta/manifest.xml
+	@grep -q 'id="$(BETA_ID)"' build/beta/manifest.xml || { echo "could not set the beta id in manifest.xml"; exit 1; }
+	@{ echo 'project.manifest = build/beta/manifest.xml'; echo 'base.resourcePath = resources'; \
+	   grep -v '^project.manifest' monkey.jungle; } > .beta.jungle
+	"$(MONKEYC)" -f .beta.jungle -o $(BETA_IQ) -y "$(KEY)" -e -r -w; s=$$?; rm -f .beta.jungle; exit $$s
+	@echo "Upload $(BETA_IQ) with Beta App ticked."
 
 clean:
 	rm -rf bin

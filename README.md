@@ -15,6 +15,7 @@ make sim DEVICE=epix2              # launch the simulator and sideload
 make install DEVICE=epix2          # push onto a USB-connected watch
 make test DEVICE=epix2pro51mm      # run tests on the largest lattice
 make package                       # signed multi-product Store package
+make package-beta                  # the same, under the beta app id, for a Store beta
 make sdk-info DEVICE=epix2         # show resolved SDK, device and key
 ```
 

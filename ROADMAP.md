@@ -81,6 +81,10 @@ source of truth. `docs/config-code.md` is the format.
   code applies, and the custom theme survives a phone-side save. Picked up when the face
   is prepared for Garmin Connect. If the round trip fails there, an API is the route to
   weigh rather than the phone's settings field.
+  `make package-beta` builds the upload: `bin/beta/CrossoverFace.iq`, the store package
+  under its own pinned id (`BETA_ID` in the Makefile), leaving `d711a1ab-…` unspent for
+  a public release. Still to prove: the phone accepts the code's `_` and `-` in an
+  `alphaNumeric` field, and the release build holds the watchdog on the wrist.
 
 ## Epix time ring
 
