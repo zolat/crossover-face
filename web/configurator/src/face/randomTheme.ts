@@ -1,10 +1,12 @@
 // A random custom theme that is still a good one: five hues spread round the wheel by
 // one of a few schemes, bright enough to show in always-on and not so pale that a lap
 // past the goal disappears, with neighbouring rings clearly apart. A draw that any of
-// themeWarnings() would flag is thrown away and drawn again.
+// themeWarnings() would flag, or with a colour the picker hides as dull, is thrown away
+// and drawn again.
 //
 // The temperature ramp follows the colours: cold takes the hue nearest blue, hot the one
 // nearest red, the middle the one nearest yellow of what is left.
+import { isDull } from "./dull";
 import { build } from "./palette";
 import { distance, themeWarnings } from "./warnings";
 
@@ -89,6 +91,7 @@ function draw(random: Random): RandomTheme {
 
 export function isGood(theme: RandomTheme): boolean {
   if (themeWarnings(build(theme)).length > 0) return false;
+  if (theme.colours.some((colour) => isDull(colour))) return false;
   for (let ring = 0; ring + 1 < theme.colours.length; ring++) {
     if (distance(theme.colours[ring], theme.colours[ring + 1]) < SPREAD) return false;
   }

@@ -61,6 +61,11 @@ source of truth. `docs/config-code.md` is the format.
   outer ring offers only the two styles there and reads a stored one as Off on the
   Crossover, as `StatMap.load()` does; the preview draws it at ten past ten, pinned to
   `TimeRingTest`'s 10:29 dot counts; the brightness figure prices its brightest fill
+- [x] Phase 5.2 — a colour wheel for the custom theme: one wheel for whichever ring is
+  chosen (hue clockwise from red at twelve, saturation outward, brightness on a slider),
+  with **Hide dull colours** on by default: colours under an OKLCH floor (lightness 0.60,
+  chroma 0.09, just under the dullest shipping colours) are shaded and cannot be picked,
+  and Randomise never draws one. The floor is a starting point; see Backlog
 - [x] Phase 0 — on the wrist, over the cable, on an Instinct Crossover AMOLED (2026-11-01):
   after a menu change the watch's own `.SET` carried a canonical code agreeing with every
   value beside it, and a `.SET` pushed with a new `configCode` applied in full the moment
@@ -69,6 +74,9 @@ source of truth. `docs/config-code.md` is the format.
 
 ### Backlog
 
+- [ ] Settle the dull-colour floor on the wrist: push each `tools/dull_ladder.py` code
+  (`make push-config TO=watch CODE=...`), note the last ring that still reads, and move
+  `DULL` in `web/configurator/src/face/dull.ts` to match.
 - [ ] Garmin Connect, through a private beta: the field shows the watch's code, a pasted
   code applies, and the custom theme survives a phone-side save. Picked up when the face
   is prepared for Garmin Connect. If the round trip fails there, an API is the route to

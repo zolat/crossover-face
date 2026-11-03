@@ -88,3 +88,21 @@ export const remembered = {
     }
   },
 };
+
+/** The picker hides dull colours unless this viewer turned that off. */
+export const hideDullPref = {
+  load(): boolean {
+    try {
+      return localStorage.getItem("crossover-face-hide-dull") !== "off";
+    } catch {
+      return true;
+    }
+  },
+  save(hide: boolean) {
+    try {
+      localStorage.setItem("crossover-face-hide-dull", hide ? "on" : "off");
+    } catch {
+      // Blocked storage: the switch still works for this visit.
+    }
+  },
+};

@@ -133,17 +133,55 @@ try {
 
   await pickLabel("Make your own");
   check("Make your own selects theme 99", (await code()) === python({ ...PAGE_START, theme: 99, ring2: 7 }), await code());
-  const picker = await page.$("#colour-1");
-  await page.$eval("#colour-1", (input) => {
-    input.value = "#050505";
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-  });
+  const hexOf = (colour) => `#${colour.toString(16).padStart(6, "0")}`;
+  const typeHex = (target, value) => target.$eval(".hex", (input, text) => {
+    input.value = text;
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  }, value);
+  const grey = (colour) => ((colour >> 16) & 255) === ((colour >> 8) & 255) && ((colour >> 8) & 255) === (colour & 255);
+  check("the builder edits one ring at a time on a wheel",
+    (await page.$$(".ring-tab")).length === 4 && (await page.$$(".wheel-disc")).length === 1);
+  check("dull colours are hidden by default", await page.$eval('[data-key="hide-dull"]', (box) => box.checked));
+  await page.$eval('label[for="colour-1"]', (label) => label.click());
+  await typeHex(page, "#050505");
+  const brightened = decoded(await code()).customColours[1];
+  check("a dull colour typed in is brightened to one the watch shows",
+    brightened !== 0x050505 && brightened !== 0xb8d64b && (await page.$eval(".hex", (el) => el.value.toLowerCase())) === hexOf(brightened),
+    hexOf(brightened));
+  check("…and says so", (await page.$eval(".wheel-note", (el) => el.textContent)).includes("brightened"));
+  const disc = await page.$(".wheel-disc");
+  await disc.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  const wheelBox = await disc.boundingBox();
+  await page.mouse.click(wheelBox.x + wheelBox.width / 2, wheelBox.y + wheelBox.height / 2);
+  const middle = decoded(await code()).customColours[1];
+  check("clicking the wheel's grey middle picks a colour, not a grey", !grey(middle) && middle !== brightened, hexOf(middle));
+  await page.mouse.move(wheelBox.x + wheelBox.width * 0.85, wheelBox.y + wheelBox.height * 0.5);
+  await page.mouse.down();
+  for (let step = 1; step <= 8; step++) {
+    await page.mouse.move(wheelBox.x + wheelBox.width * 0.85, wheelBox.y + wheelBox.height * (0.5 + step * 0.04));
+  }
+  await page.mouse.up();
+  const dragged = decoded(await code());
+  check("dragging on the wheel recolours only that ring", dragged.customColours[1] !== middle &&
+    python({ ...dragged, customColours: [...dragged.customColours.slice(0, 1), middle, ...dragged.customColours.slice(2)] }) ===
+      python({ ...PAGE_START, theme: 99, ring2: 7, customColours: [0xe879f9, middle, 0x7fd4ff, 0xff6b5b, 0xe5b33a] }),
+    hexOf(dragged.customColours[1]));
+  check("the wheel is not rebuilt under the pointer", await disc.evaluate((el) => el.isConnected));
+  check("…and the preview follows it", (await page.$eval('label[for="colour-1"] i', (el) => getComputedStyle(el).backgroundColor)) ===
+    `rgb(${(dragged.customColours[1] >> 16) & 255}, ${(dragged.customColours[1] >> 8) & 255}, ${dragged.customColours[1] & 255})`);
+  await page.screenshot({ path: join(shots, "desktop-wheel.png") });
+
+  await page.click('[data-key="hide-dull"]');
+  await typeHex(page, "#050505");
   const colours = [0xe879f9, 0x050505, 0x7fd4ff, 0xff6b5b, 0xe5b33a];
-  check("a picked colour reaches the code",
+  check("with dull colours shown, any colour reaches the code",
     (await code()) === python({ ...PAGE_START, theme: 99, ring2: 7, customColours: colours }), await code());
+  check("…and the wheel says it is dull", (await page.$eval(".wheel-note", (el) => el.textContent)).includes("dull"));
   const warnings = await page.$$eval(".warnings p", (ps) => ps.map((p) => p.textContent));
   check("a too-dark colour is warned about", warnings.some((text) => text.includes("ring 2 is very dark")), warnings.join(" | "));
-  check("the colour picker is not rebuilt under the cursor", await picker.evaluate((el) => el.isConnected));
+  await page.reload({ waitUntil: "networkidle0" });
+  check("the page remembers dull colours are shown", !(await page.$eval('[data-key="hide-dull"]', (box) => box.checked)));
+  check("…and which colours were picked", (await code()) === python({ ...PAGE_START, theme: 99, ring2: 7, customColours: colours }));
   await page.select("#stop-0", "1");
   check("a ramp stop reaches the code",
     (await code()) === python({ ...PAGE_START, theme: 99, ring2: 7, customColours: colours, customRamp: [1, 0, 3] }), await code());
@@ -326,12 +364,10 @@ try {
   check("…in a version-2 code", (await bigCode()).length === 44, await bigCode());
   await big.$$eval("label", (labels) => labels.find((l) => l.textContent.trim() === "Make your own")?.click());
   await new Promise((r) => setTimeout(r, 200));
-  check("the colour builder has a fifth colour on the 51mm", (await big.$$(".builder .colour")).length === 5);
-  await big.$eval("#colour-4", (input) => {
-    input.value = "#123456";
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-  });
-  check("…which reaches the code", decoded(await bigCode()).customColours[4] === 0x123456, await bigCode());
+  check("the colour builder has a fifth ring to colour on the 51mm", (await big.$$(".ring-tab")).length === 5);
+  await big.$eval('label[for="colour-4"]', (label) => label.click());
+  await typeHex(big, "#33aa66");
+  check("…which reaches the code", decoded(await bigCode()).customColours[4] === 0x33aa66, await bigCode());
   await big.select("#stop-0", "4");
   check("…and can be a ramp stop", decoded(await bigCode()).customRamp[0] === 4, await bigCode());
   await big.screenshot({ path: join(shots, "desktop-51mm-five-rings.png") });
@@ -342,6 +378,20 @@ try {
   await phone.goto(`${origin}/#c=${vector}&w=instinctcrossoveramoled`, { waitUntil: "networkidle0" });
   const width = await phone.evaluate(() => document.documentElement.scrollWidth);
   check("no sideways scroll at phone width", width <= 390, `${width}px`);
+  const phoneDisc = await phone.$(".wheel-disc");
+  check("the colour wheel shows at phone width", phoneDisc !== null);
+  if (phoneDisc) {
+    await phoneDisc.evaluate((el) => el.scrollIntoView({ block: "center" }));
+    const fits = await phone.$eval(".wheel", (el) => el.getBoundingClientRect().right <= 390 - 16);
+    check("…inside the page's margin", fits);
+    const before = await phone.$eval(".hex", (el) => el.value);
+    const box = await phoneDisc.boundingBox();
+    await phone.touchscreen.tap(box.x + box.width * 0.2, box.y + box.height * 0.5);
+    check("…and a tap on it picks a colour", (await phone.$eval(".hex", (el) => el.value)) !== before);
+    await phone.screenshot({ path: join(shots, "phone-wheel.png") });
+    await phone.evaluate(() => window.scrollTo(0, 0));
+    await new Promise((r) => setTimeout(r, 300)); // the face grows back over a frame or two
+  }
   const bar = await phone.$eval(".code", (el) => el.getBoundingClientRect().bottom);
   check("the code stays on screen at phone width", bar <= 844 + 1, `${bar}`);
   const meter = await phone.$eval(".meter", (el) => {

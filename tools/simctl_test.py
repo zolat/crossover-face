@@ -246,6 +246,33 @@ class ConfigCodeVectors(unittest.TestCase):
             configcode.decode(code[:10] + "!" + code[10:])
 
 
+class DullLadder(unittest.TestCase):
+    """tools/dull_ladder.py: codes that step one quantity down, ring by ring."""
+
+    def setUp(self):
+        import dull_ladder
+        from mockup import to_oklch
+        self.ladders = dull_ladder.ladders()
+        self.to_oklch = to_oklch
+        self.module = dull_ladder
+
+    def test_every_code_is_a_custom_theme_of_battery_rings(self):
+        for _, _, code in self.ladders:
+            config = configcode.decode(code)
+            self.assertEqual(config["theme"], configcode.THEME_CUSTOM)
+            self.assertEqual([config[f"ring{n}"] for n in range(1, 6)], [self.module.BATTERY] * 5)
+            self.assertEqual(config["showDate"], 0)
+
+    def test_each_ladder_steps_down_in_its_own_quantity(self):
+        for title, _, code in self.ladders:
+            rgb = [((c >> 16) & 255, (c >> 8) & 255, c & 255) for c in configcode.decode(code)["customColours"]]
+            measured = [self.to_oklch(c) for c in rgb]
+            axis = 1 if "chroma" in title else 0
+            steps = self.module.CHROMA_STEPS if axis == 1 else self.module.LIGHTNESS_STEPS
+            for (value, target) in zip((m[axis] for m in measured), steps):
+                self.assertAlmostEqual(value, target, delta=0.01, msg=title)
+
+
 class FakeWatch:
     """The slice of the MTP binding watch.push_code uses, over a dict of files."""
 

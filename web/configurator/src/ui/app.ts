@@ -3,18 +3,19 @@
 import { type Config, encode, THEME_CUSTOM, tryDecode } from "../codec/configCode";
 import { type Device, type Lattice, loadLattice } from "../face/lattice";
 import { alwaysOnWorst, BUDGET, relativeLuminance } from "../face/luminance";
-import { build, fromHex, hex, themeColours } from "../face/palette";
+import { build, hex, themeColours } from "../face/palette";
 import { randomTheme } from "../face/randomTheme";
 import { type Mode, render } from "../face/render";
 import { effectiveRings, tellsTime } from "../face/rings";
 import { schema, setting } from "../face/schema";
 import { themeWarnings } from "../face/warnings";
 import { createLibrary, localBacking } from "../library";
-import { remembered, type State, type Store, writeHash } from "../state";
+import { hideDullPref, remembered, type State, type Store, writeHash } from "../state";
 import { choices, select } from "./controls";
-import { h } from "./dom";
+import { h, uid } from "./dom";
 import { savedSection, suggestedName } from "./library";
 import { compactFace } from "./compact";
+import { colourWheel, type Wheel } from "./wheel";
 import { CARD_MM, calibration, estimatedPxPerMm, faceSize, type View } from "./size";
 
 const DEVICE_NAMES: Record<string, string> = {
@@ -225,6 +226,9 @@ export function mountApp(root: HTMLElement, store: Store, devices: Device[]) {
   // --- the settings --------------------------------------------------------
 
   const warningsSlot = h("div", { class: "warnings", "aria-live": "polite" });
+  /** Which ring the colour wheel is editing, kept across rebuilds of the panel. */
+  let editing = 0;
+  let wheel: Wheel | null = null;
 
   function drawWarnings(state: State) {
     if (state.config.theme !== THEME_CUSTOM) {
@@ -299,17 +303,30 @@ export function mountApp(root: HTMLElement, store: Store, devices: Device[]) {
    */
   function builder(config: Config, ringCount: number): HTMLElement {
     const names = ringNames(ringCount);
-    const rows = config.customColours.slice(0, ringCount).map((colour, ring) => {
+    editing = Math.min(editing, ringCount - 1);
+    const tabsName = uid("editing");
+    const tabs = names.map((name, ring) => {
       const id = `colour-${ring}`;
-      const picker = h("input", {
-        id, type: "color", value: hex(colour), "data-key": id,
-        oninput: (event: Event) => {
-          const next = [...store.get().config.customColours] as Config["customColours"];
-          next[ring] = fromHex((event.target as HTMLInputElement).value);
-          store.setConfig({ customColours: next });
-        },
-      });
-      return h("div", { class: "colour" }, picker, h("label", { for: id }, names[ring]));
+      return h("span", { class: "ring-tab" },
+        h("input", {
+          type: "radio", name: tabsName, id, value: String(ring), checked: ring === editing, "data-key": id,
+          onchange: () => {
+            editing = ring;
+            wheel?.show(store.get().config.customColours[ring], names[ring]);
+          },
+        }),
+        h("label", { for: id }, h("i", { style: `background:var(--r${ring + 1})`, "aria-hidden": "true" }), name));
+    });
+    wheel = colourWheel({
+      colour: config.customColours[editing],
+      label: names[editing],
+      hideDull: hideDullPref.load(),
+      onHideDull: (hide) => hideDullPref.save(hide),
+      onPick: (colour) => {
+        const next = [...store.get().config.customColours] as Config["customColours"];
+        next[editing] = colour;
+        store.setConfig({ customColours: next });
+      },
     });
     const stopNames = ["Cold", "Middle", "Hot"];
     const stops = config.customRamp.map((stop, point) => {
@@ -326,7 +343,8 @@ export function mountApp(root: HTMLElement, store: Store, devices: Device[]) {
           h("option", { value: String(ring), selected: ring === stop }, `${name} colour`))));
     });
     return h("fieldset", { class: "builder" }, h("legend", {}, "Your colours"),
-      h("div", { class: "colours" }, ...rows),
+      h("div", { class: "ring-tabs", role: "radiogroup", "aria-label": "Ring to colour" }, ...tabs),
+      wheel.element,
       h("p", { class: "hint" }, "Temperature runs through three of them, cold to hot."),
       h("div", { class: "stops" }, ...stops),
       warningsSlot);
@@ -409,7 +427,8 @@ export function mountApp(root: HTMLElement, store: Store, devices: Device[]) {
       previous.view === state.view &&
       encode({ ...previous.config, customColours: state.config.customColours }) === code;
     if (onlyColours) {
-      // A colour picker is open: rebuilding it would close it under the wearer's cursor.
+      // The wheel is being dragged: rebuilding it would drop it from under the pointer.
+      wheel?.show(state.config.customColours[editing], ringNames(deviceOf(state).rings)[editing]);
       drawWarnings(state);
       return;
     }
