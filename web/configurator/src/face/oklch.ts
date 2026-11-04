@@ -55,6 +55,13 @@ export function toByte(x: number): number {
 
 export const wrap = (h: number) => ((h % 360) + 360) % 360;
 
+/** HueSplit.lighten: `amount` of the way to white in OKLCH, hue kept, chroma kept where it fits. */
+export function lighten(colour: number, amount: number): number {
+  const [L, C, h] = toOklch(colour);
+  const lightness = L + amount * (1 - L);
+  return fromOklch(lightness, C, h);
+}
+
 /** An sRGB 0xRRGGBB for OKLCH, giving up chroma where the screen cannot show it. */
 export function fromOklch(L: number, C: number, h: number): number {
   const [r, g, b] = linearRgb(L, fit(L, C, h), h);

@@ -15,6 +15,37 @@ module ConfigCodeTest {
 
     // --- generated from tools/testdata/config-codes.json: do not edit ---
     const VALID_CODES = [
+        "AwAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AAAzEQ",
+        "A2MCAQEAAgkKDQcARv___wAAABI0VqvN7wcA5bM6AAC1Sg",
+        "AwgAAAABAQwLBQRGAOh5-bjWS3_U__9rWzIA5bM6AADMWg",
+        "AwEAAAABAQABAgkUQeh5-bjWS3_U__9rWzIA5bM6AACnEQ",
+        "AwcAAAABAQAIAgMgIOh5-bjWS3_U__9rWwAA5bM6AAAqdg",
+        "AwABAAABAQ8IAgMUQeh5-bjWS3_U__9rWzIA5bM6AAD_wQ",
+        "AwAAAAABAQ4NAg8UQeh5-bjWS3_U__9rWzIA5bM6AAChhw",
+        "A2MAAAABAQAIAgMUQREiM0RVZneImaq7zAQHEjRWAQAFzw",
+        "AwAAAAABAQAIAgMUQQAAAAAAAAAAAAAAAAAP____BwCUlQ",
+        "AwAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AAEjMA",
+        "AwAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AAITUw",
+        "AwAAAAABAQAIAgMUQQAAAAAAAAAAAAAAAAAP____BwK01w"
+    ] as Array<String>;
+    //! ConfigCode.FIELDS numbers per code, in VALID_CODES order.
+    const VALID_CONFIGS = [
+        0, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0,
+        99, 2, 1, 1, 0, 2, 9, 10, 13, 7, -20, 50, 16777215, 0, 1193046, 11259375, 3, 1, 0, 0, 15053626, 0,
+        8, 0, 0, 0, 1, 1, 12, 11, 5, 4, 50, -20, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0,
+        1, 0, 0, 0, 1, 1, 0, 1, 2, 9, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0,
+        7, 0, 0, 0, 1, 1, 0, 8, 2, 3, 12, 12, 15235577, 12113483, 8377599, 16739163, 0, 0, 0, 0, 15053626, 0,
+        0, 1, 0, 0, 1, 1, 15, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0,
+        0, 0, 0, 0, 1, 1, 14, 13, 2, 15, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0,
+        99, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 1122867, 4478310, 7833753, 11189196, 4, 1, 0, 7, 1193046, 0,
+        0, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 0, 0, 0, 0, 4, 4, 4, 15, 16777215, 0,
+        0, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 1,
+        0, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 2,
+        0, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 0, 0, 0, 0, 4, 4, 4, 15, 16777215, 2
+    ] as Array<Number>;
+    //! Older codes, decode-only, and the ConfigCode.FIELDS numbers this
+    //! decoder makes of each: what a version lacks at its default.
+    const V2_CODES = [
         "AgAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6ALwM",
         "AmMCAQEAAgkKDQcARv___wAAABI0VqvN7wcA5bM6AIQ9",
         "AggAAAABAQwLBQRGAOh5-bjWS3_U__9rWzIA5bM6AJVG",
@@ -25,20 +56,17 @@ module ConfigCodeTest {
         "AmMAAAABAQAIAgMUQREiM0RVZneImaq7zAQHEjRWAaPZ",
         "AgAAAAABAQAIAgMUQQAAAAAAAAAAAAAAAAAP____B7jr"
     ] as Array<String>;
-    //! ConfigCode.FIELDS numbers per code, in VALID_CODES order.
-    const VALID_CONFIGS = [
-        0, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626,
-        99, 2, 1, 1, 0, 2, 9, 10, 13, 7, -20, 50, 16777215, 0, 1193046, 11259375, 3, 1, 0, 0, 15053626,
-        8, 0, 0, 0, 1, 1, 12, 11, 5, 4, 50, -20, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626,
-        1, 0, 0, 0, 1, 1, 0, 1, 2, 9, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626,
-        7, 0, 0, 0, 1, 1, 0, 8, 2, 3, 12, 12, 15235577, 12113483, 8377599, 16739163, 0, 0, 0, 0, 15053626,
-        0, 1, 0, 0, 1, 1, 15, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626,
-        0, 0, 0, 0, 1, 1, 14, 13, 2, 15, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626,
-        99, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 1122867, 4478310, 7833753, 11189196, 4, 1, 0, 7, 1193046,
-        0, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 0, 0, 0, 0, 4, 4, 4, 15, 16777215
+    const V2_CONFIGS = [
+        0, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0,
+        99, 2, 1, 1, 0, 2, 9, 10, 13, 7, -20, 50, 16777215, 0, 1193046, 11259375, 3, 1, 0, 0, 15053626, 0,
+        8, 0, 0, 0, 1, 1, 12, 11, 5, 4, 50, -20, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0,
+        1, 0, 0, 0, 1, 1, 0, 1, 2, 9, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0,
+        7, 0, 0, 0, 1, 1, 0, 8, 2, 3, 12, 12, 15235577, 12113483, 8377599, 16739163, 0, 0, 0, 0, 15053626, 0,
+        0, 1, 0, 0, 1, 1, 15, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0,
+        0, 0, 0, 0, 1, 1, 14, 13, 2, 15, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0,
+        99, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 1122867, 4478310, 7833753, 11189196, 4, 1, 0, 7, 1193046, 0,
+        0, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 0, 0, 0, 0, 4, 4, 4, 15, 16777215, 0
     ] as Array<Number>;
-    //! Version-1 codes, decode-only, and the ConfigCode.FIELDS numbers a
-    //! version-2 decoder makes of each: ring 5 and colour 5 at their defaults.
     const V1_CODES = [
         "AQAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIEYw",
         "AWMCAQEAAgkKDQcARv___wAAABI0VqvN7wcDSQ",
@@ -49,17 +77,17 @@ module ConfigCodeTest {
         "AQAAAAABAQ4NAg8UQeh5-bjWS3_U__9rWzLhnA"
     ] as Array<String>;
     const V1_CONFIGS = [
-        0, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626,
-        99, 2, 1, 1, 0, 2, 9, 10, 13, 7, -20, 50, 16777215, 0, 1193046, 11259375, 3, 1, 0, 0, 15053626,
-        8, 0, 0, 0, 1, 1, 12, 11, 5, 4, 50, -20, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626,
-        1, 0, 0, 0, 1, 1, 0, 1, 2, 9, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626,
-        7, 0, 0, 0, 1, 1, 0, 8, 2, 3, 12, 12, 15235577, 12113483, 8377599, 16739163, 0, 0, 0, 0, 15053626,
-        0, 1, 0, 0, 1, 1, 15, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626,
-        0, 0, 0, 0, 1, 1, 14, 13, 2, 15, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626
+        0, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0,
+        99, 2, 1, 1, 0, 2, 9, 10, 13, 7, -20, 50, 16777215, 0, 1193046, 11259375, 3, 1, 0, 0, 15053626, 0,
+        8, 0, 0, 0, 1, 1, 12, 11, 5, 4, 50, -20, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0,
+        1, 0, 0, 0, 1, 1, 0, 1, 2, 9, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0,
+        7, 0, 0, 0, 1, 1, 0, 8, 2, 3, 12, 12, 15235577, 12113483, 8377599, 16739163, 0, 0, 0, 0, 15053626, 0,
+        0, 1, 0, 0, 1, 1, 15, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0,
+        0, 0, 0, 0, 1, 1, 14, 13, 2, 15, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0
     ] as Array<Number>;
     const ALIAS_CODES = [
-        "AmMCAQEAAgkKDQcARv///wAAABI0VqvN7wcA5bM6AIQ9",
-        "  AmMCAQEAAgkKDQcARv_\n __wAAABI0VqvN7wcA5bM6AIQ9\t"
+        "A2MCAQEAAgkKDQcARv///wAAABI0VqvN7wcA5bM6AAC1Sg==",
+        "  A2MCAQEAAgkKDQcARv__\n _wAAABI0VqvN7wcA5bM6AAC1Sg\t"
     ] as Array<String>;
     //! Which VALID_CODES entry each alias spells.
     const ALIAS_OF = [1, 1] as Array<Number>;
@@ -83,7 +111,12 @@ module ConfigCodeTest {
         "AQAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AD5W",
         "AgAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIQ5bM6ALhW",
         "AgAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6CD0E",
-        "AgAAAAABAQAIAgMUQeh5-bjWS3_U__9rWwEA5bM6AU1B"
+        "AgAAAAABAQAIAgMUQeh5-bjWS3_U__9rWwEA5bM6AU1B",
+        "AwAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AAAzEA",
+        "BAAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AACt4g",
+        "AwAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AAAAFzA",
+        "AgAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AABqVw",
+        "AwAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AAMDcg"
     ] as Array<String>;
     const CRC_CHECK = 10673;
     // --- end of generated vectors ---
@@ -112,6 +145,7 @@ module ConfigCodeTest {
         var keys = ConfigCode.ENUM_KEYS.slice(0, null);
         keys.add(StatMap.PROPERTY_THEME);
         keys.add(StatMap.PROPERTY_RINGS[ConfigCode.CODE_RINGS]);
+        keys.add(StatMap.PROPERTY_BOOST);
         keys.add(StatMap.PROPERTY_TEMP_AHEAD_LOW);
         keys.add(StatMap.PROPERTY_TEMP_AHEAD_HIGH);
         keys.add(ConfigCode.PROPERTY_CODE);
@@ -176,8 +210,8 @@ module ConfigCodeTest {
             var code = ConfigCode.encode(configAt(i));
             Test.assertMessage(code.equals(VALID_CODES[i]),
                 "vector " + i + " encodes to " + code + ", not " + VALID_CODES[i]);
-            Test.assertEqualMessage(code.length(), 44,
-                "a version-2 code is 44 characters");
+            Test.assertEqualMessage(code.length(), 46,
+                "a version-3 code is 46 characters");
         }
         return true;
     }
@@ -202,7 +236,23 @@ module ConfigCodeTest {
                                             (i + 1) * ConfigCode.FIELDS);
             Test.assertMessage(
                 sameConfig(ConfigCode.decode(V1_CODES[i]), expected),
-                "version-1 vector " + i + " does not decode as version 2 reads it");
+                "version-1 vector " + i + " does not decode as version 3 reads it");
+        }
+        return true;
+    }
+
+    //! A version-2 code still applies, with the always-on boost Off: it was
+    //! written before the face could draw always-on brighter than awake.
+    (:test)
+    function aVersion2CodeDecodesWithTheBoostOff(logger as Logger) as Boolean {
+        for (var i = 0; i < V2_CODES.size(); i++) {
+            var expected = V2_CONFIGS.slice(i * ConfigCode.FIELDS,
+                                            (i + 1) * ConfigCode.FIELDS);
+            var decoded = ConfigCode.decode(V2_CODES[i]);
+            Test.assertMessage(sameConfig(decoded, expected),
+                "version-2 vector " + i + " does not decode as version 3 reads it");
+            Test.assertEqualMessage((decoded as Array<Number>)[ConfigCode.FIELD_BOOST],
+                StatMap.BOOST_OFF, "a version-2 code asks for no boost");
         }
         return true;
     }
@@ -259,9 +309,11 @@ module ConfigCodeTest {
             "a custom theme is five colours and three ramp stops");
         Test.assertEqualMessage(ConfigCode.FIELDS,
             1 + ConfigCode.ENUM_KEYS.size() + 2 + ConfigCode.CODE_COLOURS +
-                Palette.RAMP_POINTS + 2,
+                Palette.RAMP_POINTS + 3,
             "a config vector is theme, settings, temperatures, four custom " +
-            "colours, the stops, then ring 5 and colour 5");
+            "colours, the stops, then ring 5, colour 5 and the boost");
+        Test.assertEqualMessage(ConfigCode.FIELD_BOOST, ConfigCode.FIELDS - 1,
+            "the boost is the last field, appended in version 3");
         Test.assertEqualMessage(StatMap.PROPERTY_RINGS[ConfigCode.CODE_RINGS],
             "ring5", "the appended ring is ring5");
         return true;

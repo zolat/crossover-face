@@ -39,6 +39,20 @@ module HueSplit {
         return out;
     }
 
+    //! `colour` lightened `amount` of the way to white in OKLCH: hue kept, and
+    //! chroma kept wherever the screen can show it at the new lightness.
+    //!
+    //! The always-on boost (Palette.boost). Perceptual lightness rather than a
+    //! channel multiply, because a theme colour already sits at a full channel
+    //! and multiplying would clamp it and turn the hue; and rather than a mix
+    //! toward white, which greys every colour by the same share whatever it
+    //! needed. A dark colour gains the most, a light one little.
+    function lighten(colour as Number, amount as Double) as Number {
+        var lch = toOklch(colour);
+        var lightness = lch[0] + amount * (1.0d - lch[0]);
+        return fromOklch(lightness, fit(lightness, lch[1], lch[2]), lch[2]);
+    }
+
     //! [lightness, chroma, hue in degrees].
     function toOklch(colour as Number) as Array<Double> {
         var r = linear(((colour >> 16) & 0xFF) / 255.0d);

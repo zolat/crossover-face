@@ -40,6 +40,8 @@ export interface PaletteFactors {
   OVER_TINT: number;
   SUN_TINT: number;
   SUN_HUES: number[];
+  /** Palette.BOOST_AMOUNTS: how far each always-on boost level lightens the theme. */
+  BOOST_AMOUNTS: number[];
   BACKING_WHITE: number;
   BACKING_DARK: number;
   RAMP_STEPS: number;

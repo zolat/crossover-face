@@ -1,5 +1,5 @@
 {
-  "_comment": "Shared vectors for the three config-code codecs; see docs/config-code.md. Colours are 0xRRGGBB as decimal. 'why' is Python's message, informative only. 'valid' codes are version 2; 'v1' codes are decode-only, with the config a version-2 decoder makes of them (ring 5 and colour 5 at their defaults).",
+  "_comment": "Shared vectors for the three config-code codecs; see docs/config-code.md. Colours are 0xRRGGBB as decimal. 'why' is Python's message, informative only. 'valid' codes are version 3; 'v1' and 'v2' codes are decode-only, with the config a version-3 decoder makes of them (what each version lacks at its default: ring 5 Steps, colour 5 gold, always-on boost Off).",
   "crc_check": {
     "input": "123456789",
     "crc": 10673
@@ -19,6 +19,619 @@
         "ring3": 2,
         "ring4": 3,
         "ring5": 0,
+        "alwaysOnBoost": 0,
+        "tempAheadLow": 0,
+        "tempAheadHigh": 45,
+        "customColours": [
+          15235577,
+          12113483,
+          8377599,
+          16739163,
+          15053626
+        ],
+        "customRamp": [
+          2,
+          0,
+          3
+        ]
+      },
+      "code": "AwAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AAAzEQ"
+    },
+    {
+      "name": "custom-theme-every-field-moved",
+      "config": {
+        "theme": 99,
+        "handBacking": 2,
+        "alwaysOnFill": 1,
+        "dotRotation": 1,
+        "showDate": 0,
+        "dateOutline": 2,
+        "ring1": 9,
+        "ring2": 10,
+        "ring3": 13,
+        "ring4": 7,
+        "ring5": 0,
+        "alwaysOnBoost": 0,
+        "tempAheadLow": -20,
+        "tempAheadHigh": 50,
+        "customColours": [
+          16777215,
+          0,
+          1193046,
+          11259375,
+          15053626
+        ],
+        "customRamp": [
+          3,
+          1,
+          0
+        ]
+      },
+      "code": "A2MCAQEAAgkKDQcARv___wAAABI0VqvN7wcA5bM6AAC1Sg"
+    },
+    {
+      "name": "inverted-temperatures-are-carried-not-normalised",
+      "config": {
+        "theme": 8,
+        "handBacking": 0,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 12,
+        "ring2": 11,
+        "ring3": 5,
+        "ring4": 4,
+        "ring5": 0,
+        "alwaysOnBoost": 0,
+        "tempAheadLow": 50,
+        "tempAheadHigh": -20,
+        "customColours": [
+          15235577,
+          12113483,
+          8377599,
+          16739163,
+          15053626
+        ],
+        "customRamp": [
+          2,
+          0,
+          3
+        ]
+      },
+      "code": "AwgAAAABAQwLBQRGAOh5-bjWS3_U__9rWzIA5bM6AADMWg"
+    },
+    {
+      "name": "values-statmap-cleans-are-still-in-range",
+      "config": {
+        "theme": 1,
+        "handBacking": 0,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 0,
+        "ring2": 1,
+        "ring3": 2,
+        "ring4": 9,
+        "ring5": 0,
+        "alwaysOnBoost": 0,
+        "tempAheadLow": 0,
+        "tempAheadHigh": 45,
+        "customColours": [
+          15235577,
+          12113483,
+          8377599,
+          16739163,
+          15053626
+        ],
+        "customRamp": [
+          2,
+          0,
+          3
+        ]
+      },
+      "code": "AwEAAAABAQABAgkUQeh5-bjWS3_U__9rWzIA5bM6AACnEQ"
+    },
+    {
+      "name": "beacon-equal-temperatures",
+      "config": {
+        "theme": 7,
+        "handBacking": 0,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 0,
+        "ring2": 8,
+        "ring3": 2,
+        "ring4": 3,
+        "ring5": 0,
+        "alwaysOnBoost": 0,
+        "tempAheadLow": 12,
+        "tempAheadHigh": 12,
+        "customColours": [
+          15235577,
+          12113483,
+          8377599,
+          16739163,
+          15053626
+        ],
+        "customRamp": [
+          0,
+          0,
+          0
+        ]
+      },
+      "code": "AwcAAAABAQAIAgMgIOh5-bjWS3_U__9rWwAA5bM6AAAqdg"
+    },
+    {
+      "name": "drawn-hands-time-ring",
+      "config": {
+        "theme": 0,
+        "handBacking": 1,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 15,
+        "ring2": 8,
+        "ring3": 2,
+        "ring4": 3,
+        "ring5": 0,
+        "alwaysOnBoost": 0,
+        "tempAheadLow": 0,
+        "tempAheadHigh": 45,
+        "customColours": [
+          15235577,
+          12113483,
+          8377599,
+          16739163,
+          15053626
+        ],
+        "customRamp": [
+          2,
+          0,
+          3
+        ]
+      },
+      "code": "AwABAAABAQ8IAgMUQeh5-bjWS3_U__9rWzIA5bM6AAD_wQ"
+    },
+    {
+      "name": "time-styles-anywhere-are-in-range",
+      "config": {
+        "theme": 0,
+        "handBacking": 0,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 14,
+        "ring2": 13,
+        "ring3": 2,
+        "ring4": 15,
+        "ring5": 0,
+        "alwaysOnBoost": 0,
+        "tempAheadLow": 0,
+        "tempAheadHigh": 45,
+        "customColours": [
+          15235577,
+          12113483,
+          8377599,
+          16739163,
+          15053626
+        ],
+        "customRamp": [
+          2,
+          0,
+          3
+        ]
+      },
+      "code": "AwAAAAABAQ4NAg8UQeh5-bjWS3_U__9rWzIA5bM6AAChhw"
+    },
+    {
+      "name": "fifth-ring-and-a-fifth-colour",
+      "config": {
+        "theme": 99,
+        "handBacking": 0,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 0,
+        "ring2": 8,
+        "ring3": 2,
+        "ring4": 3,
+        "ring5": 7,
+        "alwaysOnBoost": 0,
+        "tempAheadLow": 0,
+        "tempAheadHigh": 45,
+        "customColours": [
+          1122867,
+          4478310,
+          7833753,
+          11189196,
+          1193046
+        ],
+        "customRamp": [
+          4,
+          1,
+          0
+        ]
+      },
+      "code": "A2MAAAABAQAIAgMUQREiM0RVZneImaq7zAQHEjRWAQAFzw"
+    },
+    {
+      "name": "every-version-2-field-at-its-top",
+      "config": {
+        "theme": 0,
+        "handBacking": 0,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 0,
+        "ring2": 8,
+        "ring3": 2,
+        "ring4": 3,
+        "ring5": 15,
+        "alwaysOnBoost": 0,
+        "tempAheadLow": 0,
+        "tempAheadHigh": 45,
+        "customColours": [
+          0,
+          0,
+          0,
+          0,
+          16777215
+        ],
+        "customRamp": [
+          4,
+          4,
+          4
+        ]
+      },
+      "code": "AwAAAAABAQAIAgMUQQAAAAAAAAAAAAAAAAAP____BwCUlQ"
+    },
+    {
+      "name": "always-on-bright",
+      "config": {
+        "theme": 0,
+        "handBacking": 0,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 0,
+        "ring2": 8,
+        "ring3": 2,
+        "ring4": 3,
+        "ring5": 0,
+        "alwaysOnBoost": 1,
+        "tempAheadLow": 0,
+        "tempAheadHigh": 45,
+        "customColours": [
+          15235577,
+          12113483,
+          8377599,
+          16739163,
+          15053626
+        ],
+        "customRamp": [
+          2,
+          0,
+          3
+        ]
+      },
+      "code": "AwAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AAEjMA"
+    },
+    {
+      "name": "always-on-brightest",
+      "config": {
+        "theme": 0,
+        "handBacking": 0,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 0,
+        "ring2": 8,
+        "ring3": 2,
+        "ring4": 3,
+        "ring5": 0,
+        "alwaysOnBoost": 2,
+        "tempAheadLow": 0,
+        "tempAheadHigh": 45,
+        "customColours": [
+          15235577,
+          12113483,
+          8377599,
+          16739163,
+          15053626
+        ],
+        "customRamp": [
+          2,
+          0,
+          3
+        ]
+      },
+      "code": "AwAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AAITUw"
+    },
+    {
+      "name": "every-version-3-field-at-its-top",
+      "config": {
+        "theme": 0,
+        "handBacking": 0,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 0,
+        "ring2": 8,
+        "ring3": 2,
+        "ring4": 3,
+        "ring5": 15,
+        "alwaysOnBoost": 2,
+        "tempAheadLow": 0,
+        "tempAheadHigh": 45,
+        "customColours": [
+          0,
+          0,
+          0,
+          0,
+          16777215
+        ],
+        "customRamp": [
+          4,
+          4,
+          4
+        ]
+      },
+      "code": "AwAAAAABAQAIAgMUQQAAAAAAAAAAAAAAAAAP____BwK01w"
+    }
+  ],
+  "v1": [
+    {
+      "name": "defaults",
+      "config": {
+        "theme": 0,
+        "handBacking": 0,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 0,
+        "ring2": 8,
+        "ring3": 2,
+        "ring4": 3,
+        "ring5": 0,
+        "alwaysOnBoost": 0,
+        "tempAheadLow": 0,
+        "tempAheadHigh": 45,
+        "customColours": [
+          15235577,
+          12113483,
+          8377599,
+          16739163,
+          15053626
+        ],
+        "customRamp": [
+          2,
+          0,
+          3
+        ]
+      },
+      "code": "AQAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIEYw"
+    },
+    {
+      "name": "custom-theme-every-field-moved",
+      "config": {
+        "theme": 99,
+        "handBacking": 2,
+        "alwaysOnFill": 1,
+        "dotRotation": 1,
+        "showDate": 0,
+        "dateOutline": 2,
+        "ring1": 9,
+        "ring2": 10,
+        "ring3": 13,
+        "ring4": 7,
+        "ring5": 0,
+        "alwaysOnBoost": 0,
+        "tempAheadLow": -20,
+        "tempAheadHigh": 50,
+        "customColours": [
+          16777215,
+          0,
+          1193046,
+          11259375,
+          15053626
+        ],
+        "customRamp": [
+          3,
+          1,
+          0
+        ]
+      },
+      "code": "AWMCAQEAAgkKDQcARv___wAAABI0VqvN7wcDSQ"
+    },
+    {
+      "name": "inverted-temperatures-are-carried-not-normalised",
+      "config": {
+        "theme": 8,
+        "handBacking": 0,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 12,
+        "ring2": 11,
+        "ring3": 5,
+        "ring4": 4,
+        "ring5": 0,
+        "alwaysOnBoost": 0,
+        "tempAheadLow": 50,
+        "tempAheadHigh": -20,
+        "customColours": [
+          15235577,
+          12113483,
+          8377599,
+          16739163,
+          15053626
+        ],
+        "customRamp": [
+          2,
+          0,
+          3
+        ]
+      },
+      "code": "AQgAAAABAQwLBQRGAOh5-bjWS3_U__9rWzKyZw"
+    },
+    {
+      "name": "values-statmap-cleans-are-still-in-range",
+      "config": {
+        "theme": 1,
+        "handBacking": 0,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 0,
+        "ring2": 1,
+        "ring3": 2,
+        "ring4": 9,
+        "ring5": 0,
+        "alwaysOnBoost": 0,
+        "tempAheadLow": 0,
+        "tempAheadHigh": 45,
+        "customColours": [
+          15235577,
+          12113483,
+          8377599,
+          16739163,
+          15053626
+        ],
+        "customRamp": [
+          2,
+          0,
+          3
+        ]
+      },
+      "code": "AQEAAAABAQABAgkUQeh5-bjWS3_U__9rWzIRZQ"
+    },
+    {
+      "name": "beacon-equal-temperatures",
+      "config": {
+        "theme": 7,
+        "handBacking": 0,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 0,
+        "ring2": 8,
+        "ring3": 2,
+        "ring4": 3,
+        "ring5": 0,
+        "alwaysOnBoost": 0,
+        "tempAheadLow": 12,
+        "tempAheadHigh": 12,
+        "customColours": [
+          15235577,
+          12113483,
+          8377599,
+          16739163,
+          15053626
+        ],
+        "customRamp": [
+          0,
+          0,
+          0
+        ]
+      },
+      "code": "AQcAAAABAQAIAgMgIOh5-bjWS3_U__9rWwBfYg"
+    },
+    {
+      "name": "drawn-hands-time-ring",
+      "config": {
+        "theme": 0,
+        "handBacking": 1,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 15,
+        "ring2": 8,
+        "ring3": 2,
+        "ring4": 3,
+        "ring5": 0,
+        "alwaysOnBoost": 0,
+        "tempAheadLow": 0,
+        "tempAheadHigh": 45,
+        "customColours": [
+          15235577,
+          12113483,
+          8377599,
+          16739163,
+          15053626
+        ],
+        "customRamp": [
+          2,
+          0,
+          3
+        ]
+      },
+      "code": "AQABAAABAQ8IAgMUQeh5-bjWS3_U__9rWzKZQQ"
+    },
+    {
+      "name": "time-styles-anywhere-are-in-range",
+      "config": {
+        "theme": 0,
+        "handBacking": 0,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 14,
+        "ring2": 13,
+        "ring3": 2,
+        "ring4": 15,
+        "ring5": 0,
+        "alwaysOnBoost": 0,
+        "tempAheadLow": 0,
+        "tempAheadHigh": 45,
+        "customColours": [
+          15235577,
+          12113483,
+          8377599,
+          16739163,
+          15053626
+        ],
+        "customRamp": [
+          2,
+          0,
+          3
+        ]
+      },
+      "code": "AQAAAAABAQ4NAg8UQeh5-bjWS3_U__9rWzLhnA"
+    }
+  ],
+  "v2": [
+    {
+      "name": "defaults",
+      "config": {
+        "theme": 0,
+        "handBacking": 0,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 0,
+        "ring2": 8,
+        "ring3": 2,
+        "ring4": 3,
+        "ring5": 0,
+        "alwaysOnBoost": 0,
         "tempAheadLow": 0,
         "tempAheadHigh": 45,
         "customColours": [
@@ -50,6 +663,7 @@
         "ring3": 13,
         "ring4": 7,
         "ring5": 0,
+        "alwaysOnBoost": 0,
         "tempAheadLow": -20,
         "tempAheadHigh": 50,
         "customColours": [
@@ -81,6 +695,7 @@
         "ring3": 5,
         "ring4": 4,
         "ring5": 0,
+        "alwaysOnBoost": 0,
         "tempAheadLow": 50,
         "tempAheadHigh": -20,
         "customColours": [
@@ -112,6 +727,7 @@
         "ring3": 2,
         "ring4": 9,
         "ring5": 0,
+        "alwaysOnBoost": 0,
         "tempAheadLow": 0,
         "tempAheadHigh": 45,
         "customColours": [
@@ -143,6 +759,7 @@
         "ring3": 2,
         "ring4": 3,
         "ring5": 0,
+        "alwaysOnBoost": 0,
         "tempAheadLow": 12,
         "tempAheadHigh": 12,
         "customColours": [
@@ -174,6 +791,7 @@
         "ring3": 2,
         "ring4": 3,
         "ring5": 0,
+        "alwaysOnBoost": 0,
         "tempAheadLow": 0,
         "tempAheadHigh": 45,
         "customColours": [
@@ -205,6 +823,7 @@
         "ring3": 2,
         "ring4": 15,
         "ring5": 0,
+        "alwaysOnBoost": 0,
         "tempAheadLow": 0,
         "tempAheadHigh": 45,
         "customColours": [
@@ -236,6 +855,7 @@
         "ring3": 2,
         "ring4": 3,
         "ring5": 7,
+        "alwaysOnBoost": 0,
         "tempAheadLow": 0,
         "tempAheadHigh": 45,
         "customColours": [
@@ -267,6 +887,7 @@
         "ring3": 2,
         "ring4": 3,
         "ring5": 15,
+        "alwaysOnBoost": 0,
         "tempAheadLow": 0,
         "tempAheadHigh": 45,
         "customColours": [
@@ -285,234 +906,15 @@
       "code": "AgAAAAABAQAIAgMUQQAAAAAAAAAAAAAAAAAP____B7jr"
     }
   ],
-  "v1": [
-    {
-      "name": "defaults",
-      "code": "AQAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIEYw",
-      "config": {
-        "theme": 0,
-        "handBacking": 0,
-        "alwaysOnFill": 0,
-        "dotRotation": 0,
-        "showDate": 1,
-        "dateOutline": 1,
-        "ring1": 0,
-        "ring2": 8,
-        "ring3": 2,
-        "ring4": 3,
-        "ring5": 0,
-        "tempAheadLow": 0,
-        "tempAheadHigh": 45,
-        "customColours": [
-          15235577,
-          12113483,
-          8377599,
-          16739163,
-          15053626
-        ],
-        "customRamp": [
-          2,
-          0,
-          3
-        ]
-      }
-    },
-    {
-      "name": "custom-theme-every-field-moved",
-      "code": "AWMCAQEAAgkKDQcARv___wAAABI0VqvN7wcDSQ",
-      "config": {
-        "theme": 99,
-        "handBacking": 2,
-        "alwaysOnFill": 1,
-        "dotRotation": 1,
-        "showDate": 0,
-        "dateOutline": 2,
-        "ring1": 9,
-        "ring2": 10,
-        "ring3": 13,
-        "ring4": 7,
-        "ring5": 0,
-        "tempAheadLow": -20,
-        "tempAheadHigh": 50,
-        "customColours": [
-          16777215,
-          0,
-          1193046,
-          11259375,
-          15053626
-        ],
-        "customRamp": [
-          3,
-          1,
-          0
-        ]
-      }
-    },
-    {
-      "name": "inverted-temperatures-are-carried-not-normalised",
-      "code": "AQgAAAABAQwLBQRGAOh5-bjWS3_U__9rWzKyZw",
-      "config": {
-        "theme": 8,
-        "handBacking": 0,
-        "alwaysOnFill": 0,
-        "dotRotation": 0,
-        "showDate": 1,
-        "dateOutline": 1,
-        "ring1": 12,
-        "ring2": 11,
-        "ring3": 5,
-        "ring4": 4,
-        "ring5": 0,
-        "tempAheadLow": 50,
-        "tempAheadHigh": -20,
-        "customColours": [
-          15235577,
-          12113483,
-          8377599,
-          16739163,
-          15053626
-        ],
-        "customRamp": [
-          2,
-          0,
-          3
-        ]
-      }
-    },
-    {
-      "name": "values-statmap-cleans-are-still-in-range",
-      "code": "AQEAAAABAQABAgkUQeh5-bjWS3_U__9rWzIRZQ",
-      "config": {
-        "theme": 1,
-        "handBacking": 0,
-        "alwaysOnFill": 0,
-        "dotRotation": 0,
-        "showDate": 1,
-        "dateOutline": 1,
-        "ring1": 0,
-        "ring2": 1,
-        "ring3": 2,
-        "ring4": 9,
-        "ring5": 0,
-        "tempAheadLow": 0,
-        "tempAheadHigh": 45,
-        "customColours": [
-          15235577,
-          12113483,
-          8377599,
-          16739163,
-          15053626
-        ],
-        "customRamp": [
-          2,
-          0,
-          3
-        ]
-      }
-    },
-    {
-      "name": "beacon-equal-temperatures",
-      "code": "AQcAAAABAQAIAgMgIOh5-bjWS3_U__9rWwBfYg",
-      "config": {
-        "theme": 7,
-        "handBacking": 0,
-        "alwaysOnFill": 0,
-        "dotRotation": 0,
-        "showDate": 1,
-        "dateOutline": 1,
-        "ring1": 0,
-        "ring2": 8,
-        "ring3": 2,
-        "ring4": 3,
-        "ring5": 0,
-        "tempAheadLow": 12,
-        "tempAheadHigh": 12,
-        "customColours": [
-          15235577,
-          12113483,
-          8377599,
-          16739163,
-          15053626
-        ],
-        "customRamp": [
-          0,
-          0,
-          0
-        ]
-      }
-    },
-    {
-      "name": "drawn-hands-time-ring",
-      "code": "AQABAAABAQ8IAgMUQeh5-bjWS3_U__9rWzKZQQ",
-      "config": {
-        "theme": 0,
-        "handBacking": 1,
-        "alwaysOnFill": 0,
-        "dotRotation": 0,
-        "showDate": 1,
-        "dateOutline": 1,
-        "ring1": 15,
-        "ring2": 8,
-        "ring3": 2,
-        "ring4": 3,
-        "ring5": 0,
-        "tempAheadLow": 0,
-        "tempAheadHigh": 45,
-        "customColours": [
-          15235577,
-          12113483,
-          8377599,
-          16739163,
-          15053626
-        ],
-        "customRamp": [
-          2,
-          0,
-          3
-        ]
-      }
-    },
-    {
-      "name": "time-styles-anywhere-are-in-range",
-      "code": "AQAAAAABAQ4NAg8UQeh5-bjWS3_U__9rWzLhnA",
-      "config": {
-        "theme": 0,
-        "handBacking": 0,
-        "alwaysOnFill": 0,
-        "dotRotation": 0,
-        "showDate": 1,
-        "dateOutline": 1,
-        "ring1": 14,
-        "ring2": 13,
-        "ring3": 2,
-        "ring4": 15,
-        "ring5": 0,
-        "tempAheadLow": 0,
-        "tempAheadHigh": 45,
-        "customColours": [
-          15235577,
-          12113483,
-          8377599,
-          16739163,
-          15053626
-        ],
-        "customRamp": [
-          2,
-          0,
-          3
-        ]
-      }
-    }
-  ],
   "aliases": [
     {
       "name": "standard-alphabet-with-padding",
-      "code": "AmMCAQEAAgkKDQcARv///wAAABI0VqvN7wcA5bM6AIQ9",
+      "code": "A2MCAQEAAgkKDQcARv///wAAABI0VqvN7wcA5bM6AAC1Sg==",
       "same_as": "custom-theme-every-field-moved"
     },
     {
       "name": "whitespace-and-line-breaks",
-      "code": "  AmMCAQEAAgkKDQcARv_\n __wAAABI0VqvN7wcA5bM6AIQ9\t",
+      "code": "  A2MCAQEAAgkKDQcARv__\n _wAAABI0VqvN7wcA5bM6AAC1Sg\t",
       "same_as": "custom-theme-every-field-moved"
     }
   ],
@@ -583,9 +985,9 @@
       "why": "checksum does not match: the code is damaged or mistyped"
     },
     {
-      "name": "unknown-version-3",
+      "name": "version-3-at-version-2-length",
       "code": "AwAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6ADIl",
-      "why": "version 3 is not one this decoder reads (1, 2)"
+      "why": "33 bytes, a version-3 code is 34"
     },
     {
       "name": "v2-truncated",
@@ -616,6 +1018,31 @@
       "name": "ramp-stop-above-the-fifth-colour",
       "code": "AgAAAAABAQAIAgMUQeh5-bjWS3_U__9rWwEA5bM6AU1B",
       "why": "customRamp=[5, 0, 0] must be three indices 0..4"
+    },
+    {
+      "name": "v3-checksum-mismatch",
+      "code": "AwAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AAAzEA",
+      "why": "checksum does not match: the code is damaged or mistyped"
+    },
+    {
+      "name": "unknown-version-4",
+      "code": "BAAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AACt4g",
+      "why": "version 4 is not one this decoder reads (1, 2, 3)"
+    },
+    {
+      "name": "v3-one-byte-too-long",
+      "code": "AwAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AAAAFzA",
+      "why": "35 bytes, a version-3 code is 34"
+    },
+    {
+      "name": "version-2-at-version-3-length",
+      "code": "AgAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AABqVw",
+      "why": "34 bytes, a version-2 code is 33"
+    },
+    {
+      "name": "boost-out-of-range",
+      "code": "AwAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AAMDcg",
+      "why": "alwaysOnBoost=3 is outside 0..2"
     }
   ]
 }

@@ -113,6 +113,10 @@ class CrossoverView extends WatchUi.WatchFace {
             return;
         }
         var lowPower = (mode == System.DISPLAY_MODE_LOW_POWER);
+        // The marks, sun dots, unknown hours and time ring in this mode's
+        // colours: always-on's are lightened when the boost is on. Before
+        // anything reads them, the gate's prints included.
+        Palette.useMode(lowPower);
         // Held back in always-on when asked: the field keeps its colour but
         // loses its waterlines, and the data comes back on a wrist raise.
         //

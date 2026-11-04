@@ -18,6 +18,11 @@
     <string id="AlwaysOnFillPrompt">Whether always-on shows the levels or just the colours</string>
     <string id="AlwaysOnFillShown">Shown</string>
     <string id="AlwaysOnFillHidden">Colour only</string>
+    <string id="BoostTitle">Always-on brightness</string>
+    <string id="BoostPrompt">How much brighter than awake always-on draws its colours</string>
+    <string id="BoostOff">Normal</string>
+    <string id="BoostBright">Bright</string>
+    <string id="BoostBrightest">Brightest</string>
     <string id="RotationTitle">Dot rotation</string>
     <string id="RotationPrompt">Whether each cross turns to follow the ring it sits on</string>
     <string id="RotationRadial">Follow the rings</string>

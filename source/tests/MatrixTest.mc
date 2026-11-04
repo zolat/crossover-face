@@ -2337,7 +2337,7 @@ module MatrixTest {
             Test.assertMessage(subLabelOf(menu, i).length() > 0,
                 "menu row " + i + " lost its sub-label after a refresh");
         }
-        Test.assertEqualMessage(rows, HandStyle.HANDS ? 9 : 8,
+        Test.assertEqualMessage(rows, HandStyle.HANDS ? 10 : 9,
             "the menu must have every row, the Hands row only with hands");
 
         Properties.setValue(StatMap.PROPERTY_ROTATION, saved);

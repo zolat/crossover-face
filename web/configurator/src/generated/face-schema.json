@@ -82,6 +82,31 @@
       ]
     },
     {
+      "key": "alwaysOnBoost",
+      "type": "list",
+      "title": "Always-on brightness",
+      "titleDrawn": "Always-on brightness",
+      "prompt": "How much brighter than awake always-on draws its colours",
+      "promptDrawn": "How much brighter than awake always-on draws its colours",
+      "options": [
+        {
+          "value": 0,
+          "label": "Normal",
+          "labelDrawn": "Normal"
+        },
+        {
+          "value": 1,
+          "label": "Bright",
+          "labelDrawn": "Bright"
+        },
+        {
+          "value": 2,
+          "label": "Brightest",
+          "labelDrawn": "Brightest"
+        }
+      ]
+    },
+    {
       "key": "dotRotation",
       "type": "list",
       "title": "Dot rotation",
@@ -460,6 +485,7 @@
     "theme": 0,
     "handBacking": 0,
     "alwaysOnFill": 0,
+    "alwaysOnBoost": 0,
     "dotRotation": 0,
     "showDate": 1,
     "dateOutline": 1,
@@ -476,6 +502,7 @@
     "theme": 0,
     "handBacking": 0,
     "alwaysOnFill": 0,
+    "alwaysOnBoost": 0,
     "dotRotation": 0,
     "showDate": 1,
     "dateOutline": 1,
@@ -580,6 +607,11 @@
     "SUN_HUES": [
       16770688,
       5082367
+    ],
+    "BOOST_AMOUNTS": [
+      0.0,
+      0.35,
+      0.65
     ]
   },
   "sources": {

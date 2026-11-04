@@ -882,10 +882,12 @@ The menu republishes after each choice. Three things are easy to break:
 - **Version 2 appends the 51mm's fields: ring 5, custom colour 5, and each ramp stop's third
   bit** (33 bytes, 44 characters). Every decoder reads version 1 too and fills what it
   lacks with the defaults — ring 5 Steps, colour 5 Terrain's gold — so an old code still
-  applies, and resets those two. The watch, the web and the tooling always write version 2.
-  In a config vector the two new fields are appended (`FIELD_RING5` 19, `FIELD_COLOUR5`
-  20), so no version-1 index moved. `tools/testdata/config-codes.json` keeps the old codes
-  under `v1`, decode-only.
+  applies, and resets those two. In a config vector the two new fields are appended
+  (`FIELD_RING5` 19, `FIELD_COLOUR5` 20), so no version-1 index moved.
+- **Version 3 appends the always-on boost** (`alwaysOnBoost`, byte 31; 34 bytes, 46
+  characters; `FIELD_BOOST` 21). Version-1 and -2 codes read with the boost Off. The watch,
+  the web and the tooling always write version 3. `tools/testdata/config-codes.json` keeps
+  the older codes under `v1` and `v2`, decode-only.
 - **No colours can cross the always-on budget**: all-white measures 8.99% at 390 and 9.10%
   at 454 with every mark and sun dot. `anAllWhiteCustomThemeFitsTheAlwaysOnBudget` holds
   it, which is why the watch has no clamp. Raise the dot count or `LIFT` and that stops
@@ -912,8 +914,8 @@ it did not make, because whether a watch reads a file it never wrote is still un
 
 Stored values are **list indices**, so `resources/properties.xml`, `resources/settings/settings.xml`,
 `resources/strings/strings.xml`, the enums in `StatMap`/`Source`, and the label arrays in
-`source/settings/SettingsMenu.mc` all have to agree. Fourteen properties today: `theme`,
-`handBacking`, `alwaysOnFill`, `dotRotation`, `showDate`, `dateOutline`, `ring1`–`ring5`,
+`source/settings/SettingsMenu.mc` all have to agree. Fifteen properties today: `theme`,
+`handBacking`, `alwaysOnFill`, `alwaysOnBoost`, `dotRotation`, `showDate`, `dateOutline`, `ring1`–`ring5`,
 `tempAheadLow`, `tempAheadHigh`, `configCode` — `ring5` only in `properties.xml`, read on the
 454 alone and set from its on-device menu (see *One face, five watches*). `dotRotation` stores three values and offers two: the third, Upright +
 date, is **retired** — `StatMap.load()` reads it as Upright, and `showDate`'s default of On
@@ -1133,6 +1135,20 @@ test suite; `tools/luminance.py` and the simulator's **File → View Screen Heat
 Awake and always-on share their *filled* colours and differ only in the unfilled tier
 (`WEAK_ACTIVE` 0.55 vs `WEAK_ALWAYS_ON` 0.45). `Palette.LIFT` is 1.0 — scaling up would clamp
 channels and shift hue rather than brighten.
+
+**Unless the always-on boost is on.** The watch turns its whole screen down in always-on,
+which is why waking looks so much more vibrant, and a face cannot change that. The
+`alwaysOnBoost` setting (Normal, Bright, Brightest) makes up for it: `Palette.build()`
+lightens the five theme colours in OKLCH (`HueSplit.lighten`, `L + amount·(1 − L)` with
+`BOOST_AMOUNTS` 0, 0.35, 0.65, hue kept, chroma fitted to the gamut) and builds every
+always-on table from that lighter copy: tiers, held-back, unknown hours, soft marks, sun
+dots, the ramp and the time ring's split. The awake tables do not move. The renderer reads
+`dimOf`, `softMarkOf`, `sunOf` and `timeOverlap` as globals, so `CrossoverView` calls
+`Palette.useMode(lowPower)` before every frame to point them at the right set. With the
+boost off both sets are one array and nothing differs from before. It needs no budget
+logic: all-white fits, so any lightening does, and Brightest measures 7.7–8.3% on the
+worst-case frame. `BoostTest` pins the lightened colours to `tools/mockup.py`
+(`lighten`, `use_boost`) and the web's `boost.test.ts`.
 
 There is a **fourth tier**, `Palette.dimOf` at `WEAK_UNKNOWN` 0.25, for an hour the forecast
 said nothing about. The face never draws black, so a dry hour is the unfilled tier rather

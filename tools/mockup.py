@@ -496,6 +496,25 @@ def hue_split(colour, degrees=TIME_SPLIT_DEGREES, floor=TIME_SPLIT_CHROMA):
     return out
 
 
+#: Mirrors Palette.BOOST_AMOUNTS: how far each always-on boost level (Off, Bright,
+#: Brightest) lightens the theme, as a share of the way to white in OKLCH.
+BOOST_AMOUNTS = (0.0, 0.35, 0.65)
+
+
+def lighten(colour, amount):
+    """``colour`` lightened ``amount`` of the way to white. Mirrors HueSplit.lighten."""
+    L, C, h = to_oklch(colour)
+    L = L + amount * (1.0 - L)
+    return tuple(_byte(x) for x in _linear_rgb(L, _fit(L, C, h), h))
+
+
+def use_boost(level: int) -> None:
+    """Draw from the theme as always-on boost ``level`` lightens it, the way
+    Palette.build() builds its always-on tables. ``use_theme`` undoes it."""
+    globals()["THEME"] = [lighten(c, BOOST_AMOUNTS[level]) if BOOST_AMOUNTS[level] else c
+                          for c in THEME]
+
+
 def time_overlap_colours(ring):
     """(hour, minute, both) for the overlapping ring. Mirrors Palette.timeOverlap."""
     both = THEME[ring % len(THEME)]

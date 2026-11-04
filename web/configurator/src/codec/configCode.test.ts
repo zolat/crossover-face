@@ -10,6 +10,7 @@ const vectors = JSON.parse(
   crc_check: { input: string; crc: number };
   valid: { name: string; config: Config; code: string }[];
   v1: { name: string; config: Config; code: string }[];
+  v2: { name: string; config: Config; code: string }[];
   aliases: { name: string; code: string; same_as: string }[];
   invalid: { name: string; code: string }[];
 };
@@ -23,7 +24,7 @@ describe("config code", () => {
   for (const vector of vectors.valid) {
     it(`encodes ${vector.name}`, () => {
       expect(encode(vector.config)).toBe(vector.code);
-      expect(vector.code).toHaveLength(44);
+      expect(vector.code).toHaveLength(46);
     });
     it(`decodes ${vector.name}`, () => {
       expect(decode(vector.code)).toEqual(vector.config);
@@ -34,6 +35,14 @@ describe("config code", () => {
     it(`reads the version-1 code ${vector.name}, defaulting what it lacks`, () => {
       expect(vector.code).toHaveLength(38);
       expect(decode(vector.code)).toEqual(vector.config);
+    });
+  }
+
+  for (const vector of vectors.v2) {
+    it(`reads the version-2 code ${vector.name} with the boost off`, () => {
+      expect(vector.code).toHaveLength(44);
+      expect(decode(vector.code)).toEqual(vector.config);
+      expect(decode(vector.code).alwaysOnBoost).toBe(0);
     });
   }
 

@@ -23,6 +23,15 @@ module StatMap {
         ALWAYS_ON_FILL_HIDDEN = 1   //! Colour only; the data appears on a raise.
     }
 
+    //! How much brighter than awake always-on draws. The watch turns its whole
+    //! screen down in always-on, which the face cannot change; this draws the
+    //! always-on tables from a lighter copy of the theme instead (Palette.boost).
+    enum AlwaysOnBoost {
+        BOOST_OFF = 0,
+        BOOST_BRIGHT = 1,
+        BOOST_BRIGHTEST = 2
+    }
+
     //! Whether each cross turns to follow the ring it sits on.
     //!
     //! Turned, one stroke points out from the centre and the other lies across
@@ -111,6 +120,7 @@ module StatMap {
     const PROPERTY_THEME = "theme";
     const PROPERTY_BACKING = "handBacking";
     const PROPERTY_ALWAYS_ON_FILL = "alwaysOnFill";
+    const PROPERTY_BOOST = "alwaysOnBoost";
     const PROPERTY_ROTATION = "dotRotation";
     const PROPERTY_DATE = "showDate";
     const PROPERTY_DATE_OUTLINE = "dateOutline";
@@ -153,6 +163,7 @@ module StatMap {
     var customTheme as Array<Number> = CUSTOM_DEFAULT;
     var backing as Number = BACKING_OFF;
     var alwaysOnFill as Number = ALWAYS_ON_FILL_SHOWN;
+    var boost as Number = BOOST_OFF;
     var rotation as Number = ROTATION_RADIAL;
     var date as Number = DATE_ON;
     var dateOutline as Number = OUTLINE_65;
@@ -178,6 +189,7 @@ module StatMap {
                              BACKING_OFF, BACKING_DARK);
         alwaysOnFill = readNumber(PROPERTY_ALWAYS_ON_FILL, ALWAYS_ON_FILL_SHOWN,
                                   ALWAYS_ON_FILL_SHOWN, ALWAYS_ON_FILL_HIDDEN);
+        boost = readNumber(PROPERTY_BOOST, BOOST_OFF, BOOST_OFF, BOOST_BRIGHTEST);
         rotation = readNumber(PROPERTY_ROTATION, ROTATION_RADIAL,
                               ROTATION_RADIAL, ROTATION_RETIRED_DATE);
         if (rotation == ROTATION_RETIRED_DATE) {

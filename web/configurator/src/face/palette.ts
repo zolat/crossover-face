@@ -1,6 +1,7 @@
 // Palette.build(), ported. Monkey C does this arithmetic in 32-bit floats and truncates,
 // so every step here goes through Math.fround: a channel that lands on 109.99999 on the
 // watch must land there here too, or the preview is a shade off from the face.
+import { lighten } from "./oklch";
 import { schema, type Theme } from "./schema";
 
 const P = schema.palette;
@@ -56,6 +57,17 @@ export function themeColours(theme: number, custom: ThemeColours): ThemeColours 
   if (theme === schema.themeCustom) return custom;
   const found: Theme | undefined = schema.themes.find((entry) => entry.id === theme);
   return found ?? schema.themes[0];
+}
+
+/**
+ * The theme always-on draws from at a boost level: Palette.boosted(). Building a
+ * palette from it gives every always-on tier the watch draws — filled, unfilled,
+ * held back, unknown hours, marks, sun dots, the ramp and the time ring's split.
+ */
+export function boostedTheme(theme: ThemeColours, level: number): ThemeColours {
+  const amount = P.BOOST_AMOUNTS[level] ?? 0;
+  if (amount === 0) return theme;
+  return { colours: theme.colours.map((colour) => lighten(colour, amount)), ramp: theme.ramp };
 }
 
 export function build(theme: ThemeColours): BuiltPalette {

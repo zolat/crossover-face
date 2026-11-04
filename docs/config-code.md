@@ -54,7 +54,22 @@ five custom colours, 0..4. Every watch carries ring 5 and colour 5, since a code
 say which watch it is for; only the Epix 2 Pro 51mm draws them.
 
 **A version-1 code is still read**, with ring 5 at Steps (`0`) and colour 5 at Terrain's
-gold (`0xE5B33A`) — the defaults, as *Versions* below requires. Everything writes version 2.
+gold (`0xE5B33A`) — the defaults, as *Versions* below requires.
+
+## v3
+
+34 bytes, **46 characters**. Version 2's 31 bytes of payload in place — byte 0 is now `3` —
+then one appended field, then the CRC:
+
+    byte  field              stored as                      valid
+    31    alwaysOnBoost      list index: Off, Bright, Brightest   0..2
+    32    CRC-16             big-endian, over bytes 0..31
+
+The always-on boost draws always-on from a lighter copy of the theme (`Palette.BOOST_AMOUNTS`,
+`HueSplit.lighten`), to make up for the watch turning its screen down in always-on.
+
+**Version-1 and version-2 codes are still read**, with the boost Off, plus version 1's
+defaults above. Everything writes version 3.
 
 The CRC is CRC-16/CCITT-FALSE: polynomial `0x1021`, initial value `0xFFFF`, no reflection,
 no final XOR. `"123456789"` checks to `0x29B1`.
@@ -70,7 +85,7 @@ A ramp stop is an index into the theme's colours, exactly as `Palette.RAMP_STOPS
 - Strip whitespace. Accept either base64 alphabet (`-_` or `+/`) and optional `=` padding,
   because a code pasted through a phone's clipboard or an e-mail can come back either way.
 - Reject — apply nothing — on a wrong length for the version, a bad CRC, an unknown
-  version (anything but 1 or 2), or any field outside its range. A code is all-or-nothing: a half-applied one
+  version (anything but 1, 2 or 3), or any field outside its range. A code is all-or-nothing: a half-applied one
   would leave the wearer with a face that matches neither what they had nor what they
   pasted.
 - Ring sources are range-checked only. Which ring may carry which source, and the retired

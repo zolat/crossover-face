@@ -129,7 +129,29 @@ try {
   await pickLabel("Always-on");
   check("always-on keeps a lit dot at full band", (await pixel(...topDot)) === 0x5cd9f0);
   check("always-on leaves the code alone", (await code()) === python({ ...PAGE_START, theme: 7, ring2: 7 }));
+
+  // The always-on boost: lighter always-on colours, awake untouched, carried in the code.
+  const near = (a, b) => [16, 8, 0].every((shift) => Math.abs(((a >> shift) & 255) - ((b >> shift) & 255)) <= 1);
+  const meterFigure = () => page.$eval(".meter span", (el) => parseFloat(el.textContent.replace(/^[^\d]*/, "")));
+  check("always-on brightness starts at Normal", await page.$$eval("fieldset", (sets) => {
+    const set = sets.find((f) => f.querySelector("legend")?.textContent.trim() === "Always-on brightness");
+    return set?.querySelector("input:checked + label")?.textContent.trim() === "Normal";
+  }));
+  const plainFigure = await meterFigure();
+  await pickIn("Always-on brightness", "Brightest");
+  check("Brightest puts the boost in the code",
+    (await code()) === python({ ...PAGE_START, theme: 7, ring2: 7, alwaysOnBoost: 2 }) && decoded(await code()).alwaysOnBoost === 2,
+    await code());
+  const boosted = await pixel(...topDot);
+  check("…and draws always-on in the lightened colour (mockup.lighten, Beacon cyan)", near(boosted, 0xc3f5ff), boosted.toString(16));
+  const boostedFigure = await meterFigure();
+  check("…which the brightness figure prices, still under 10%", boostedFigure > plainFigure && boostedFigure < 10,
+    `${plainFigure} -> ${boostedFigure}`);
+  await page.screenshot({ path: join(shots, "desktop-always-on-brightest.png") });
   await pickLabel("Awake");
+  check("…and leaves the awake face alone", (await pixel(...topDot)) === 0x5cd9f0);
+  await pickIn("Always-on brightness", "Normal");
+  check("Normal takes the boost back out", (await code()) === python({ ...PAGE_START, theme: 7, ring2: 7 }), await code());
 
   await pickLabel("Make your own");
   check("Make your own selects theme 99", (await code()) === python({ ...PAGE_START, theme: 99, ring2: 7 }), await code());
@@ -361,7 +383,7 @@ try {
   check("…which starts on Steps", decoded(await bigCode()).ring5 === 0, await bigCode());
   await big.select(".rings .ring:nth-child(5) select", "2");
   check("choosing the centre ring's source puts ring5 in the code", decoded(await bigCode()).ring5 === 2, await bigCode());
-  check("…in a version-2 code", (await bigCode()).length === 44, await bigCode());
+  check("…in a version-3 code", (await bigCode()).length === 46, await bigCode());
   await big.$$eval("label", (labels) => labels.find((l) => l.textContent.trim() === "Make your own")?.click());
   await new Promise((r) => setTimeout(r, 200));
   check("the colour builder has a fifth ring to colour on the 51mm", (await big.$$(".ring-tab")).length === 5);

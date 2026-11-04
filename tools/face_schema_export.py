@@ -120,6 +120,7 @@ def palette() -> dict:
     factors["BACKING_DARK"] = int(factors["BACKING_DARK"])
     factors["RAMP_STEPS"] = int(factors["RAMP_STEPS"])
     factors["SUN_HUES"] = _array(source, "SUN_HUES")
+    factors["BOOST_AMOUNTS"] = _floats(source, "BOOST_AMOUNTS")
     return {
         "themeColours": [colours[i:i + per_theme] for i in range(0, len(colours), per_theme)],
         "rampStops": [stops[i:i + points] for i in range(0, len(stops), points)],

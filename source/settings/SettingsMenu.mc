@@ -20,6 +20,14 @@ const DATE_OUTLINE_LABELS = [
     Rez.Strings.DateOutline80
 ] as Array<ResourceId>;
 
+//! Always-on brightness, in StatMap.AlwaysOnBoost order. Shared by the row's
+//! sub-label and its picker for the reason THEME_LABELS is.
+const BOOST_LABELS = [
+    Rez.Strings.BoostOff,
+    Rez.Strings.BoostBright,
+    Rez.Strings.BoostBrightest
+] as Array<ResourceId>;
+
 //! Source names, in Source.Kind order — every value, including the retired
 //! one, so this stays indexable by the enum. What the picker *offers* is
 //! Source.OFFERED, which is a different and shorter list.
@@ -66,6 +74,8 @@ class SettingsMenu extends WatchUi.Menu2 {
         }
         addItem(new WatchUi.MenuItem(Rez.Strings.AlwaysOnFillTitle,
             alwaysOnFillLabel(), :alwaysOnFill, null));
+        addItem(new WatchUi.MenuItem(Rez.Strings.BoostTitle,
+            BOOST_LABELS[StatMap.boost], :boost, null));
         addItem(new WatchUi.MenuItem(
             Rez.Strings.RotationTitle, rotationLabel(), :rotation, null));
         addItem(new WatchUi.MenuItem(
@@ -95,6 +105,7 @@ class SettingsMenu extends WatchUi.Menu2 {
             setSubLabelOf(:backing, backingLabel());
         }
         setSubLabelOf(:alwaysOnFill, alwaysOnFillLabel());
+        setSubLabelOf(:boost, BOOST_LABELS[StatMap.boost]);
         setSubLabelOf(:rotation, rotationLabel());
         setSubLabelOf(:date, dateLabel());
         setSubLabelOf(:dateOutline, dateOutlineLabel());
@@ -176,6 +187,9 @@ class SettingsMenuDelegate extends WatchUi.Menu2InputDelegate {
                 [Rez.Strings.AlwaysOnFillShown,
                  Rez.Strings.AlwaysOnFillHidden] as Array<ResourceId>,
                 sequential(2), StatMap.alwaysOnFill));
+        } else if (id == :boost) {
+            push(new ChoiceMenu(Rez.Strings.BoostTitle, StatMap.PROPERTY_BOOST,
+                BOOST_LABELS, sequential(3), StatMap.boost));
         } else if (id == :rotation) {
             push(new ChoiceMenu(Rez.Strings.RotationTitle,
                 StatMap.PROPERTY_ROTATION,

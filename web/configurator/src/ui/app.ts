@@ -3,7 +3,7 @@
 import { type Config, encode, THEME_CUSTOM, tryDecode } from "../codec/configCode";
 import { type Device, type Lattice, loadLattice } from "../face/lattice";
 import { alwaysOnWorst, BUDGET, relativeLuminance } from "../face/luminance";
-import { build, hex, themeColours } from "../face/palette";
+import { boostedTheme, build, hex, themeColours } from "../face/palette";
 import { randomTheme } from "../face/randomTheme";
 import { type Mode, render } from "../face/render";
 import { effectiveRings, tellsTime } from "../face/rings";
@@ -66,7 +66,11 @@ export function mountApp(root: HTMLElement, store: Store, devices: Device[]) {
       latticeKey = device.lattice;
     }
     if (store.get() !== state) return; // a newer state is already on its way
-    const palette = build(themeColours(state.config.theme, custom(state.config)));
+    // Always-on draws from the boosted theme, as Palette.build() builds its always-on
+    // tables; with the boost off that is the theme itself.
+    const theme = themeColours(state.config.theme, custom(state.config));
+    const asleep = build(boostedTheme(theme, state.config.alwaysOnBoost));
+    const palette = state.mode === "alwaysOn" ? asleep : build(theme);
     source.width = source.height = lattice.screen;
     const context = source.getContext("2d")!;
     const image = context.createImageData(lattice.screen, lattice.screen);
@@ -80,7 +84,7 @@ export function mountApp(root: HTMLElement, store: Store, devices: Device[]) {
     const timeStyle = tellsTime(device.drawnHands)
       ? effectiveRings(state.config, device.drawnHands)[schema.timeRing.ring]
       : undefined;
-    const worst = alwaysOnWorst(lattice, palette, timeStyle).total;
+    const worst = alwaysOnWorst(lattice, asleep, timeStyle).total;
     meterText.textContent = `Always-on, brightest case ${(worst * 100).toFixed(1)}%`;
     meterFill.style.width = `${Math.min(100, (worst / BUDGET) * 100)}%`;
   }
@@ -283,6 +287,9 @@ export function mountApp(root: HTMLElement, store: Store, devices: Device[]) {
       // Only where there are hands to back; a watch with none ignores the setting.
       drawn ? null : choices(label("handBacking"), options("handBacking"), config.handBacking, (value) => set({ handBacking: Number(value) })),
       choices(label("alwaysOnFill"), options("alwaysOnFill"), config.alwaysOnFill, (value) => set({ alwaysOnFill: Number(value) })),
+      choices(label("alwaysOnBoost"), options("alwaysOnBoost"), config.alwaysOnBoost,
+        (value) => set({ alwaysOnBoost: Number(value) }),
+        "The watch dims its screen in always-on. This draws always-on in lighter colours to make up for it."),
       choices(label("dotRotation"), options("dotRotation"), config.dotRotation, (value) => set({ dotRotation: Number(value) })),
       choices(label("showDate"), options("showDate"), config.showDate, (value) => set({ showDate: Number(value) })),
       config.showDate === 1

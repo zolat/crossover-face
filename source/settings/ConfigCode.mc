@@ -17,14 +17,15 @@ import Toybox.StringUtil;
 //! a menu choice.
 module ConfigCode {
 
-    //! The version this watch writes. It reads version 1 too: a newer decoder
-    //! reads every older code, filling what it lacks with the defaults.
-    const VERSION = 2;
-    //! Bytes in a version-2 code: 31 of payload and a 16-bit CRC — version 1's
-    //! 26, then ring 5, colour 5 and the ramp stops' third bits.
-    const LENGTH = 33;
-    const PAYLOAD = 31;
-    const LENGTH_V1 = 28;
+    //! The version this watch writes. It reads versions 1 and 2 too: a newer
+    //! decoder reads every older code, filling what it lacks with the defaults.
+    const VERSION = 3;
+    //! Bytes in a version-3 code: 32 of payload and a 16-bit CRC — version 1's
+    //! 26, version 2's ring 5, colour 5 and the ramp stops' third bits, then
+    //! version 3's always-on boost.
+    const LENGTH = 34;
+    const PAYLOAD = 32;
+    const PAYLOAD_V2 = 31;
     const PAYLOAD_V1 = 26;
     const TEMP_OFFSET = 20;
 
@@ -33,16 +34,18 @@ module ConfigCode {
     const STORAGE_LAST_CODE = "lastCode";
 
     //! A config vector — what pack() takes and unpack() returns — is these
-    //! twenty-one numbers, in the units the settings store: theme, the nine
+    //! twenty-two numbers, in the units the settings store: theme, the nine
     //! one-byte settings, both temperature ends in °C, custom colours 1 to 4,
     //! the three custom ramp stops, then version 2's ring 5 and custom colour
-    //! 5 — appended, so no index version 1 had moves.
-    const FIELDS = 21;
+    //! 5, then version 3's always-on boost — each appended, so no older index
+    //! moves.
+    const FIELDS = 22;
     const FIELD_TEMP_LOW = 10;
     const FIELD_COLOURS = 12;
     const FIELD_RAMP = 16;
     const FIELD_RING5 = 19;
     const FIELD_COLOUR5 = 20;
+    const FIELD_BOOST = 21;
 
     //! Rings and custom colours the code carries in its first block, version
     //! 1's; the fifth of each is version 2's appendix.
@@ -81,7 +84,7 @@ module ConfigCode {
         return crc;
     }
 
-    //! A config vector as the 33 bytes of a sealed version-2 code. Trusts its
+    //! A config vector as the 34 bytes of a sealed version-3 code. Trusts its
     //! input: only decode() is handed anything a wearer typed.
     function pack(config as Array<Number>) as Array<Number> {
         var bytes = new [LENGTH] as Array<Number>;
@@ -107,22 +110,25 @@ module ConfigCode {
         bytes[29] = fifth & 0xFF;
         bytes[30] = (config[FIELD_RAMP] >> 2) | ((config[FIELD_RAMP + 1] >> 2) << 1) |
                     ((config[FIELD_RAMP + 2] >> 2) << 2);
+        bytes[31] = config[FIELD_BOOST];
         var crc = crc16(bytes, PAYLOAD);
-        bytes[31] = (crc >> 8) & 0xFF;
-        bytes[32] = crc & 0xFF;
+        bytes[PAYLOAD] = (crc >> 8) & 0xFF;
+        bytes[PAYLOAD + 1] = crc & 0xFF;
         return bytes;
     }
 
     //! The config vector a sealed code carries, or null when the code is
-    //! anything but a well-formed version-1 or version-2 code with every field
-    //! in range. A version-1 code's ring 5 and colour 5 are the defaults.
+    //! anything but a well-formed version-1, -2 or -3 code with every field in
+    //! range. What an older code lacks takes its default: ring 5 and colour 5
+    //! before version 2, the boost (Off) before version 3.
     function unpack(bytes as Array<Number>) as Array<Number>? {
         if (bytes.size() == 0) {
             return null;
         }
         var version = bytes[0];
         var payload = (version == VERSION) ? PAYLOAD
-                    : ((version == 1) ? PAYLOAD_V1 : -1);
+                    : ((version == 2) ? PAYLOAD_V2
+                    : ((version == 1) ? PAYLOAD_V1 : -1));
         if (payload < 0 || bytes.size() != payload + 2) {
             return null;
         }
@@ -162,7 +168,14 @@ module ConfigCode {
             return null;
         }
         var high = 0;
-        if (version == VERSION) {
+        config[FIELD_BOOST] = StatMap.BOOST_OFF;
+        if (version >= 3) {
+            if (bytes[31] > StatMap.BOOST_BRIGHTEST) {
+                return null;
+            }
+            config[FIELD_BOOST] = bytes[31];
+        }
+        if (version >= 2) {
             if (bytes[26] > RING5_MAX) {
                 return null;
             }
@@ -302,6 +315,7 @@ module ConfigCode {
             : StatMap.readNumber(StatMap.PROPERTY_RINGS[CODE_RINGS],
                                  RING5_DEFAULT, 0, Source.COUNT - 1);
         config[FIELD_COLOUR5] = custom[CODE_COLOURS];
+        config[FIELD_BOOST] = StatMap.boost;
         return config;
     }
 
@@ -317,6 +331,7 @@ module ConfigCode {
                             config[FIELD_TEMP_LOW + 1]);
         Properties.setValue(StatMap.PROPERTY_RINGS[CODE_RINGS],
                             config[FIELD_RING5]);
+        Properties.setValue(StatMap.PROPERTY_BOOST, config[FIELD_BOOST]);
         // The custom theme as Storage holds it: five colours, then the stops.
         var custom = config.slice(FIELD_COLOURS, FIELD_RAMP);
         custom.add(config[FIELD_COLOUR5]);

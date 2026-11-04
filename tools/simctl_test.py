@@ -197,18 +197,26 @@ class ConfigCodeVectors(unittest.TestCase):
         for vector in self.vectors["valid"]:
             with self.subTest(vector["name"]):
                 self.assertEqual(configcode.encode(vector["config"]), vector["code"])
-                self.assertEqual(len(vector["code"]), 44)
+                self.assertEqual(len(vector["code"]), 46)
 
     def test_every_valid_code_decodes_to_its_config(self):
         for vector in self.vectors["valid"]:
             with self.subTest(vector["name"]):
                 self.assertEqual(dict(configcode.decode(vector["code"])), vector["config"])
 
-    def test_a_version_1_code_decodes_with_the_version_2_fields_defaulted(self):
+    def test_a_version_1_code_decodes_with_the_later_fields_defaulted(self):
         for vector in self.vectors["v1"]:
             with self.subTest(vector["name"]):
                 self.assertEqual(len(vector["code"]), 38)
                 self.assertEqual(dict(configcode.decode(vector["code"])), vector["config"])
+
+    def test_a_version_2_code_decodes_with_the_boost_off(self):
+        for vector in self.vectors["v2"]:
+            with self.subTest(vector["name"]):
+                self.assertEqual(len(vector["code"]), 44)
+                config = configcode.decode(vector["code"])
+                self.assertEqual(dict(config), vector["config"])
+                self.assertEqual(config["alwaysOnBoost"], 0)
 
     def test_other_spellings_of_a_code_decode_the_same(self):
         by_name = {vector["name"]: vector for vector in self.vectors["valid"]}
@@ -306,7 +314,7 @@ class WatchConfigPush(unittest.TestCase):
     """make push-config TO=watch, against the settings file a real watch wrote."""
 
     WATCH_FILE = (Path(__file__).resolve().parent / "testdata" / "CrossoverFace-watch.SET").read_bytes()
-    CODE = "AmMAAAAAAAQMCQAUQXDugLVV6Y7V3qvgjx4A5bM6AJDt"
+    CODE = "A2MAAAAAAAQMCQAUQXDugLVV6Y7V3qvgjx4A5bM6AAA3_w"
 
     def setUp(self):
         self.backups = Path(tempfile.mkdtemp())

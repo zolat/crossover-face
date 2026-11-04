@@ -21,6 +21,13 @@
             <listEntry value="1">@Strings.AlwaysOnFillHidden</listEntry>
         </settingConfig>
     </setting>
+    <setting propertyKey="@Properties.alwaysOnBoost" title="@Strings.BoostTitle" prompt="@Strings.BoostPrompt">
+        <settingConfig type="list">
+            <listEntry value="0">@Strings.BoostOff</listEntry>
+            <listEntry value="1">@Strings.BoostBright</listEntry>
+            <listEntry value="2">@Strings.BoostBrightest</listEntry>
+        </settingConfig>
+    </setting>
     <setting propertyKey="@Properties.dotRotation" title="@Strings.RotationTitle" prompt="@Strings.RotationPrompt">
         <settingConfig type="list">
             <listEntry value="0">@Strings.RotationRadial</listEntry>

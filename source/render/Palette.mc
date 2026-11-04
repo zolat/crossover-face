@@ -125,6 +125,16 @@ module Palette {
     //! separation than it needs.
     const WEAK_UNKNOWN = 0.25;
 
+    //! How far each always-on boost level lightens the theme, as a share of
+    //! the way to white in OKLCH (HueSplit.lighten), in StatMap.AlwaysOnBoost
+    //! order. Off is no lightening at all, so every table is today's.
+    //!
+    //! The 10% budget does not bound these: an all-white field with every mark
+    //! and sun measures under 9.1% (anAllWhiteCustomThemeFitsTheAlwaysOnBudget),
+    //! so any colours fit. What bounds them is how pale a strong colour may go
+    //! before the theme stops being itself — a call made on the wrist.
+    const BOOST_AMOUNTS = [0.0d, 0.35d, 0.65d] as Array<Double>;
+
     //! Always-on used to lift the colours to survive the panel's own dimming.
     //! With this palette there is nothing left to lift: ice and orchid are
     //! already at or near a full channel, so scaling up would clamp and shift
@@ -284,11 +294,12 @@ module Palette {
     var markerOf as Array<Number> = [] as Array<Number>;
 
     //! The sun dots' colours, flat: ring * Source.SUN_VALUES, then sunrise,
-    //! sunset. Indexed exactly as MatrixRenderer.drawnSun is. One table for
-    //! both power modes, for markerOf's reason.
+    //! sunset. Indexed exactly as MatrixRenderer.drawnSun is. Always-on's
+    //! version is sunAsleep, from the boosted colours; useMode() picks.
     var sunOf as Array<Number> = [] as Array<Number>;
 
     //! The current-temperature mark's colour on each ring. See SOFT_MARK_TINT.
+    //! It draws in always-on too, so it has a boosted version (softAsleep).
     var softMarkOf as Array<Number> = [] as Array<Number>;
 
     //! The second lap's colour on each ring — what a ring past its goal draws
@@ -298,9 +309,8 @@ module Palette {
     //!
     //! Awake only — over-ness is awake-only at its source, so no always-on
     //! frame reads this table and there is no second tier to keep in step.
-    //! markerOf, by contrast, draws in both modes from one table, the way
-    //! dimOf does: LIFT is 1.0, so the band under the mark is identical in
-    //! both and a mark that differed would shift on a wrist raise.
+    //! markerOf is awake-only for the same reason: in always-on every mark is
+    //! a reading, which takes softMarkOf.
     var overOf as Array<Number> = [] as Array<Number>;
 
     //! The unknown-hour tier on each ring. One entry per ring, not per slot —
@@ -308,14 +318,32 @@ module Palette {
     //! third colour the renderer swaps in, not a fourth palette slot, so the
     //! ring * 2 + lit indexing every other table and test uses is untouched.
     //!
-    //! One table for both power modes, because LIFT is 1.0 and an always-on
-    //! variant would be a duplicate of this one. If LIFT ever moves off 1.0
-    //! this owes a second table, exactly as heldBack does.
+    //! Always-on's version is dimAsleep, from the boosted colours, and
+    //! useMode() picks: with the boost off the two are one array, since LIFT
+    //! is 1.0 and the band under it is identical in both modes.
     var dimOf as Array<Number> = [] as Array<Number>;
 
     //! The overlapping time ring's slot colours, indexed as TimeRing's slots:
     //! neither, hour, minute, both. Built from the theme with the rest.
     var timeOverlap as Array<Number> = [] as Array<Number>;
+
+    //! The tables above that always-on draws too, in each mode's version. The
+    //! renderer reads dimOf, softMarkOf, sunOf and timeOverlap as they stand;
+    //! useMode() points them at one set or the other before a frame, so it
+    //! needs no notion of a boost. With the boost off the two sets are the same
+    //! arrays. markerOf and overOf have no always-on set: a lap, and with it
+    //! the waterline, is awake-only (StatMap.overs).
+    var dimAwake as Array<Number> = [] as Array<Number>;
+    var dimAsleep as Array<Number> = [] as Array<Number>;
+    var softAwake as Array<Number> = [] as Array<Number>;
+    var softAsleep as Array<Number> = [] as Array<Number>;
+    var sunAwake as Array<Number> = [] as Array<Number>;
+    var sunAsleep as Array<Number> = [] as Array<Number>;
+    var timeAwake as Array<Number> = [] as Array<Number>;
+    var timeAsleep as Array<Number> = [] as Array<Number>;
+
+    //! The theme's colours as always-on draws them: lightened by the boost.
+    var bright as Array<Number> = [] as Array<Number>;
     var rampActive as Array<Number> = [] as Array<Number>;
     var rampAlwaysOn as Array<Number> = [] as Array<Number>;
 
@@ -356,69 +384,115 @@ module Palette {
         stops = ramp;
     }
 
-    function build() as Void {
-        selectTheme();
-        var awake = [] as Array<Number>;
-        var asleep = [] as Array<Number>;
-        var held = [] as Array<Number>;
-        var marks = [] as Array<Number>;
-        var suns = [] as Array<Number>;
+    //! The theme colours always-on draws: themselves, or lightened.
+    function boosted() as Array<Number> {
+        var amount = BOOST_AMOUNTS[StatMap.boost];
+        if (amount == 0.0d) {
+            return colours;
+        }
+        var out = new [THEME_COLOURS] as Array<Number>;
+        for (var i = 0; i < THEME_COLOURS; i++) {
+            out[i] = HueSplit.lighten(colours[i], amount);
+        }
+        return out;
+    }
+
+    //! Point the shared tables at awake's or always-on's set. Cheap — four
+    //! references — and called before every frame, so the renderer draws
+    //! whichever mode the view is in with no test of its own.
+    function useMode(lowPower as Boolean) as Void {
+        dimOf = lowPower ? dimAsleep : dimAwake;
+        softMarkOf = lowPower ? softAsleep : softAwake;
+        sunOf = lowPower ? sunAsleep : sunAwake;
+        timeOverlap = lowPower ? timeAsleep : timeAwake;
+    }
+
+    //! Marks, sun dots and the unknown-hour tier for one set of colours.
+    function sharedFrom(source as Array<Number>) as Array<Array<Number> > {
         var soft = [] as Array<Number>;
-        var beyond = [] as Array<Number>;
+        var suns = [] as Array<Number>;
         var faint = [] as Array<Number>;
         for (var ring = 0; ring < StatMap.RINGS; ring++) {
-            var colour = themeColour(ring);
-            marks.add(mix(MARKER, colour, MARKER_TINT));
+            var colour = source[ring % THEME_COLOURS];
             soft.add(mix(MARKER, colour, SOFT_MARK_TINT));
             for (var slot = 0; slot < SUN_HUES.size(); slot++) {
                 suns.add(mix(SUN_HUES[slot], colour, SUN_TINT));
             }
             faint.add(scale(colour, WEAK_UNKNOWN));
+        }
+        var both = source[StatMap.TIME_RING % THEME_COLOURS];
+        var split = HueSplit.pair(both, TIME_SPLIT_DEGREES, TIME_SPLIT_CHROMA);
+        return [faint, soft, suns,
+                [TIME_UNLIT, split[0], split[1], both] as Array<Number>]
+               as Array<Array<Number> >;
+    }
+
+    function build() as Void {
+        selectTheme();
+        bright = boosted();
+        var awake = [] as Array<Number>;
+        var asleep = [] as Array<Number>;
+        var held = [] as Array<Number>;
+        var marks = [] as Array<Number>;
+        var beyond = [] as Array<Number>;
+        for (var ring = 0; ring < StatMap.RINGS; ring++) {
+            var colour = themeColour(ring);
+            marks.add(mix(MARKER, colour, MARKER_TINT));
             beyond.add(mix(MARKER, colour, OVER_TINT));
-            var lifted = scale(colour, LIFT);
             awake.add(scale(colour, WEAK_ACTIVE));
             awake.add(colour);
+            // Always-on from the boosted colour, which is the colour itself
+            // while the boost is off.
+            var lifted = scale(bright[ring % THEME_COLOURS], LIFT);
             asleep.add(scale(lifted, WEAK_ALWAYS_ON));
             asleep.add(lifted);
-            // Unfilled from the awake colour, because matching the awake field
-            // is the whole point of this tier and that must hold whatever LIFT
-            // does. Filled from the lifted one, because this table draws in
-            // always-on — no dot is lit while the fills are held back, but a
-            // table that is merely unreachable should still be right.
-            held.add(scale(colour, WEAK_HELD_BACK));
+            // Unfilled at the awake tier, because matching the awake field is
+            // the whole point of this tier: with the boost off it is the awake
+            // field exactly, and with it on the same field lightened. Filled
+            // from the lifted one, because this table draws in always-on — no
+            // dot is lit while the fills are held back, but a table that is
+            // merely unreachable should still be right.
+            held.add(scale(lifted, WEAK_HELD_BACK));
             held.add(lifted);
         }
         active = awake;
         alwaysOn = asleep;
         heldBack = held;
         markerOf = marks;
-        sunOf = suns;
-        softMarkOf = soft;
         overOf = beyond;
-        dimOf = faint;
 
-        var both = themeColour(StatMap.TIME_RING);
-        var split = HueSplit.pair(both, TIME_SPLIT_DEGREES,
-                                  TIME_SPLIT_CHROMA);
-        timeOverlap = [TIME_UNLIT, split[0], split[1], both] as Array<Number>;
+        var day = sharedFrom(colours);
+        var night = (bright == colours) ? day : sharedFrom(bright);
+        dimAwake = day[0];
+        softAwake = day[1];
+        sunAwake = day[2];
+        timeAwake = day[3];
+        dimAsleep = night[0];
+        softAsleep = night[1];
+        sunAsleep = night[2];
+        timeAsleep = night[3];
+        // Awake until the view says otherwise, as these tables always were.
+        useMode(false);
 
+        rampActive = rampFrom(colours, 1.0);
+        rampAlwaysOn = rampFrom(bright, LIFT);
+    }
+
+    //! The temperature ramp through this set's three stops.
+    function rampFrom(source as Array<Number>, lift as Float) as Array<Number> {
         var ramp = [] as Array<Number>;
-        var rampLifted = [] as Array<Number>;
         // Hoisted: the stops are fixed for the whole ramp, so looking them up
         // per step would pay for the indirection 32 times over for nothing.
-        var cold = themeColour(stops[0]);
-        var mid = themeColour(stops[1]);
-        var hot = themeColour(stops[2]);
+        var cold = scale(source[stops[0] % THEME_COLOURS], lift);
+        var mid = scale(source[stops[1] % THEME_COLOURS], lift);
+        var hot = scale(source[stops[2] % THEME_COLOURS], lift);
         for (var step = 0; step < RAMP_STEPS; step++) {
             var along = step.toFloat() / (RAMP_STEPS - 1);
-            var colour = (along <= 0.5)
+            ramp.add((along <= 0.5)
                 ? mix(cold, mid, along * 2.0)
-                : mix(mid, hot, (along - 0.5) * 2.0);
-            ramp.add(colour);
-            rampLifted.add(scale(colour, LIFT));
+                : mix(mid, hot, (along - 0.5) * 2.0));
         }
-        rampActive = ramp;
-        rampAlwaysOn = rampLifted;
+        return ramp;
     }
 
     //! Linear blend between two packed RGB colours.

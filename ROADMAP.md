@@ -86,6 +86,19 @@ source of truth. `docs/config-code.md` is the format.
   a public release. Still to prove: the phone accepts the code's `_` and `-` in an
   `alphaNumeric` field, and the release build holds the watchdog on the wrist.
 
+## Always-on boost
+
+Out-of-band. Waking looks far more vibrant than always-on because the watch turns its
+screen down there; the face already draws the awake colours. `alwaysOnBoost` (Normal,
+Bright, Brightest) draws always-on from the theme lightened in OKLCH instead, inside the
+10% budget by construction. A setting in all five places, config code version 3, and the
+configurator's preview and brightness figure.
+
+- [x] Watch: `HueSplit.lighten`, always-on tables from the lightened theme,
+  `Palette.useMode()`, the menu row and phone-side setting, code version 3
+- [x] Configurator: the option in Details, the always-on preview and its figure
+- [ ] On the wrist: compare Normal, Bright and Brightest; tune `BOOST_AMOUNTS`
+
 ## Epix time ring
 
 Out-of-band. The Epix stops drawing hands out of the dot field and tells the time in its

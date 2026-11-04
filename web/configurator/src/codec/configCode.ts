@@ -4,12 +4,11 @@
 // tools/testdata/config-codes.json, beside tools/simctl/configcode.py and
 // source/settings/ConfigCode.mc.
 
-/** The version this page writes; it reads version 1 too, filling version 2's fields with their defaults. */
-export const VERSION = 2;
-export const LENGTH = 33;
-const PAYLOAD = 31;
-const LENGTH_V1 = 28;
-const PAYLOAD_V1 = 26;
+/** The version this page writes; it reads versions 1 and 2 too, filling what each lacks with the defaults. */
+export const VERSION = 3;
+export const LENGTH = 34;
+/** Bytes per version, the CRC included; the payload is two fewer. */
+const LENGTHS: Record<number, number> = { 1: 28, 2: 33, 3: LENGTH };
 const TEMP_OFFSET = 20;
 
 export const THEME_CUSTOM = 99;
@@ -18,6 +17,8 @@ export const TEMP_MIN = -20;
 export const TEMP_MAX = 50;
 /** Source.COUNT - 1. The two time styles, 14 and 15, are the top. */
 export const SOURCE_MAX = 15;
+/** Always-on brightness: Off, Bright, Brightest. */
+export const BOOST_MAX = 2;
 
 export interface Config {
   theme: number;
@@ -32,6 +33,8 @@ export interface Config {
   ring4: number;
   /** The 51mm's centre ball. Every watch carries it; only the 51mm draws it. */
   ring5: number;
+  /** Always-on drawn brighter than awake: 0 Off, 1 Bright, 2 Brightest. Version 3. */
+  alwaysOnBoost: number;
   tempAheadLow: number;
   tempAheadHigh: number;
   /** Five 0xRRGGBB colours, outermost ring first; the fifth is the 51mm's centre ball. */
@@ -67,6 +70,7 @@ export const DEFAULT_CONFIG: Config = {
   ring4: 3,
   // StatMap.RING_DEFAULTS[4]: the 51mm's centre ball shows Steps.
   ring5: 0,
+  alwaysOnBoost: 0,
   tempAheadLow: 0,
   tempAheadHigh: 45,
   customColours: [0xe879f9, 0xb8d64b, 0x7fd4ff, 0xff6b5b, 0xe5b33a],
@@ -97,7 +101,7 @@ export function problems(config: Config): string[] {
   if (!(THEME_IDS as readonly number[]).includes(config.theme)) {
     out.push(`theme ${config.theme} is not one of ${THEME_IDS.join(", ")}`);
   }
-  for (const [key, high] of [...ENUM_FIELDS, ["ring5", SOURCE_MAX] as const]) {
+  for (const [key, high] of [...ENUM_FIELDS, ["ring5", SOURCE_MAX] as const, ["alwaysOnBoost", BOOST_MAX] as const]) {
     if (!isByteInRange(config[key], high)) out.push(`${key} ${config[key]} is outside 0..${high}`);
   }
   for (const key of ["tempAheadLow", "tempAheadHigh"] as const) {
@@ -138,9 +142,10 @@ export function toBytes(config: Config): Uint8Array {
   bytes[26] = config.ring5;
   putColour(config.customColours[4], 27);
   bytes[30] = (cold >> 2) | ((mid >> 2) << 1) | ((hot >> 2) << 2);
-  const crc = crc16(bytes, PAYLOAD);
-  bytes[31] = crc >> 8;
-  bytes[32] = crc & 0xff;
+  bytes[31] = config.alwaysOnBoost;
+  const crc = crc16(bytes, LENGTH - 2);
+  bytes[LENGTH - 2] = crc >> 8;
+  bytes[LENGTH - 1] = crc & 0xff;
   return bytes;
 }
 
@@ -197,17 +202,17 @@ export function decode(code: string): Config {
   const bytes = fromText(code);
   if (bytes.length === 0) throw new ConfigCodeError("empty");
   const version = bytes[0];
-  const length = version === VERSION ? LENGTH : version === 1 ? LENGTH_V1 : 0;
-  if (!length) throw new ConfigCodeError(`version ${version} is not one this page reads (1, 2)`);
+  const length = LENGTHS[version] ?? 0;
+  if (!length) throw new ConfigCodeError(`version ${version} is not one this page reads (1, 2, 3)`);
   if (bytes.length !== length) throw new ConfigCodeError(`${bytes.length} bytes, a version-${version} code is ${length}`);
-  const payload = version === VERSION ? PAYLOAD : PAYLOAD_V1;
+  const payload = length - 2;
   if (crc16(bytes, payload) !== ((bytes[payload] << 8) | bytes[payload + 1])) {
     throw new ConfigCodeError("checksum does not match: the code is damaged or mistyped");
   }
   const ramp = bytes[25];
   if (ramp >> 6) throw new ConfigCodeError("the ramp byte sets its reserved top bits");
-  // Version 2's fields, or their defaults for a version-1 code.
-  const v2 = version === VERSION;
+  // Each later version's fields, or their defaults for an older code.
+  const v2 = version >= 2;
   const high = v2 ? bytes[30] : 0;
   if (high >> 3) throw new ConfigCodeError("the ramp high byte sets its reserved bits");
   const colour = (at: number) => (bytes[at] << 16) | (bytes[at + 1] << 8) | bytes[at + 2];
@@ -216,6 +221,7 @@ export function decode(code: string): Config {
     theme: bytes[1],
     ...Object.fromEntries(ENUM_FIELDS.map(([key], i) => [key, bytes[2 + i]])),
     ring5: v2 ? bytes[26] : DEFAULT_CONFIG.ring5,
+    alwaysOnBoost: version >= 3 ? bytes[31] : DEFAULT_CONFIG.alwaysOnBoost,
     tempAheadLow: bytes[11] - TEMP_OFFSET,
     tempAheadHigh: bytes[12] - TEMP_OFFSET,
     customColours: [colour(13), colour(16), colour(19), colour(22), v2 ? colour(27) : DEFAULT_CONFIG.customColours[4]],
