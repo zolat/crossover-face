@@ -2431,8 +2431,48 @@ module MatrixTest {
             distinct |= 1 << (offset / DotGrid.ARM_VALUES);
         }
         logger.debug("orientations used: " + distinct);
-        Test.assertEqualMessage(distinct, (1 << DotGrid.ORIENTATIONS) - 1,
-            "the field should carry every orientation");
+        // Rows 1-3: the three tilted crosses. Row 0, the upright one, is
+        // Upright mode's alone — no hour slot is centred near an axis.
+        Test.assertEqualMessage(distinct, 0xE,
+            "the turned field should carry the three tilted crosses and " +
+            "never the upright one");
+        return true;
+    }
+
+    //! Follow the rings changes a cross's angle on the hour marks and nowhere
+    //! else: every dot in a 30-degree hour slot takes the same cross, each
+    //! mark changes it, and the pattern repeats every three hours. The slot is
+    //! found with real trig — positionOf is an approximation, and the
+    //! threshold comparisons are the thing under test.
+    (:test)
+    function crossAngleChangesOnlyAtHourMarks(logger as Logger) as Boolean {
+        Config.reload();
+        DotGrid.build();
+        var bySlot = new [12] as Array<Number>;
+        for (var h = 0; h < 12; h++) {
+            bySlot[h] = -1;
+        }
+        for (var i = 0; i < DotGrid.count; i++) {
+            var degrees = Math.toDegrees(Math.atan2(DotGrid.ys[i].toFloat(),
+                DotGrid.xs[i].toFloat()));
+            if (degrees < 0) {
+                degrees += 360;
+            }
+            var slot = (degrees / 30).toNumber() % 12;
+            if (bySlot[slot] < 0) {
+                bySlot[slot] = DotGrid.armOf[i];
+            }
+            Test.assertEqualMessage(DotGrid.armOf[i], bySlot[slot],
+                "dot " + i + " takes a different cross from the rest of its " +
+                "hour slot " + slot);
+        }
+        for (var h = 0; h < 12; h++) {
+            Test.assertMessage(bySlot[h] != bySlot[(h + 1) % 12],
+                "the cross does not change at the mark after slot " + h);
+            Test.assertEqualMessage(bySlot[h], bySlot[(h + 3) % 12],
+                "slots " + h + " and " + (h + 3) + " should match by symmetry");
+        }
+        logger.debug("crosses by slot: " + bySlot);
         return true;
     }
 

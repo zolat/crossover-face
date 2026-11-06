@@ -205,12 +205,14 @@ against ~570 of squares, *and* costs less light. The finer grain reads as instru
 texture rather than a chunky LED panel.
 
 **Each cross is turned to follow the circle it sits on** — one stroke pointing out from the
-centre, the other across it. Crosses read as `+` on the axes and `×` on the diagonals, which
-gives the field a radial grain matching the rings it is drawing. It is a setting (see
+centre, the other across it, as near as a 5px cross can — `×` on the diagonals, tilting
+one way then the other through each hour slot — which gives the field a radial grain matching the rings it is drawing. It is a setting (see
 **Dot rotation**); upright, the field reads as a plain lattice with the rings drawn on it.
 
-A cross has 90° rotational symmetry, so four orientations at 22.5° apart cover every
-distinct one — and at 5px that is about all the resolution there is anyway. Each dot's
+A cross has 90° rotational symmetry, and at 5px there are exactly four distinct ones: 0°,
+26.6°, 45° and 63.4°. The turned field changes angle **on the hour marks** — each 30° hour
+slot takes the cross nearest its centre, so it uses the three tilted ones and never the
+upright — which puts every change inside an hour block's gutter. Each dot's
 orientation is precomputed in `DotGrid` alongside its ring and position, so the loop just
 indexes a table (`DotGrid.ARMS`). Arms are scaled so the larger component is always half a
 dot, keeping every orientation the same visual weight; scaling by true length would make

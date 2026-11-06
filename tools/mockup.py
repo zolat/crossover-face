@@ -893,8 +893,12 @@ ARMS = [(2, 0, 0, 2), (2, 1, -1, 2), (2, 2, -2, 2), (1, 2, -2, 1)]
 
 
 def orientation_at(dx: int, dy: int) -> int:
-    """Which ARMS entry aligns a cross with the circle it sits on."""
-    return int(math.degrees(math.atan2(dy, dx)) / 22.5 + 0.5) % len(ARMS)
+    """Which ARMS entry aligns a cross with the circle it sits on.
+
+    Mirrors DotGrid.orientationFor: one cross per 30-degree hour slot, changing on the
+    hour marks, rows 1-3 only. The signed angle mod 90 carries the mirror rule.
+    """
+    return 1 + int((math.degrees(math.atan2(dy, dx)) % 90.0) // 30.0)
 
 
 def draw_dot(draw, left: int, top: int, colour, arm=ARMS[0]) -> None:

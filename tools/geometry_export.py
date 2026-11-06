@@ -36,7 +36,7 @@ BLOCK_END = "    // --- end of generated counts ---"
 
 PITCH, DOT = mockup.PITCH, mockup.DOT
 # DotGrid's orientation thresholds, verbatim.
-TAN_11_25, TAN_33_75, TAN_56_25, TAN_78_75 = 0.198912, 0.668179, 1.496606, 5.027339
+TAN_30, TAN_60 = 0.577350, 1.732051
 ARMS = [(2, 0, 0, 2), (2, 1, -1, 2), (2, 2, -2, 2), (1, 2, -2, 1)]
 ORIENTATIONS = 4
 
@@ -56,20 +56,16 @@ def orientation_for(dx: int, dy: int) -> int:
     """DotGrid.orientationFor, as an ARMS row rather than a flat offset."""
     ax, ay = abs(dx), abs(dy)
     if ax == 0:
-        step = 0
+        step = 3
     else:
         ratio = ay / ax
-        if ratio < TAN_11_25:
-            step = 0
-        elif ratio < TAN_33_75:
+        if ratio < TAN_30:
             step = 1
-        elif ratio < TAN_56_25:
+        elif ratio < TAN_60:
             step = 2
-        elif ratio < TAN_78_75:
-            step = 3
         else:
-            step = 0
-    if step != 0 and ((dx < 0) != (dy < 0)):
+            step = 3
+    if (dx < 0) != (dy < 0):
         step = ORIENTATIONS - step
     return step
 

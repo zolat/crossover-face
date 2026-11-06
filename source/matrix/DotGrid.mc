@@ -79,10 +79,13 @@ module DotGrid {
     //! Arm offsets for each orientation a cross can take, as
     //! [armA x, armA y, armB x, armB y] half-lengths.
     //!
-    //! A cross has 90-degree rotational symmetry, so four steps of 22.5 cover
-    //! every distinct orientation. At this dot size that is also about all the
-    //! resolution there is — a 5px cross rotated less than ~22 degrees looks
-    //! identical. Offsets are scaled so the larger component is always half a
+    //! A cross has 90-degree rotational symmetry, and with half-arms of two
+    //! pixels these four are every distinct cross there is: 0, 26.6, 45 and
+    //! 63.4 degrees. Upright draws row 0 alone. Turned, the field changes
+    //! angle on the hour marks — three hour slots a quadrant, one cross each,
+    //! the nearest to the slot's centre (15, 45, 75) — so it uses rows 1-3 and
+    //! never row 0, and every hour block draws a single cross with the change
+    //! falling in its gutter. Offsets are scaled so the larger component is always half a
     //! dot, which keeps every orientation the same visual weight; scaling by
     //! true length instead would make the diagonal ones visibly shorter.
     //! Flat, four values per orientation, rather than an array of arrays.
@@ -260,12 +263,11 @@ module DotGrid {
     //! Radians per turn, for the arctangent approximation below.
     const FULL_TURN = 6.2831853;
 
-    //! Tangents of the boundaries between orientations — 11.25, 33.75, 56.25
-    //! and 78.75 degrees. Above the last one the cross is upright again.
-    const TAN_11_25 = 0.198912;
-    const TAN_33_75 = 0.668179;
-    const TAN_56_25 = 1.496606;
-    const TAN_78_75 = 5.027339;
+    //! Tangents of the boundaries between orientations, measured from the
+    //! horizontal: 30 and 60 degrees, which with the axes are the hour marks.
+    //! No dot lies on either line — |y|/|x| is rational — so there are no ties.
+    const TAN_30 = 0.577350;
+    const TAN_60 = 1.732051;
 
     //! Which ARMS entry aligns a dot's cross with the circle it sits on: one
     //! arm pointing out from the centre, the other across it.
@@ -282,17 +284,15 @@ module DotGrid {
         var ay = dy.abs();
         var step;
         if (ax == 0) {
-            step = 0;                       //! straight up: 90 == 0 for a cross
+            step = 3;                       //! the 60-90 slot, as ratio -> inf
         } else {
             var ratio = ay.toFloat() / ax;
-            if (ratio < TAN_11_25)      { step = 0; }
-            else if (ratio < TAN_33_75) { step = 1; }
-            else if (ratio < TAN_56_25) { step = 2; }
-            else if (ratio < TAN_78_75) { step = 3; }
-            else                        { step = 0; }
+            if (ratio < TAN_30)      { step = 1; }
+            else if (ratio < TAN_60) { step = 2; }
+            else                     { step = 3; }
         }
         // Mirror for the other diagonal: the sign of x*y flips the tilt.
-        if (step != 0 && ((dx < 0) != (dy < 0))) {
+        if ((dx < 0) != (dy < 0)) {
             step = ORIENTATIONS - step;
         }
         return step * ARM_VALUES;   //! offset straight into ARMS
@@ -863,16 +863,13 @@ module DotGrid {
 
                 var ratio = vFloat / uFloat;
                 var step;
-                if (ratio < TAN_11_25)      { step = 0; }
-                else if (ratio < TAN_33_75) { step = 1; }
-                else if (ratio < TAN_56_25) { step = 2; }
-                else if (ratio < TAN_78_75) { step = 3; }
-                else                        { step = 0; }
+                if (ratio < TAN_30)      { step = 1; }
+                else if (ratio < TAN_60) { step = 2; }
+                else                     { step = 3; }
                 // A cross tilts one way in the quadrants where x and y
                 // share a sign, the other way where they differ.
                 var aligned = step * ARM_VALUES;
-                var mirrored = (step == 0) ? 0
-                             : (ORIENTATIONS - step) * ARM_VALUES;
+                var mirrored = (ORIENTATIONS - step) * ARM_VALUES;
                 armOf[topLeft] = aligned;       armOf[bottomRight] = aligned;
                 armOf[topRight] = mirrored;     armOf[bottomLeft] = mirrored;
             }
