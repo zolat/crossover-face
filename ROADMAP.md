@@ -1,8 +1,8 @@
 # Roadmap
 
-**Current:** 51mm fifth ring complete through Phase 6.1: five rings on the Epix 2 Pro 51mm,
-set from the watch or the configurator through the version-2 config code. Queued: Phase
-4.2, a time-colours control in the configurator.
+**Current:** Epix time ring Phase 7 complete: hour marks and a seconds dot on the time
+ring, set from the watch or the configurator through the version-4 config code. Queued:
+Phase 4.2, a time-colours control in the configurator.
 
 ## Out-of-band features
 
@@ -176,6 +176,21 @@ untouched.
   ring5 having no phone-side setting), a fifth colour row and the centre colour as a ramp
   stop; Randomise colours draws five hues. 195/195 on all five, `make web-test` green with
   six new browser checks, simctl OK.
+- [x] Phase 7 — hour marks and a seconds dot, each Off by default. Hour marks: a solid dot
+  at each hour on the ring's outer edge in the colour the ring has there, the current hour
+  mixed toward white (`HOUR_MARK_TINT` 0.6, chosen on `14i-time-marks-tint.png` over 0.45
+  and 0.75); awake and always-on. Seconds dot: solid, inner edge, awake only, riding the
+  time ring's empty mark slot so the print and the gate carry it unchanged. A second that
+  moves nothing else is a tick that repaints one dot, not the ring (`painted` 1, `erased`
+  1). Set from two watch-menu rows (time-ring watches only) or config code v4 (36 bytes,
+  48 characters; v1–v3 read with both Off), not Garmin Connect. Two stack overflows in the
+  test runner moved the hour-mark search and the tick to `drawAt()`'s own level. **Watchdog,
+  measured in the simulator:** on the 454 the first frame with both on tripped every time
+  (twice out of two) while either alone ran, so the twelve hour-mark searches moved out of
+  the frame into `onShow()` / `onSettingsChanged()` (`TimeRing.prepare()`); after that the
+  454 ran twice and the 416 once with both on, the seconds dot moving each second. Not a
+  headroom probe: the 454's first frame is still close to its cliff. 213/213 on all five,
+  `make web-test` green with nine new browser checks, simctl OK, `make package` built 8/8.
 
 
 ## Epix 2 family

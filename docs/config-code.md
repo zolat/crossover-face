@@ -69,7 +69,25 @@ The always-on boost draws always-on from a lighter copy of the theme (`Palette.B
 `HueSplit.lighten`), to make up for the watch turning its screen down in always-on.
 
 **Version-1 and version-2 codes are still read**, with the boost Off, plus version 1's
-defaults above. Everything writes version 3.
+defaults above.
+
+## v4
+
+36 bytes, **48 characters**. Version 3's 32 bytes of payload in place — byte 0 is now `4` —
+then two appended fields, then the CRC:
+
+    byte  field              stored as                      valid
+    32    timeHourMarks      Off, On                        0..1
+    33    timeSeconds        Off, On                        0..1
+    34    CRC-16             big-endian, over bytes 0..33
+
+The time ring's extras (`TimeRing`): a solid dot at each hour on its outer edge, the
+current hour's lifted toward white, and a seconds dot on its inner edge, awake only. Every
+watch carries both, as every watch carries ring 5; only one with a time ring draws them.
+Neither is in `settings.xml` — the watch menu and this code set them.
+
+**Version-1 to version-3 codes are still read**, with both extras Off, plus each older
+version's defaults above. Everything writes version 4.
 
 The CRC is CRC-16/CCITT-FALSE: polynomial `0x1021`, initial value `0xFFFF`, no reflection,
 no final XOR. `"123456789"` checks to `0x29B1`.
@@ -85,7 +103,7 @@ A ramp stop is an index into the theme's colours, exactly as `Palette.RAMP_STOPS
 - Strip whitespace. Accept either base64 alphabet (`-_` or `+/`) and optional `=` padding,
   because a code pasted through a phone's clipboard or an e-mail can come back either way.
 - Reject — apply nothing — on a wrong length for the version, a bad CRC, an unknown
-  version (anything but 1, 2 or 3), or any field outside its range. A code is all-or-nothing: a half-applied one
+  version (anything but 1 to 4), or any field outside its range. A code is all-or-nothing: a half-applied one
   would leave the wearer with a face that matches neither what they had nor what they
   pasted.
 - Ring sources are range-checked only. Which ring may carry which source, and the retired

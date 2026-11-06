@@ -24,6 +24,10 @@ class CrossoverApp extends Application.AppBase {
     function onSettingsChanged() as Void {
         // Config.reload() also invalidates the authoritative buffered frame.
         Config.reload();
+        // A setting turned on from the phone reaches onUpdate with no onShow()
+        // in between, so the hour marks are placed here too. A no-op once they
+        // are: they depend on the lattice, which no setting moves.
+        TimeRing.prepare();
         // A pasted config code wins over list fields saved alongside it, and
         // either way the code field is rewritten to what the face now draws.
         ConfigCode.sync();

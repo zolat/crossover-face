@@ -98,6 +98,9 @@ class CrossoverView extends WatchUi.WatchFace {
     //! becoming visible again does not make its pixels stale.
     function onShow() as Void {
         DotGrid.ensureBuilt();
+        // The time ring's hour marks are placed here rather than in the first
+        // frame, which has no budget left for them on the 454.
+        TimeRing.prepare();
         startReveal();
     }
 

@@ -216,9 +216,45 @@ Things that are load-bearing:
   definition the tests pin. It records numeral colours for the date like the other loops, and
   it **returns** its dot count for `drawAt()` to add to its local `drew`: `painted` is published
   once a draw, so an increment from outside is overwritten. `drawAt()` takes no new local for
-  any of this — its frame is at the stack's limit — so it asks `Source.isTime()` three times.
-- **It opts out of the delta**, like a block ring, and is repainted whole when its print
-  moves: once a minute.
+  any of this — its frame is at the stack's limit — so it asks `Source.isTime()` four times.
+- **Its span opts out of the delta**, like a block ring, and the ring is repainted whole
+  when its span moves: once a minute. A frame where only the seconds dot moved is a
+  **tick** instead (below).
+
+**Two extras, each Off by default** (`timeHourMarks`, `timeSeconds`; the watch menu's
+*Hour marks* and *Seconds dot* rows, only where `HandStyle.TIME_RING`; config code v4; not
+in `settings.xml`, like the time style). Both are solid dots, the face's one way of calling
+a position out:
+
+- **Hour marks** sit on the ring's **outer** edge (`DotGrid.nearDot` with `SUN_OUTWARD`,
+  cached in `TimeRing.hourDotsFor` by `DotGrid.generation`), each solid in the colour its
+  dot was just painted — density alone. The current hour, the one the hour's fill last
+  passed (`TimeRing.currentHour`, nudged so 10/12 is not read as nine), is mixed toward
+  white by `Palette.HOUR_MARK_TINT` 0.6, chosen on `14i-time-marks-tint.png`. Awake and
+  always-on; the budget test prices all twelve in white. In the split style a mark the
+  minute has passed is white already, so the current hour has no headroom there.
+- **The seconds dot** sits on the **inner** edge (`SUN_INWARD`), awake only, and **rides
+  the time ring's mark slot**: `StatMap.fillSecondMark()` writes `second / 60` into
+  `markers[TIME_RING]` after `fillMarkers()`, so it is already in the ring print and
+  `drawAt`'s parameters, `PER_RING` and `FrameGate` did not change. `drawAt` places it with
+  `TimeRing.secondDotFor` and the ordinary mark pass draws it in `softMarkOf`.
+- **A tick repaints one dot.** When the time ring's span equals `lastFrom/lastTo` and its
+  key is stable, `drawAt` takes the delta branch for it: the mark erase blacks the old
+  seconds cell and `TimeRing.repaintOne()` puts that one cross back (`painted` 1,
+  `erased` 1 — `aSecondsTickRepaintsOneDot`). Opposite edges are what make this safe: the
+  seconds dot never lands on an hour mark (`theSecondsDotNeverLandsOnAnHourMark`), so a tick
+  never has to redraw one.
+- **Both run from `drawAt()`'s own level, and that is load-bearing.** The hour-mark search
+  called from inside `TimeRing.draw()`, and the tick dispatched through it, each overflowed
+  the test runner's stack: `draw()`'s frame is wide. `draw()` only records the ring as
+  pending; `TimeRing.drawPendingMarks()` runs beside `drawSuns()` at the depth the sun dots'
+  search already proved, and `drawAt` calls `repaintOne()` in `draw()`'s place.
+- **The hour marks are placed outside any frame.** `TimeRing.prepare()` runs the twelve
+  searches from the view's `onShow()` and the app's `onSettingsChanged()`, whether or not
+  the marks are on (the answer depends only on the lattice). Measured on the 454: a first
+  frame with both extras on, paying the twelve searches plus the seconds dot's one, tripped
+  the watchdog every time, and either extra alone did not. Do not move them back into
+  `drawAt`.
 - **The time survives always-on and the held-back mode** — `StatMap.fillNoSpans()` keeps a
   time ring's live span. Overlap at 11:59 measures 4.22% always-on on the 454; the split's
   white is the brighter, and `theTimeRingFitsTheAlwaysOnBudget` prices the brightest colour
@@ -885,9 +921,14 @@ The menu republishes after each choice. Three things are easy to break:
   applies, and resets those two. In a config vector the two new fields are appended
   (`FIELD_RING5` 19, `FIELD_COLOUR5` 20), so no version-1 index moved.
 - **Version 3 appends the always-on boost** (`alwaysOnBoost`, byte 31; 34 bytes, 46
-  characters; `FIELD_BOOST` 21). Version-1 and -2 codes read with the boost Off. The watch,
-  the web and the tooling always write version 3. `tools/testdata/config-codes.json` keeps
-  the older codes under `v1` and `v2`, decode-only.
+  characters; `FIELD_BOOST` 21). Version-1 and -2 codes read with the boost Off.
+- **Version 4 appends the time ring's extras** (`timeHourMarks`, `timeSeconds`, bytes 32
+  and 33; 36 bytes, 48 characters; `FIELD_HOUR_MARKS` 22, `FIELD_SECONDS` 23). Older codes
+  read with both Off. Every watch publishes what it stores, as with ring 5. The watch, the
+  web and the tooling always write version 4. `tools/testdata/config-codes.json` keeps the
+  older codes under `v1`, `v2` and `v3`, decode-only. `make push-config TO=watch`
+  canonicalises a pasted code to the newest version, so `simctl_test`'s pinned watch code
+  moves with every version.
 - **No colours can cross the always-on budget**: all-white measures 8.99% at 390 and 9.10%
   at 454 with every mark and sun dot. `anAllWhiteCustomThemeFitsTheAlwaysOnBudget` holds
   it, which is why the watch has no clamp. Raise the dot count or `LIFT` and that stops
@@ -914,10 +955,13 @@ it did not make, because whether a watch reads a file it never wrote is still un
 
 Stored values are **list indices**, so `resources/properties.xml`, `resources/settings/settings.xml`,
 `resources/strings/strings.xml`, the enums in `StatMap`/`Source`, and the label arrays in
-`source/settings/SettingsMenu.mc` all have to agree. Fifteen properties today: `theme`,
+`source/settings/SettingsMenu.mc` all have to agree. Seventeen properties today: `theme`,
 `handBacking`, `alwaysOnFill`, `alwaysOnBoost`, `dotRotation`, `showDate`, `dateOutline`, `ring1`–`ring5`,
-`tempAheadLow`, `tempAheadHigh`, `configCode` — `ring5` only in `properties.xml`, read on the
-454 alone and set from its on-device menu (see *One face, five watches*). `dotRotation` stores three values and offers two: the third, Upright +
+`timeHourMarks`, `timeSeconds`, `tempAheadLow`, `tempAheadHigh`, `configCode` — `ring5` only
+in `properties.xml`, read on the 454 alone and set from its on-device menu (see *One face,
+five watches*), and the two time-ring extras likewise, read only where there is a time ring;
+their configurator labels come from `strings.xml` through `face_schema_export.py`'s
+`timeRing.extras`. `dotRotation` stores three values and offers two: the third, Upright +
 date, is **retired** — `StatMap.load()` reads it as Upright, and `showDate`'s default of On
 keeps that wearer's date. Never give 2 a new meaning.
 

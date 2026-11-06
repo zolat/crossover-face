@@ -253,6 +253,23 @@ module TimeRing {
         return (hourEnd * HOURS + 0.001).toNumber() % HOURS;
     }
 
+    //! Find the hour marks' dots now, in a callback with a watchdog budget of
+    //! its own, so no frame has to. Called from the view's onShow() and after
+    //! a phone-side settings change, whether or not the marks are on: the
+    //! answer depends only on the lattice, and a setting turned on from the
+    //! phone reaches onUpdate with no onShow() in between.
+    //!
+    //! **Not optional on the 454.** Measured in the simulator, the first frame
+    //! with both extras on — a full draw, these twelve searches and the
+    //! seconds dot's one — tripped the watchdog every time, and either extra
+    //! alone did not. Out of the frame, the first frame pays one search.
+    function prepare() as Void {
+        if (HandStyle.TIME_RING) {
+            DotGrid.ensureBuilt();
+            hourDotsFor(StatMap.TIME_RING);
+        }
+    }
+
     //! The dot each hour's mark sits on: the one nearest the ring's outer edge
     //! inside the hour's window, the way the sunset dot is found. -1 for an
     //! hour no dot answers, which theHourMarksSitOnTheOuterEdge rules out.
