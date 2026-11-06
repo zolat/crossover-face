@@ -34,6 +34,12 @@ export function effectiveRings(config: Config, drawnHands: boolean, ringCount = 
 /** The time the preview shows: the forecasts' ten o'clock, at ten past. */
 export const SAMPLE_TIME = { hour: 10, minute: 10 };
 
+/** The second the preview's seconds dot shows, awake. */
+export const SAMPLE_SECOND = 42;
+
+/** TimeRing.currentHour(): the hour mark the hour's fill last passed. */
+export const currentHour = (hourEnd: number) => Math.trunc(Math.fround(hourEnd * 12 + 0.001)) % 12;
+
 /** ClockData.timeFractions(): the hour's and the minute's ends, in turns. */
 export function timeFractions(hour: number, minute: number): [number, number] {
   const withinHour = minute / 60;

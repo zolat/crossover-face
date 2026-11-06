@@ -282,6 +282,10 @@ export function mountApp(root: HTMLElement, store: Store, devices: Device[]) {
         select(names[ring], ringOptions(ring), rings[ring], (value) => set({ [key]: value }),
           h("span", { class: "sw", style: `background:var(--r${ring + 1})`, "aria-hidden": "true" })))),
       timed ? h("p", { class: "note" }, "This watch tells the time in its outer ring. The preview shows ten past ten.") : null,
+      // The time ring's extras: only a watch that has one draws them, as only it has the rows.
+      ...(timed ? schema.timeRing.extras.map((extra) =>
+        choices(extra.title, extra.options, config[extra.key], (value) => set({ [extra.key]: Number(value) }),
+          extra.key === "timeSeconds" ? "Awake only: always-on updates once a minute." : undefined)) : []),
       rings.some((source) => source === TEMP_HOURS) ? tempAhead(config) : null,
       h("h2", {}, "Details"),
       // Only where there are hands to back; a watch with none ignores the setting.

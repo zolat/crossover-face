@@ -603,6 +603,7 @@
     "MARKER": 16777215,
     "MARKER_TINT": 0.55,
     "SOFT_MARK_TINT": 0.85,
+    "HOUR_MARK_TINT": 0.6,
     "OVER_TINT": 0.7,
     "SUN_TINT": 0.7,
     "BACKING_WHITE": 16777215,
@@ -677,6 +678,36 @@
       "unlit": 3815994
     },
     "splitDegrees": 60.0,
-    "splitChroma": 0.08
+    "splitChroma": 0.08,
+    "extras": [
+      {
+        "key": "timeHourMarks",
+        "title": "Hour marks",
+        "options": [
+          {
+            "value": 0,
+            "label": "Off"
+          },
+          {
+            "value": 1,
+            "label": "On"
+          }
+        ]
+      },
+      {
+        "key": "timeSeconds",
+        "title": "Seconds dot",
+        "options": [
+          {
+            "value": 0,
+            "label": "Off"
+          },
+          {
+            "value": 1,
+            "label": "On"
+          }
+        ]
+      }
+    ]
   }
 }

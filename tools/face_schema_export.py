@@ -113,7 +113,7 @@ def palette() -> dict:
     points = int(_number(source, "RAMP_POINTS"))
     factors = {name: _number(source, name) for name in (
         "WEAK_ACTIVE", "WEAK_ALWAYS_ON", "WEAK_HELD_BACK", "WEAK_UNKNOWN", "LIFT",
-        "MARKER", "MARKER_TINT", "SOFT_MARK_TINT", "OVER_TINT", "SUN_TINT",
+        "MARKER", "MARKER_TINT", "SOFT_MARK_TINT", "HOUR_MARK_TINT", "OVER_TINT", "SUN_TINT",
         "BACKING_WHITE", "BACKING_DARK", "RAMP_STEPS")}
     factors["MARKER"] = int(factors["MARKER"])
     factors["BACKING_WHITE"] = int(factors["BACKING_WHITE"])
@@ -173,6 +173,13 @@ def time_ring(kinds: dict[str, int], drawn: dict[str, str]) -> dict:
                     for name in ("LIT", "UNLIT")},
         "splitDegrees": _number(paint, "TIME_SPLIT_DEGREES"),
         "splitChroma": _number(paint, "TIME_SPLIT_CHROMA"),
+        # Not in settings.xml, like the styles, so their labels come from the strings the
+        # on-device menu names them by, in StatMap.TimeExtra order.
+        "extras": [{"key": key, "title": drawn[title],
+                    "options": [{"value": 0, "label": drawn["ExtraOff"]},
+                                {"value": 1, "label": drawn["ExtraOn"]}]}
+                   for key, title in (("timeHourMarks", "HourMarksTitle"),
+                                      ("timeSeconds", "SecondsDotTitle"))],
     }
 
 

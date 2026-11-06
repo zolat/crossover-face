@@ -11,6 +11,7 @@ const vectors = JSON.parse(
   valid: { name: string; config: Config; code: string }[];
   v1: { name: string; config: Config; code: string }[];
   v2: { name: string; config: Config; code: string }[];
+  v3: { name: string; config: Config; code: string }[];
   aliases: { name: string; code: string; same_as: string }[];
   invalid: { name: string; code: string }[];
 };
@@ -24,7 +25,7 @@ describe("config code", () => {
   for (const vector of vectors.valid) {
     it(`encodes ${vector.name}`, () => {
       expect(encode(vector.config)).toBe(vector.code);
-      expect(vector.code).toHaveLength(46);
+      expect(vector.code).toHaveLength(48);
     });
     it(`decodes ${vector.name}`, () => {
       expect(decode(vector.code)).toEqual(vector.config);
@@ -43,6 +44,15 @@ describe("config code", () => {
       expect(vector.code).toHaveLength(44);
       expect(decode(vector.code)).toEqual(vector.config);
       expect(decode(vector.code).alwaysOnBoost).toBe(0);
+    });
+  }
+
+  for (const vector of vectors.v3) {
+    it(`reads the version-3 code ${vector.name} with the time ring's extras off`, () => {
+      expect(vector.code).toHaveLength(46);
+      const config = decode(vector.code);
+      expect(config).toEqual(vector.config);
+      expect([config.timeHourMarks, config.timeSeconds]).toEqual([0, 0]);
     });
   }
 

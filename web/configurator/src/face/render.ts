@@ -11,9 +11,9 @@
 import type { Config } from "../codec/configCode";
 import { cellLit, cellOf, dimmed, gap, GLYPH_COLS, LINE_PERCENTS, origin, outline } from "./date";
 import type { Lattice } from "./lattice";
-import type { BuiltPalette } from "./palette";
+import { mix, type BuiltPalette } from "./palette";
 import { inSpan, readingFor } from "./samples";
-import { effectiveRings, isTime, SAMPLE_TIME, timeColours, timeFractions, timeSlot } from "./rings";
+import { currentHour, effectiveRings, isTime, SAMPLE_SECOND, SAMPLE_TIME, timeColours, timeFractions, timeSlot } from "./rings";
 import { isTemperatureRange, schema } from "./schema";
 
 export type Mode = "awake" | "alwaysOn";
@@ -159,6 +159,31 @@ export function render(image: ImageData, lattice: Lattice, palette: BuiltPalette
       }
     });
   }
+  // The time ring's extras (TimeRing): hour marks on its outer edge in the colour the
+  // ring has there, the current hour's mixed toward white, in every mode; and, awake,
+  // the seconds dot on its inner edge in the ring's soft mark colour.
+  const timeRing = schema.timeRing.ring;
+  const style = sources[timeRing];
+  if (isTime(style) && timeRing < sources.length) {
+    const tiers = palette.rings[timeRing];
+    const colours = timeColours(style, tiers);
+    if (config.timeHourMarks === 1) {
+      const current = currentHour(hourEnd);
+      for (let hour = 0; hour < HOURS; hour++) {
+        const dot = edgeDot(lattice, timeRing, hour / HOURS, true);
+        if (!dot) continue;
+        const colour = colours[timeSlot(style, dot.dx * dot.dx + dot.dy * dot.dy, timeEdgeSq[timeRing], dot.turn,
+                                        hourEnd, minuteEnd)];
+        solids.push({ dx: dot.dx, dy: dot.dy,
+                      colour: hour === current ? mix(schema.palette.MARKER, colour, schema.palette.HOUR_MARK_TINT) : colour });
+      }
+    }
+    if (config.timeSeconds === 1 && !alwaysOn) {
+      const dot = edgeDot(lattice, timeRing, SAMPLE_SECOND / 60, false);
+      if (dot) solids.push({ dx: dot.dx, dy: dot.dy, colour: tiers.softMark });
+    }
+  }
+
   const half = Math.floor(lattice.dot / 2);
   for (const solid of solids) {
     for (let y = -half; y <= half; y++) {
@@ -184,6 +209,47 @@ export function render(image: ImageData, lattice: Lattice, palette: BuiltPalette
       }
     }
   }
+}
+
+/**
+ * DotGrid.nearDot() with SUN_OUTWARD or SUN_INWARD, exactly: of the ring's dots inside
+ * the mark window round `at`, the one nearest the ring's outer (or inner) edge, first
+ * in scan order on a tie. Where the time ring's hour marks and seconds dot sit.
+ */
+export function edgeDot(lattice: Lattice, ring: number, at: number, outward: boolean):
+    { dx: number; dy: number; turn: number } | null {
+  // DotGrid.markerWidths(): a pitch of arc at the ring's float inner edge.
+  const floor = lattice.hubDots ? 0 : lattice.hub;
+  const thickness = (lattice.radius - floor) / lattice.rings;
+  const inner = Math.max(lattice.radius - (ring + 1) * thickness, thickness / 2);
+  const halfWindow = lattice.pitch / (2 * 2 * Math.PI * inner);
+  const score = outward ? lattice.radius * lattice.radius * 4 : 0;
+  let best: { dx: number; dy: number; turn: number } | null = null;
+  let bestOff = Infinity;
+  for (const [dx, dy, dotRing, , turn] of lattice.dots) {
+    if (dotRing !== ring || !inWindow(turn, windowAround(at, halfWindow))) continue;
+    const off = Math.abs(dx * dx + dy * dy - score);
+    if (off < bestOff) {
+      bestOff = off;
+      best = { dx, dy, turn };
+    }
+  }
+  return best;
+}
+
+/** nearDot()'s window test: inclusive at both ends, unlike a span. */
+function inWindow(turn: number, [from, to]: [number, number]): boolean {
+  return from > to ? turn >= from || turn <= to : turn >= from && turn <= to;
+}
+
+/** StatMap.windowAround(): [from, to] round `at`, wrapping past twelve; the whole turn when wider. */
+function windowAround(at: number, half: number): [number, number] {
+  if (2 * half >= 1) return [0, 1];
+  let from = at - half;
+  let to = at + half;
+  if (from < 0) from += 1;
+  if (to >= 1) to -= 1;
+  return [from, to];
 }
 
 /** Half an arm offset, rounded away from zero on both sides so a cross stays symmetric. */

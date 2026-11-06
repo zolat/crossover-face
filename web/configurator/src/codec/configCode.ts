@@ -4,11 +4,11 @@
 // tools/testdata/config-codes.json, beside tools/simctl/configcode.py and
 // source/settings/ConfigCode.mc.
 
-/** The version this page writes; it reads versions 1 and 2 too, filling what each lacks with the defaults. */
-export const VERSION = 3;
-export const LENGTH = 34;
+/** The version this page writes; it reads versions 1 to 3 too, filling what each lacks with the defaults. */
+export const VERSION = 4;
+export const LENGTH = 36;
 /** Bytes per version, the CRC included; the payload is two fewer. */
-const LENGTHS: Record<number, number> = { 1: 28, 2: 33, 3: LENGTH };
+const LENGTHS: Record<number, number> = { 1: 28, 2: 33, 3: 34, 4: LENGTH };
 const TEMP_OFFSET = 20;
 
 export const THEME_CUSTOM = 99;
@@ -19,6 +19,11 @@ export const TEMP_MAX = 50;
 export const SOURCE_MAX = 15;
 /** Always-on brightness: Off, Bright, Brightest. */
 export const BOOST_MAX = 2;
+/** The time ring's two extras, appended in version 4, each Off (0) or On (1). */
+export const EXTRA_FIELDS = [
+  ["timeHourMarks", 1],
+  ["timeSeconds", 1],
+] as const;
 
 export interface Config {
   theme: number;
@@ -35,6 +40,10 @@ export interface Config {
   ring5: number;
   /** Always-on drawn brighter than awake: 0 Off, 1 Bright, 2 Brightest. Version 3. */
   alwaysOnBoost: number;
+  /** The time ring's hour marks, on its outer edge. Only a time-ring watch draws them. Version 4. */
+  timeHourMarks: number;
+  /** The time ring's seconds dot, on its inner edge, awake only. Version 4. */
+  timeSeconds: number;
   tempAheadLow: number;
   tempAheadHigh: number;
   /** Five 0xRRGGBB colours, outermost ring first; the fifth is the 51mm's centre ball. */
@@ -71,6 +80,8 @@ export const DEFAULT_CONFIG: Config = {
   // StatMap.RING_DEFAULTS[4]: the 51mm's centre ball shows Steps.
   ring5: 0,
   alwaysOnBoost: 0,
+  timeHourMarks: 0,
+  timeSeconds: 0,
   tempAheadLow: 0,
   tempAheadHigh: 45,
   customColours: [0xe879f9, 0xb8d64b, 0x7fd4ff, 0xff6b5b, 0xe5b33a],
@@ -101,7 +112,8 @@ export function problems(config: Config): string[] {
   if (!(THEME_IDS as readonly number[]).includes(config.theme)) {
     out.push(`theme ${config.theme} is not one of ${THEME_IDS.join(", ")}`);
   }
-  for (const [key, high] of [...ENUM_FIELDS, ["ring5", SOURCE_MAX] as const, ["alwaysOnBoost", BOOST_MAX] as const]) {
+  for (const [key, high] of [...ENUM_FIELDS, ["ring5", SOURCE_MAX] as const, ["alwaysOnBoost", BOOST_MAX] as const,
+                             ...EXTRA_FIELDS]) {
     if (!isByteInRange(config[key], high)) out.push(`${key} ${config[key]} is outside 0..${high}`);
   }
   for (const key of ["tempAheadLow", "tempAheadHigh"] as const) {
@@ -143,6 +155,9 @@ export function toBytes(config: Config): Uint8Array {
   putColour(config.customColours[4], 27);
   bytes[30] = (cold >> 2) | ((mid >> 2) << 1) | ((hot >> 2) << 2);
   bytes[31] = config.alwaysOnBoost;
+  EXTRA_FIELDS.forEach(([key], i) => {
+    bytes[32 + i] = config[key];
+  });
   const crc = crc16(bytes, LENGTH - 2);
   bytes[LENGTH - 2] = crc >> 8;
   bytes[LENGTH - 1] = crc & 0xff;
@@ -203,7 +218,7 @@ export function decode(code: string): Config {
   if (bytes.length === 0) throw new ConfigCodeError("empty");
   const version = bytes[0];
   const length = LENGTHS[version] ?? 0;
-  if (!length) throw new ConfigCodeError(`version ${version} is not one this page reads (1, 2, 3)`);
+  if (!length) throw new ConfigCodeError(`version ${version} is not one this page reads (1, 2, 3, 4)`);
   if (bytes.length !== length) throw new ConfigCodeError(`${bytes.length} bytes, a version-${version} code is ${length}`);
   const payload = length - 2;
   if (crc16(bytes, payload) !== ((bytes[payload] << 8) | bytes[payload + 1])) {
@@ -222,6 +237,7 @@ export function decode(code: string): Config {
     ...Object.fromEntries(ENUM_FIELDS.map(([key], i) => [key, bytes[2 + i]])),
     ring5: v2 ? bytes[26] : DEFAULT_CONFIG.ring5,
     alwaysOnBoost: version >= 3 ? bytes[31] : DEFAULT_CONFIG.alwaysOnBoost,
+    ...Object.fromEntries(EXTRA_FIELDS.map(([key], i) => [key, version >= 4 ? bytes[32 + i] : DEFAULT_CONFIG[key]])),
     tempAheadLow: bytes[11] - TEMP_OFFSET,
     tempAheadHigh: bytes[12] - TEMP_OFFSET,
     customColours: [colour(13), colour(16), colour(19), colour(22), v2 ? colour(27) : DEFAULT_CONFIG.customColours[4]],

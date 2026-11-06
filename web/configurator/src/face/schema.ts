@@ -37,6 +37,8 @@ export interface PaletteFactors {
   MARKER: number;
   MARKER_TINT: number;
   SOFT_MARK_TINT: number;
+  /** The time ring's current-hour mark, mixed toward white. */
+  HOUR_MARK_TINT: number;
   OVER_TINT: number;
   SUN_TINT: number;
   SUN_HUES: number[];
@@ -80,6 +82,8 @@ export interface FaceSchema {
     /** Palette.TIME_SPLIT_*: how the overlap's hour and minute split from the ring's colour. */
     splitDegrees: number;
     splitChroma: number;
+    /** The two extras, hour marks then the seconds dot, as the watch's menu names them. */
+    extras: { key: "timeHourMarks" | "timeSeconds"; title: string; options: { value: number; label: string }[] }[];
   };
 }
 

@@ -362,12 +362,48 @@ try {
   check("…and draws it white", (await epixPixel()) === 0xffffff, (await epixPixel()).toString(16));
   await epix.screenshot({ path: join(shots, "desktop-epix-time.png") });
   await epix.select(".rings .ring:nth-child(1) select", "15");
+
+  // The time ring's extras: a row each, on a watch with a time ring only. A solid cell
+  // lights all 25 pixels of its 5x5 square; a cross lights 9.
+  const solidCellsNear = (turn) => epix.$eval("canvas.face", (canvas, cells) => {
+    const k = canvas.width / 416;
+    const { data } = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height);
+    const lit = (x, y) => {
+      const at = (Math.round(y * k) * canvas.width + Math.round(x * k)) * 4;
+      return data[at] + data[at + 1] + data[at + 2] > 0;
+    };
+    return cells.filter(([dx, dy]) => {
+      for (let y = -2; y <= 2; y++) for (let x = -2; x <= 2; x++) if (!lit(208 + dx + x, 208 + dy + y)) return false;
+      return true;
+    }).length;
+  }, grid416.dots.filter(([, , ring, , t]) => ring === 0 && Math.abs(t - turn) < 0.01));
+  const pick = (legend, label) => epix.$$eval("fieldset", (sets, legend, label) => {
+    const set = sets.find((f) => f.querySelector("legend")?.textContent.trim().startsWith(legend));
+    [...(set?.querySelectorAll("label") ?? [])].find((l) => l.textContent.trim() === label)?.click();
+  }, legend, label);
+  check("the Epix offers hour marks and a seconds dot",
+    (await epix.content()).includes("Hour marks") && (await epix.content()).includes("Seconds dot"));
+  check("…both off to start, so three o'clock has no mark", (await solidCellsNear(0.25)) === 0);
+  await pick("Hour marks", "On");
+  await new Promise((r) => setTimeout(r, 200));
+  check("hour marks on puts them in the code", decoded(await epixCode()).timeHourMarks === 1, await epixCode());
+  check("…and draws a solid mark at three o'clock", (await solidCellsNear(0.25)) === 1);
+  await pick("Seconds dot", "On");
+  await new Promise((r) => setTimeout(r, 200));
+  check("the seconds dot goes in the code too",
+    decoded(await epixCode()).timeSeconds === 1 && (await epixCode()).length === 48, await epixCode());
+  check("…and is drawn at :42", (await solidCellsNear(42 / 60)) === 1);
+  await epix.screenshot({ path: join(shots, "desktop-epix-time-extras.png") });
+  await pick("Hour marks", "Off");
+  await pick("Seconds dot", "Off");
   await epix.$$eval("label", (labels) => labels.find((l) => l.textContent.trim().startsWith("Instinct"))?.click());
   await new Promise((r) => setTimeout(r, 200));
   check("on the Crossover a stored time style shows as Off, as the watch reads it",
     (await epix.$eval(".rings .ring:nth-child(1) select", (el) => el.value)) === "8");
   check("…and four rings and four colours, with no centre ring",
     (await epix.$$(".rings .ring")).length === 4);
+  check("…and no time ring extras, since it has no time ring",
+    !(await epix.content()).includes("Hour marks"));
   await epixContext.close();
 
   // The 51mm has a fifth ring, its centre ball, and a fifth colour for it; both go in the
@@ -383,7 +419,7 @@ try {
   check("…which starts on Steps", decoded(await bigCode()).ring5 === 0, await bigCode());
   await big.select(".rings .ring:nth-child(5) select", "2");
   check("choosing the centre ring's source puts ring5 in the code", decoded(await bigCode()).ring5 === 2, await bigCode());
-  check("…in a version-3 code", (await bigCode()).length === 46, await bigCode());
+  check("…in a version-4 code", (await bigCode()).length === 48, await bigCode());
   await big.$$eval("label", (labels) => labels.find((l) => l.textContent.trim() === "Make your own")?.click());
   await new Promise((r) => setTimeout(r, 200));
   check("the colour builder has a fifth ring to colour on the 51mm", (await big.$$(".ring-tab")).length === 5);
