@@ -5282,40 +5282,48 @@ module MatrixTest {
 
     //! The on-watch picker for one end of the scale: every whole degree,
     //! coldest first, opening on the one in use.
+    //!
+    //! It was a 71-row Menu2 that cost ~12.7KB the moment it opened, and on the
+    //! 51mm that ran the face out of memory. The ceiling is what holds it to a
+    //! factory: a picker that holds its rows again costs ten times this.
     (:test)
     function theTemperaturePickerOpensOnTheValueInUse(logger as Logger)
             as Boolean {
         var before = System.getSystemStats().freeMemory;
-        var menu = temperatureMenu(Rez.Strings.TempAheadHighTitle,
+        var picker = new TemperaturePicker(Rez.Strings.TempAheadHighTitle,
             StatMap.PROPERTY_TEMP_AHEAD_HIGH, 45);
         var after = System.getSystemStats().freeMemory;
+        var factory = new TemperatureFactory();
         var count = StatMap.TEMP_AHEAD_MAX_C - StatMap.TEMP_AHEAD_MIN_C + 1;
 
-        Test.assertMessage(menu.getItem(count - 1) != null &&
-                           menu.getItem(count) == null,
-            "the picker must hold exactly " + count + " rows");
-        Test.assertEqualMessage(idOf(menu, 0),
+        Test.assertEqualMessage(factory.getSize(), count,
+            "the picker must offer exactly " + count + " degrees");
+        Test.assertEqualMessage(factory.getValue(0) as Number,
             StatMap.TEMP_AHEAD_MIN_C, "the first row must be the coldest");
-        Test.assertEqualMessage(idOf(menu, count - 1),
+        Test.assertEqualMessage(factory.getValue(count - 1) as Number,
             StatMap.TEMP_AHEAD_MAX_C, "the last row must be the hottest");
-        Test.assertEqualMessage(menu.focus(), 45 - StatMap.TEMP_AHEAD_MIN_C,
+        for (var i = 0; i < count; i++) {
+            Test.assertMessage(factory.getDrawable(i, false) != null,
+                "every degree must draw a row, not " + i);
+        }
+        Test.assertEqualMessage(picker.focus(), 45 - StatMap.TEMP_AHEAD_MIN_C,
             "the picker must open on the value in use");
-        Test.assertMessage(subLabelOf(menu, menu.focus()).length() > 0,
-            "the value in use must be marked");
-        Test.assertEqualMessage(subLabelOf(menu, 0), "",
-            "a value not in use must not be marked");
-        Test.assertEqualMessage(menu.property(),
+        Test.assertEqualMessage(factory.getValue(picker.focus()) as Number, 45,
+            "the row it opens on must hold the value in use");
+        Test.assertEqualMessage(temperatureIndexOf(StatMap.TEMP_AHEAD_MIN_C - 5),
+            0, "a degree below the scale must open on its coldest row");
+        Test.assertEqualMessage(temperatureIndexOf(StatMap.TEMP_AHEAD_MAX_C + 5),
+            count - 1, "a degree above the scale must open on its hottest row");
+        Test.assertEqualMessage(picker.property(),
             StatMap.PROPERTY_TEMP_AHEAD_HIGH, "the picker must write its own " +
             "property");
 
         var cost = before - after;
-        logger.debug(count + "-row temperature picker costs " + cost +
+        logger.debug(count + "-degree temperature picker costs " + cost +
                      " bytes of heap");
-        // A generous ceiling: the point is to catch a picker that grows to a
-        // real share of the 123k the face is granted, not to pin the figure.
-        Test.assertMessage(cost < 16384,
-            "the temperature picker costs " + cost + " bytes; a factory-backed " +
-            "WatchUi.Picker would be cheaper");
+        Test.assertMessage(cost < 2048,
+            "the temperature picker costs " + cost + " bytes; it must not hold " +
+            "its rows");
         return true;
     }
 

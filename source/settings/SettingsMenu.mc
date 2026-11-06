@@ -309,8 +309,9 @@ class RingMenuDelegate extends WatchUi.Menu2InputDelegate {
 
     private function pushTemperature(title as ResourceId, property as String,
                                      current as Number) as Void {
-        WatchUi.pushView(temperatureMenu(title, property, current),
-                         new ChoiceMenuDelegate(), WatchUi.SLIDE_LEFT);
+        WatchUi.pushView(new TemperaturePicker(title, property, current),
+                         new TemperaturePickerDelegate(property),
+                         WatchUi.SLIDE_LEFT);
     }
 
     function onBack() as Void {
@@ -321,22 +322,6 @@ class RingMenuDelegate extends WatchUi.Menu2InputDelegate {
 //! A whole degree as the menus show it.
 function celsiusLabel(celsius as Number) as String {
     return celsius.format("%d") + "°C";
-}
-
-//! A picker for one end of the temperature-ahead scale: every whole degree the
-//! setting allows, coldest first, opening on the value in use so a nudge of a
-//! degree or two is a couple of presses rather than a scroll from -20.
-function temperatureMenu(title as ResourceId, property as String,
-                         current as Number) as ChoiceMenu {
-    var count = StatMap.TEMP_AHEAD_MAX_C - StatMap.TEMP_AHEAD_MIN_C + 1;
-    var labels = new [count] as Array<String>;
-    var values = new [count] as Array<Number>;
-    for (var i = 0; i < count; i++) {
-        var celsius = StatMap.TEMP_AHEAD_MIN_C + i;
-        values[i] = celsius;
-        labels[i] = celsiusLabel(celsius);
-    }
-    return new ChoiceMenu(title, property, labels, values, current);
 }
 
 //! The theme picker offers every shipping theme and then Custom, which takes
@@ -396,8 +381,8 @@ function offeredLabelsFor(ring as Number) as Array<ResourceId> {
 //! source after the gap would be stored as its neighbour. So the values travel
 //! beside the labels, and the position is nothing but a position.
 //!
-//! It opens focused on the value in use. That costs nothing on a three-row
-//! list and is what makes the 71-row temperature list usable.
+//! It opens focused on the value in use. Menu2 holds every row it is given,
+//! so this is for short lists; the 71 temperatures use TemperaturePicker.
 class ChoiceMenu extends WatchUi.Menu2 {
 
     private var _property as String;
@@ -430,6 +415,16 @@ class ChoiceMenu extends WatchUi.Menu2 {
     }
 }
 
+//! Stores one numeric setting and makes the face show it, from whichever
+//! picker chose it.
+function applySetting(property as String, value as Number) as Void {
+    Properties.setValue(property, value);
+    Config.reload();
+    // Keep the code field in step, so Garmin Connect shows this change.
+    ConfigCode.publish();
+    WatchUi.requestUpdate();
+}
+
 //! Applies a choice immediately and returns to the settings menu.
 class ChoiceMenuDelegate extends WatchUi.Menu2InputDelegate {
 
@@ -441,11 +436,7 @@ class ChoiceMenuDelegate extends WatchUi.Menu2InputDelegate {
         var view = WatchUi.getCurrentView()[0];
         var chosen = item.getId();
         if (view instanceof ChoiceMenu && chosen != null) {
-            Properties.setValue(view.property(), chosen as Number);
-            Config.reload();
-            // Keep the code field in step, so Garmin Connect shows this change.
-            ConfigCode.publish();
-            WatchUi.requestUpdate();
+            applySetting(view.property(), chosen as Number);
         }
         WatchUi.popView(WatchUi.SLIDE_RIGHT);
     }
