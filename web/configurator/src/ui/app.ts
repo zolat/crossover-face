@@ -4,6 +4,7 @@ import { type Config, encode, THEME_CUSTOM, tryDecode } from "../codec/configCod
 import { type Device, type Lattice, loadLattice } from "../face/lattice";
 import { alwaysOnWorst, BUDGET, relativeLuminance } from "../face/luminance";
 import { boostedTheme, build, hex, themeColours } from "../face/palette";
+import { CANDIDATES, candidateFor, duoTone } from "../face/candidates";
 import { randomTheme } from "../face/randomTheme";
 import { type Mode, render } from "../face/render";
 import { effectiveRings, tellsTime } from "../face/rings";
@@ -191,7 +192,8 @@ export function mountApp(root: HTMLElement, store: Store, devices: Device[]) {
     }, h("label", { for: "paste" }, "Code to load"), input, h("button", { type: "submit" }, "Load code"),
       pasteError ? h("p", { id: "paste-error", class: "error" }, pasteError) : null);
 
-    const themeName = schema.themes.find((theme) => theme.id === state.config.theme)?.name ?? "My colours";
+    const themeName = schema.themes.find((theme) => theme.id === state.config.theme)?.name ??
+      shownCandidate(state.config)?.name ?? "My colours";
     const nameInput = h("input", { id: "save-name", type: "text", autocomplete: "off", maxlength: 60,
       value: suggestedName(themeName) });
     const saveForm = h("form", {
@@ -228,6 +230,11 @@ export function mountApp(root: HTMLElement, store: Store, devices: Device[]) {
   }
 
   // --- the settings --------------------------------------------------------
+
+  /** The duo-tone candidate the custom colours are, if they are one. */
+  function shownCandidate(config: Config) {
+    return config.theme === THEME_CUSTOM ? candidateFor(config.customColours, config.customRamp) : null;
+  }
 
   const warningsSlot = h("div", { class: "warnings", "aria-live": "polite" });
   /** Which ring the colour wheel is editing, kept across rebuilds of the panel. */
@@ -276,6 +283,14 @@ export function mountApp(root: HTMLElement, store: Store, devices: Device[]) {
         const theme = randomTheme();
         set({ theme: THEME_CUSTOM, customColours: theme.colours, customRamp: theme.ramp });
       } }, "Randomise colours"),
+      choices("Duo-tone candidates",
+        CANDIDATES.map((candidate) => ({ value: candidate.name, label: candidate.name, swatch: candidate.pair })),
+        shownCandidate(config)?.name ?? "", (value) => {
+          const candidate = CANDIDATES.find((entry) => entry.name === value);
+          if (!candidate) return;
+          const theme = duoTone(candidate);
+          set({ theme: THEME_CUSTOM, customColours: theme.colours, customRamp: theme.ramp });
+        }, "Two colours, alternating ring by ring. Not shipping themes yet: each loads as your own colours, so its code carries it to the watch."),
       config.theme === THEME_CUSTOM ? builder(config, ringCount) : null,
       h("h2", {}, "Rings, outside in"),
       h("div", { class: "rings" }, ...RING_KEYS.slice(0, ringCount).map((key, ring) =>
