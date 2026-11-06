@@ -13,6 +13,7 @@ import Toybox.WatchUi;
 //! The dot count is asserted against the figure the Python mockup produces
 //! from the same constants (tools/mockup.py), so the two implementations
 //! cannot drift apart silently — the mockups stay an honest preview.
+(:test)
 module MatrixTest {
 
     //! What this lattice holds, read off the Lattice the build was given.

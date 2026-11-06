@@ -6,6 +6,7 @@ import Toybox.Test;
 //! make up for the watch turning its screen down there. Off leaves every table
 //! exactly as it was; on, every always-on table lightens and the awake ones do
 //! not move.
+(:test)
 module BoostTest {
 
     //! tools/mockup.py's lighten() at Bright and Brightest, each shipping

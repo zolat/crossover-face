@@ -637,6 +637,14 @@ built `.prg` against it. That comparison is meaningless.
   default already reaches.
 - What the face actually uses, read off `Diagnostics.summary()` on the device profile:
   **46k of 123k, about 37%**. Note the app is granted 123k rather than the nominal 128k.
+  That figure is old: the 51mm measured **103.6k of 123.8k** in the simulator's status bar
+  in November 2026, and the settings menu needs about 3k more on top of the running face.
+- **Every test module is `(:test)` at module level, not just its functions.** Without it the
+  module's consts (the config-code vectors, the mockup pins) and its helper functions ship
+  in the face and live in its heap. They had grown to ~18k on the 51mm, and the time-ring
+  extras' new vectors pushed the face to 121k: opening the on-watch settings then failed
+  with *Out Of Memory* in `Diagnostics.summary()`, on the watch and in the simulator
+  (Settings → Trigger App Settings reproduces it). A new test file starts `(:test) module`.
 
 The dominant runtime consumer is the `DotGrid` cache — four parallel arrays of one entry per
 dot, **22,240 bytes at 1112 dots**, five bytes a slot, plus `blockAt`, a `ByteArray` at one

@@ -7,6 +7,7 @@ import Toybox.Test;
 //! Tests for the time ring: the outermost ring of a watch with no hands, the
 //! hour filling its inner sub-band and the minute its outer two. Kept out of
 //! MatrixTest, whose shared helpers it borrows rather than copies.
+(:test)
 module TimeRingTest {
 
     //! Lit dots on ring 0 at 10:27, and how many of those are the hour's, as

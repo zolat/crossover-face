@@ -11,6 +11,7 @@ import Toybox.Test;
 //! `python3 -m simctl.configcode vectors-mc`, and a simctl test fails when the
 //! two disagree. Its own file because MatrixTest is the face's, and this is a
 //! format.
+(:test)
 module ConfigCodeTest {
 
     // --- generated from tools/testdata/config-codes.json: do not edit ---
