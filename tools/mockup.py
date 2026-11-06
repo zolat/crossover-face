@@ -184,6 +184,16 @@ def marker_colour(ring: int):
     return mix(MARKER, THEME[ring % len(THEME)], MARKER_TINT)
 
 
+#: The current-temperature mark's mix toward its band, and the time ring's
+#: current-hour mark's. Mirror Palette.SOFT_MARK_TINT and Palette.HOUR_MARK_TINT.
+SOFT_MARK_TINT = 0.85
+HOUR_MARK_TINT = 0.6
+
+
+def soft_mark_colour(ring: int):
+    return mix(MARKER, THEME[ring % len(THEME)], SOFT_MARK_TINT)
+
+
 def over_colour(ring: int):
     return mix(MARKER, THEME[ring % len(THEME)], OVER_TINT)
 
@@ -248,6 +258,34 @@ def marked_dot(ring: int, mark: float):
             if best_off is None or off < best_off:
                 best, best_off = (dx, dy), off
     return best
+
+
+def edge_dot(ring: int, at: float, outward: bool):
+    """The dot nearest the ring's outer (or inner) edge inside the window round
+    `at`, as (dx, dy), or None. Mirrors DotGrid.nearDot with SUN_OUTWARD or
+    SUN_INWARD: where the time ring's hour marks and seconds dot sit."""
+    half = marker_half(ring)
+    score = RADIUS * RADIUS * 4 if outward else 0
+    best, best_off = None, None
+    for row in range(ROWS):
+        dy = (2 * row - (ROWS - 1)) * (PITCH // 2)
+        for col in range(COLS):
+            dx = (2 * col - (COLS - 1)) * (PITCH // 2)
+            d = dx * dx + dy * dy
+            if d > RADIUS * RADIUS or d < clear_sq():
+                continue
+            r, position = ring_map(dx, dy)
+            if r != ring or not marked(position, at, half):
+                continue
+            off = abs(d - score)
+            if best_off is None or off < best_off:
+                best, best_off = (dx, dy), off
+    return best
+
+
+def current_hour(hour_end: float) -> int:
+    """The hour mark the hour's fill last passed. Mirrors TimeRing.currentHour."""
+    return int(hour_end * 12 + 0.001) % 12
 
 
 def mix(a, b, t):
@@ -768,7 +806,10 @@ def render(spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
            drift: tuple[int, int] = (0, 0), marks=None,
            overs=None, rotate: bool = True,
            date: int | None = None,
-           time: tuple[float, float] | None = None) -> Image.Image:
+           time: tuple[float, float] | None = None,
+           hour_marks: bool = False,
+           second: int | None = None,
+           hour_tint: float | None = None) -> Image.Image:
     img = Image.new("RGB", (SIZE, SIZE), (0, 0, 0))
     # Scenes are written for four rings; a five-ring watch's centre ball shows
     # Steps at its default reading, as StatMap.RING_DEFAULTS has it.
@@ -883,9 +924,43 @@ def render(spans, *, assign=(0, 1, 2, 3), always_on: bool = False,
             if (col, row) in glyph:
                 glyph_colours[(col, row)] = colour
             draw_dot(draw, left, top, colour, arm_for(dx, dy, rotate))
+    if assign[0] in TIME_SOURCES:
+        _time_extras(draw, assign[0], time or (0.0, 0.0), drift, always_on,
+                     held_back, hour_marks, second,
+                     HOUR_MARK_TINT if hour_tint is None else hour_tint)
     if dating:
         draw_outline(draw, date, glyph_colours, drift)
     return img
+
+
+def _time_extras(draw, style, time, drift, always_on, held_back, hour_marks,
+                 second, tint) -> None:
+    """The time ring's hour marks and seconds dot, solid, over the walk.
+    Mirrors TimeRing.drawHourMarks and the mark pass: each hour mark in the
+    colour the ring has there, the current hour's mixed toward white; the
+    seconds dot in the ring's soft mark colour, awake only."""
+    centre, half, ring = SIZE // 2, DOT // 2, 0
+
+    def solid(at, colour):
+        dx, dy = at
+        left = centre + dx - half + drift[0]
+        top = centre + dy - half + drift[1]
+        draw.rectangle([left, top, left + DOT - 1, top + DOT - 1], fill=colour)
+
+    if hour_marks:
+        current = current_hour(time[0])
+        for h in range(12):
+            at = edge_dot(ring, h / 12.0, outward=True)
+            if at is None:
+                continue
+            _, position = ring_map(*at)
+            colour = time_colour(ring, position, at[0] ** 2 + at[1] ** 2, time,
+                                 always_on, held_back, style)
+            solid(at, mix(MARKER, colour, tint) if h == current else colour)
+    if second is not None and not always_on:
+        at = edge_dot(ring, (second % 60) / 60.0, outward=False)
+        if at is not None:
+            solid(at, soft_mark_colour(ring))
 
 
 # Mirrors DotGrid.ARMS: half-arm offsets for each cross orientation.
@@ -1372,6 +1447,39 @@ def main(outdir: str = "build/mockups", device: str = DEFAULT_DEVICE) -> int:
     path = os.path.join(outdir, "14d-time-overlap.png")
     sheet(panels, "Time ring, overlapping - the ring's colour where both have "
                   "passed, its hue split for hour and minute").save(path)
+    written.append(path)
+
+    # 14h. The time ring's extras: hour marks on the outer edge, the current
+    #      hour's lifted, and a seconds dot on the inner edge. 10:27:42 keeps
+    #      every dot clear of both ends (see TimeRingTest.MOCKUP_MINUTE).
+    at = time_fractions(10, 27)
+    panels = []
+    for label, kwargs in (
+            ("OVERLAP, NONE", {"assign": overlap_assign}),
+            ("OVERLAP, HOUR MARKS", {"assign": overlap_assign, "hour_marks": True}),
+            ("OVERLAP, MARKS + SECONDS", {"assign": overlap_assign,
+                                          "hour_marks": True, "second": 42}),
+            ("SPLIT, MARKS + SECONDS", {"assign": time_assign,
+                                        "hour_marks": True, "second": 42}),
+            ("ALWAYS-ON, MARKS", {"assign": overlap_assign, "hour_marks": True,
+                                  "second": 42, "always_on": True}),
+            ("HELD BACK, MARKS", {"assign": overlap_assign, "hour_marks": True,
+                                  "always_on": True, "held_back": True})):
+        spans = nothing if kwargs.get("held_back") else values
+        face = render(spans, time=at, **kwargs)
+        panels.append((f"{label}   lum {measure(face) * 100:.2f}%", face))
+    path = os.path.join(outdir, "14h-time-marks.png")
+    sheet(panels, "Time ring extras at 10:27:42 - hour marks outside, "
+                  "the current hour lifted, seconds inside").save(path)
+    written.append(path)
+
+    #      The current hour's tint, side by side at 1:1.
+    panels = [(f"HOUR_MARK_TINT {tint}",
+               render(values, assign=overlap_assign, time=at, hour_marks=True,
+                      second=42, hour_tint=tint))
+              for tint in (0.45, 0.6, 0.75)]
+    path = os.path.join(outdir, "14i-time-marks-tint.png")
+    sheet(panels, "Current-hour tint, toward white (lower is brighter)").save(path)
     written.append(path)
 
     # 11. Burn-in drift: how long any one pixel stays lit over a full cycle.
