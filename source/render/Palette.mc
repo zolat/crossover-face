@@ -213,6 +213,14 @@ module Palette {
     //! above the lap's own tint (everyThemeKeepsTheTierOrder).
     const SOFT_MARK_TINT = 0.85;
 
+    //! How far the time ring's current-hour mark is mixed toward its own
+    //! colour (TimeRing.drawHourMarks). The other eleven are solid in the
+    //! colour the ring has there — density alone, the quietest mark the face
+    //! has — and this one is lifted toward white between the soft mark and
+    //! the waterline, so it is findable without glaring. Chosen on the
+    //! mockups (`14h-time-marks.png`).
+    const HOUR_MARK_TINT = 0.6;
+
     //! How far an over-goal ring's second lap is tinted toward the mark.
     //!
     //! "Slightly stronger" cannot mean scaling the colour up: that is the whole

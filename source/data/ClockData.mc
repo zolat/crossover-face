@@ -43,6 +43,18 @@ module ClockData {
         return fraction(System.getClockTime().sec);
     }
 
+    //! Where a second hand points, 0.0 up to below 1.0: empty on the minute,
+    //! a quarter at :15. A position, not a fill, so it takes no `+ 1` — the
+    //! time ring's seconds dot sits on it (StatMap.fillSecondMark).
+    function secondFraction(second as Number) as Float {
+        return (second % PER_MINUTE).toFloat() / PER_MINUTE;
+    }
+
+    //! The second hand's position, right now.
+    function secondPosition() as Float {
+        return secondFraction(System.getClockTime().sec);
+    }
+
     const MINUTES_PER_HOUR = 60.0;
     const HOURS_PER_DIAL = 12;
 

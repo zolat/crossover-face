@@ -527,9 +527,9 @@ module MatrixRenderer {
             // two tiers before the delta key reads them, so a ring that starts
             // or stops telling the time is repainted whole like any recolour.
             //
-            // Asked of Source three times a ring rather than held in a local:
+            // Asked of Source four times a ring rather than held in a local:
             // drawAt()'s frame is at the test runner's stack limit, and one
-            // more local overflowed it. Three calls a ring cost nothing.
+            // more local overflowed it. Four calls a ring cost nothing.
             if (Source.isTime(rings[ring])) {
                 weak = dimColour[ring];
                 strong = Palette.TIME_LIT;
@@ -608,11 +608,15 @@ module MatrixRenderer {
                 lastColour = -1;    //! the erase moved the pen
             }
 
-            // The time ring opts out for the block ring's reason: its print
-            // moves once a minute, and its lit test reads a radius as well as
-            // a position, which the span delta below cannot say.
-            var delta = !clears && !isBlocks && !Source.isTime(rings[ring]) &&
-                        !sunMoved &&
+            // The time ring's span never takes the delta, for the block
+            // ring's reason: its print moves once a minute, and its lit test
+            // reads a radius as well as a position, which the span delta below
+            // cannot say. But a time ring whose span has *not* moved was made
+            // dirty by its seconds dot alone, and that is a tick — the one
+            // cell the dot left, repainted by TimeRing, not the ring.
+            var delta = !clears && !isBlocks && !sunMoved &&
+                        (!Source.isTime(rings[ring]) ||
+                         (from == lastFrom[ring] && to == lastTo[ring])) &&
                         stableFor[ring] >= 1 &&
                         lastWeak[ring] == weak && lastStrong[ring] == strong &&
                         lastOver[ring] == overs[ring] &&
@@ -653,7 +657,11 @@ module MatrixRenderer {
             // existed. DotGrid remembers the answer between frames — placing a
             // mark walks the whole ring, and the mark moves with the
             // temperature rather than with the frame.
-            markAt[ring] = DotGrid.markedDotFor(ring, markers[ring]);
+            // A time ring's mark is its seconds dot, which runs on the ring's
+            // inner edge rather than through its middle.
+            markAt[ring] = Source.isTime(rings[ring])
+                ? TimeRing.secondDotFor(ring, markers[ring])
+                : DotGrid.markedDotFor(ring, markers[ring]);
 
             // This ring's slice of the watermark. Seeded per ring rather than
             // carried on from the last one, because a ring the gate left clean
@@ -671,8 +679,13 @@ module MatrixRenderer {
             // nothing else follows the dot loop inside the ring loop; the marks
             // are drawn in their own pass afterwards.
             if (Source.isTime(rings[ring])) {
-                drew += TimeRing.draw(dc, ring, centreX, centreY, from, to,
-                                      rings[ring], weak);
+                // A tick — only the seconds dot moved — repaints the one
+                // cell it left; anything else walks the ring.
+                drew += delta
+                    ? TimeRing.repaintOne(dc, ring, centreX, centreY, from, to,
+                                          rings[ring], weak, forceA)
+                    : TimeRing.draw(dc, ring, centreX, centreY, from, to,
+                                    rings[ring], weak);
                 lastColour = -1;    //! TimeRing moved the pen
                 continue;
             }
@@ -912,6 +925,7 @@ module MatrixRenderer {
         painted = drew;
 
         drawSuns(dc, dirty, centreX, centreY, hasBacking ? axes : null);
+        TimeRing.drawPendingMarks(dc, centreX, centreY);
 
         // The marks, last, so each covers whatever the loop drew there.
         // At most one per ring, so this costs four tests a frame rather than

@@ -197,7 +197,7 @@ class ConfigCodeVectors(unittest.TestCase):
         for vector in self.vectors["valid"]:
             with self.subTest(vector["name"]):
                 self.assertEqual(configcode.encode(vector["config"]), vector["code"])
-                self.assertEqual(len(vector["code"]), 46)
+                self.assertEqual(len(vector["code"]), 48)
 
     def test_every_valid_code_decodes_to_its_config(self):
         for vector in self.vectors["valid"]:
@@ -217,6 +217,25 @@ class ConfigCodeVectors(unittest.TestCase):
                 config = configcode.decode(vector["code"])
                 self.assertEqual(dict(config), vector["config"])
                 self.assertEqual(config["alwaysOnBoost"], 0)
+
+    def test_a_version_3_code_decodes_with_the_time_ring_extras_off(self):
+        for vector in self.vectors["v3"]:
+            with self.subTest(vector["name"]):
+                self.assertEqual(len(vector["code"]), 46)
+                config = configcode.decode(vector["code"])
+                self.assertEqual(dict(config), vector["config"])
+                self.assertEqual(config["timeHourMarks"], 0)
+                self.assertEqual(config["timeSeconds"], 0)
+
+    def test_the_extras_are_properties_the_face_declares(self):
+        import xml.etree.ElementTree as ElementTree
+        root = ElementTree.parse(Path(__file__).resolve().parents[1] / "resources"
+                                 / "properties.xml").getroot()
+        declared = {prop.attrib["id"]: int(prop.text) for prop in root.findall("property")
+                    if prop.attrib["type"] == "number"}
+        for key, _ in configcode.EXTRA_FIELDS:
+            with self.subTest(key):
+                self.assertEqual(declared[key], configcode.DEFAULTS[key])
 
     def test_other_spellings_of_a_code_decode_the_same(self):
         by_name = {vector["name"]: vector for vector in self.vectors["valid"]}
@@ -314,7 +333,7 @@ class WatchConfigPush(unittest.TestCase):
     """make push-config TO=watch, against the settings file a real watch wrote."""
 
     WATCH_FILE = (Path(__file__).resolve().parent / "testdata" / "CrossoverFace-watch.SET").read_bytes()
-    CODE = "A2MAAAAAAAQMCQAUQXDugLVV6Y7V3qvgjx4A5bM6AAA3_w"
+    CODE = "BGMAAAAAAAQMCQAUQXDugLVV6Y7V3qvgjx4A5bM6AAAAAGZq"
 
     def setUp(self):
         self.backups = Path(tempfile.mkdtemp())

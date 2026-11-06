@@ -17,14 +17,15 @@ import Toybox.StringUtil;
 //! a menu choice.
 module ConfigCode {
 
-    //! The version this watch writes. It reads versions 1 and 2 too: a newer
+    //! The version this watch writes. It reads versions 1 to 3 too: a newer
     //! decoder reads every older code, filling what it lacks with the defaults.
-    const VERSION = 3;
-    //! Bytes in a version-3 code: 32 of payload and a 16-bit CRC — version 1's
-    //! 26, version 2's ring 5, colour 5 and the ramp stops' third bits, then
-    //! version 3's always-on boost.
-    const LENGTH = 34;
-    const PAYLOAD = 32;
+    const VERSION = 4;
+    //! Bytes in a version-4 code: 34 of payload and a 16-bit CRC — version 1's
+    //! 26, version 2's ring 5, colour 5 and the ramp stops' third bits,
+    //! version 3's always-on boost, then version 4's two time-ring extras.
+    const LENGTH = 36;
+    const PAYLOAD = 34;
+    const PAYLOAD_V3 = 32;
     const PAYLOAD_V2 = 31;
     const PAYLOAD_V1 = 26;
     const TEMP_OFFSET = 20;
@@ -34,18 +35,20 @@ module ConfigCode {
     const STORAGE_LAST_CODE = "lastCode";
 
     //! A config vector — what pack() takes and unpack() returns — is these
-    //! twenty-two numbers, in the units the settings store: theme, the nine
+    //! twenty-four numbers, in the units the settings store: theme, the nine
     //! one-byte settings, both temperature ends in °C, custom colours 1 to 4,
     //! the three custom ramp stops, then version 2's ring 5 and custom colour
-    //! 5, then version 3's always-on boost — each appended, so no older index
-    //! moves.
-    const FIELDS = 22;
+    //! 5, then version 3's always-on boost, then version 4's hour marks and
+    //! seconds dot — each appended, so no older index moves.
+    const FIELDS = 24;
     const FIELD_TEMP_LOW = 10;
     const FIELD_COLOURS = 12;
     const FIELD_RAMP = 16;
     const FIELD_RING5 = 19;
     const FIELD_COLOUR5 = 20;
     const FIELD_BOOST = 21;
+    const FIELD_HOUR_MARKS = 22;
+    const FIELD_SECONDS = 23;
 
     //! Rings and custom colours the code carries in its first block, version
     //! 1's; the fifth of each is version 2's appendix.
@@ -84,7 +87,7 @@ module ConfigCode {
         return crc;
     }
 
-    //! A config vector as the 34 bytes of a sealed version-3 code. Trusts its
+    //! A config vector as the 36 bytes of a sealed version-4 code. Trusts its
     //! input: only decode() is handed anything a wearer typed.
     function pack(config as Array<Number>) as Array<Number> {
         var bytes = new [LENGTH] as Array<Number>;
@@ -111,6 +114,8 @@ module ConfigCode {
         bytes[30] = (config[FIELD_RAMP] >> 2) | ((config[FIELD_RAMP + 1] >> 2) << 1) |
                     ((config[FIELD_RAMP + 2] >> 2) << 2);
         bytes[31] = config[FIELD_BOOST];
+        bytes[32] = config[FIELD_HOUR_MARKS];
+        bytes[33] = config[FIELD_SECONDS];
         var crc = crc16(bytes, PAYLOAD);
         bytes[PAYLOAD] = (crc >> 8) & 0xFF;
         bytes[PAYLOAD + 1] = crc & 0xFF;
@@ -118,17 +123,19 @@ module ConfigCode {
     }
 
     //! The config vector a sealed code carries, or null when the code is
-    //! anything but a well-formed version-1, -2 or -3 code with every field in
+    //! anything but a well-formed version-1 to -4 code with every field in
     //! range. What an older code lacks takes its default: ring 5 and colour 5
-    //! before version 2, the boost (Off) before version 3.
+    //! before version 2, the boost (Off) before version 3, both time-ring
+    //! extras (Off) before version 4.
     function unpack(bytes as Array<Number>) as Array<Number>? {
         if (bytes.size() == 0) {
             return null;
         }
         var version = bytes[0];
         var payload = (version == VERSION) ? PAYLOAD
+                    : ((version == 3) ? PAYLOAD_V3
                     : ((version == 2) ? PAYLOAD_V2
-                    : ((version == 1) ? PAYLOAD_V1 : -1));
+                    : ((version == 1) ? PAYLOAD_V1 : -1)));
         if (payload < 0 || bytes.size() != payload + 2) {
             return null;
         }
@@ -168,6 +175,16 @@ module ConfigCode {
             return null;
         }
         var high = 0;
+        config[FIELD_HOUR_MARKS] = StatMap.TIME_EXTRA_OFF;
+        config[FIELD_SECONDS] = StatMap.TIME_EXTRA_OFF;
+        if (version >= 4) {
+            if (bytes[32] > StatMap.TIME_EXTRA_ON ||
+                bytes[33] > StatMap.TIME_EXTRA_ON) {
+                return null;
+            }
+            config[FIELD_HOUR_MARKS] = bytes[32];
+            config[FIELD_SECONDS] = bytes[33];
+        }
         config[FIELD_BOOST] = StatMap.BOOST_OFF;
         if (version >= 3) {
             if (bytes[31] > StatMap.BOOST_BRIGHTEST) {
@@ -316,6 +333,10 @@ module ConfigCode {
                                  RING5_DEFAULT, 0, Source.COUNT - 1);
         config[FIELD_COLOUR5] = custom[CODE_COLOURS];
         config[FIELD_BOOST] = StatMap.boost;
+        // Every watch publishes what it stores, the way ring 5 does: only a
+        // watch with a time ring draws either.
+        config[FIELD_HOUR_MARKS] = StatMap.hourMarks;
+        config[FIELD_SECONDS] = StatMap.seconds;
         return config;
     }
 
@@ -332,6 +353,9 @@ module ConfigCode {
         Properties.setValue(StatMap.PROPERTY_RINGS[CODE_RINGS],
                             config[FIELD_RING5]);
         Properties.setValue(StatMap.PROPERTY_BOOST, config[FIELD_BOOST]);
+        Properties.setValue(StatMap.PROPERTY_HOUR_MARKS,
+                            config[FIELD_HOUR_MARKS]);
+        Properties.setValue(StatMap.PROPERTY_SECONDS, config[FIELD_SECONDS]);
         // The custom theme as Storage holds it: five colours, then the stops.
         var custom = config.slice(FIELD_COLOURS, FIELD_RAMP);
         custom.add(config[FIELD_COLOUR5]);

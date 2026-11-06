@@ -31,6 +31,10 @@
     <string id="DatePrompt">The day of the month, drawn in by joining the dots when the watch wakes; always-on shows the plain field</string>
     <string id="DateOff">Off</string>
     <string id="DateOn">On</string>
+    <string id="HourMarksTitle">Hour marks</string>
+    <string id="SecondsDotTitle">Seconds dot</string>
+    <string id="ExtraOff">Off</string>
+    <string id="ExtraOn">On</string>
     <string id="DateOutlineTitle">Date outline</string>
     <string id="DateOutlinePrompt">How bright the lines joining the date's dots are</string>
     <string id="DateOutline50">50%</string>

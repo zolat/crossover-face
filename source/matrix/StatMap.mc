@@ -61,6 +61,15 @@ module StatMap {
 
     //! How bright the date's connecting lines are: an index into
     //! DateGlyph.LINE_PERCENTS, the three levels chosen between on the wrist.
+    //! The time ring's two extras, each Off or On: a solid dot at every hour on
+    //! the ring's outer edge, and one running round its inner edge with the
+    //! second. Read only where HandStyle.TIME_RING; every watch carries them,
+    //! the way every watch carries ring5. See TimeRing.
+    enum TimeExtra {
+        TIME_EXTRA_OFF = 0,
+        TIME_EXTRA_ON = 1
+    }
+
     enum DateOutline {
         OUTLINE_50 = 0,
         OUTLINE_65 = 1,             //! The pick, and the default.
@@ -124,6 +133,11 @@ module StatMap {
     const PROPERTY_ROTATION = "dotRotation";
     const PROPERTY_DATE = "showDate";
     const PROPERTY_DATE_OUTLINE = "dateOutline";
+    //! Not in settings.xml, like the time style itself: the on-device menu
+    //! and the config code set them, and only a watch with a time ring has
+    //! the row.
+    const PROPERTY_HOUR_MARKS = "timeHourMarks";
+    const PROPERTY_SECONDS = "timeSeconds";
 
     //! The temperature-ahead ring's scale, in whole degrees Celsius.
     //!
@@ -167,6 +181,8 @@ module StatMap {
     var rotation as Number = ROTATION_RADIAL;
     var date as Number = DATE_ON;
     var dateOutline as Number = OUTLINE_65;
+    var hourMarks as Number = TIME_EXTRA_OFF;
+    var seconds as Number = TIME_EXTRA_OFF;
     //! Always high > low after load(); HourlyWeatherData divides by the gap.
     var tempAheadLow as Number = TEMP_AHEAD_LOW_DEFAULT;
     var tempAheadHigh as Number = TEMP_AHEAD_HIGH_DEFAULT;
@@ -198,6 +214,10 @@ module StatMap {
         date = readNumber(PROPERTY_DATE, DATE_ON, DATE_OFF, DATE_ON);
         dateOutline = readNumber(PROPERTY_DATE_OUTLINE, OUTLINE_65,
                                  OUTLINE_50, OUTLINE_80);
+        hourMarks = readNumber(PROPERTY_HOUR_MARKS, TIME_EXTRA_OFF,
+                               TIME_EXTRA_OFF, TIME_EXTRA_ON);
+        seconds = readNumber(PROPERTY_SECONDS, TIME_EXTRA_OFF,
+                             TIME_EXTRA_OFF, TIME_EXTRA_ON);
         loadTempAheadScale();
 
         var loaded = new [RINGS] as Array<Number>;
@@ -520,6 +540,22 @@ module StatMap {
                 out[i] = Source.marker(rings[i]);
             }
         }
+    }
+
+    //! The time ring's seconds dot, into its mark slot: where a second hand
+    //! would point, awake and with the setting on. The time ring has no mark
+    //! of its own, so the slot is free, and it is already in the ring print —
+    //! the gate sees the second move with nothing new to carry.
+    //!
+    //! **Awake only**, for the seconds ring's reason: always-on gets one frame
+    //! a minute, so a seconds dot there could only be stale. Called after
+    //! fillMarkers(), never in place of it.
+    function fillSecondMark(out as Array<Float>, awake as Boolean) as Void {
+        if (!awake || seconds != TIME_EXTRA_ON || !HandStyle.TIME_RING ||
+                !Source.isTime(rings[TIME_RING])) {
+            return;
+        }
+        out[TIME_RING] = ClockData.secondPosition();
     }
 
     //! Every ring unmarked, for always-on when the fills are held back. The

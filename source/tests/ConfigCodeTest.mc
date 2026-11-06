@@ -15,6 +15,43 @@ module ConfigCodeTest {
 
     // --- generated from tools/testdata/config-codes.json: do not edit ---
     const VALID_CODES = [
+        "BAAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AAAAALZO",
+        "BGMCAQEAAgkKDQcARv___wAAABI0VqvN7wcA5bM6AAAAAOzu",
+        "BAgAAAABAQwLBQRGAOh5-bjWS3_U__9rWzIA5bM6AAAAAEwe",
+        "BAEAAAABAQABAgkUQeh5-bjWS3_U__9rWzIA5bM6AAAAAGJh",
+        "BAcAAAABAQAIAgMgIOh5-bjWS3_U__9rWwAA5bM6AAAAABPk",
+        "BAABAAABAQ8IAgMUQeh5-bjWS3_U__9rWzIA5bM6AAAAAC4K",
+        "BAAAAAABAQ4NAg8UQeh5-bjWS3_U__9rWzIA5bM6AAAAACu4",
+        "BGMAAAABAQAIAgMUQREiM0RVZneImaq7zAQHEjRWAQAAADPO",
+        "BAAAAAABAQAIAgMUQQAAAAAAAAAAAAAAAAAP____BwAAAOOr",
+        "BAAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AAEAAIF-",
+        "BAAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AAIAANgu",
+        "BAAAAAABAQAIAgMUQQAAAAAAAAAAAAAAAAAP____BwIAAI3L",
+        "BAAAAAABAQ8IAgMUQeh5-bjWS3_U__9rWzIA5bM6AAABAER9",
+        "BAAAAAABAQ8IAgMUQeh5-bjWS3_U__9rWzIA5bM6AAAAAWdt",
+        "BAAAAAABAQAIAgMUQQAAAAAAAAAAAAAAAAAP____BwIBAa7b"
+    ] as Array<String>;
+    //! ConfigCode.FIELDS numbers per code, in VALID_CODES order.
+    const VALID_CONFIGS = [
+        0, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0, 0, 0,
+        99, 2, 1, 1, 0, 2, 9, 10, 13, 7, -20, 50, 16777215, 0, 1193046, 11259375, 3, 1, 0, 0, 15053626, 0, 0, 0,
+        8, 0, 0, 0, 1, 1, 12, 11, 5, 4, 50, -20, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0, 0, 0,
+        1, 0, 0, 0, 1, 1, 0, 1, 2, 9, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0, 0, 0,
+        7, 0, 0, 0, 1, 1, 0, 8, 2, 3, 12, 12, 15235577, 12113483, 8377599, 16739163, 0, 0, 0, 0, 15053626, 0, 0, 0,
+        0, 1, 0, 0, 1, 1, 15, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0, 0, 0,
+        0, 0, 0, 0, 1, 1, 14, 13, 2, 15, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0, 0, 0,
+        99, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 1122867, 4478310, 7833753, 11189196, 4, 1, 0, 7, 1193046, 0, 0, 0,
+        0, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 0, 0, 0, 0, 4, 4, 4, 15, 16777215, 0, 0, 0,
+        0, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 1, 0, 0,
+        0, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 2, 0, 0,
+        0, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 0, 0, 0, 0, 4, 4, 4, 15, 16777215, 2, 0, 0,
+        0, 0, 0, 0, 1, 1, 15, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0, 1, 0,
+        0, 0, 0, 0, 1, 1, 15, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0, 0, 1,
+        0, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 0, 0, 0, 0, 4, 4, 4, 15, 16777215, 2, 1, 1
+    ] as Array<Number>;
+    //! Older codes, decode-only, and the ConfigCode.FIELDS numbers this
+    //! decoder makes of each: what a version lacks at its default.
+    const V3_CODES = [
         "AwAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AAAzEQ",
         "A2MCAQEAAgkKDQcARv___wAAABI0VqvN7wcA5bM6AAC1Sg",
         "AwgAAAABAQwLBQRGAOh5-bjWS3_U__9rWzIA5bM6AADMWg",
@@ -28,23 +65,20 @@ module ConfigCodeTest {
         "AwAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AAITUw",
         "AwAAAAABAQAIAgMUQQAAAAAAAAAAAAAAAAAP____BwK01w"
     ] as Array<String>;
-    //! ConfigCode.FIELDS numbers per code, in VALID_CODES order.
-    const VALID_CONFIGS = [
-        0, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0,
-        99, 2, 1, 1, 0, 2, 9, 10, 13, 7, -20, 50, 16777215, 0, 1193046, 11259375, 3, 1, 0, 0, 15053626, 0,
-        8, 0, 0, 0, 1, 1, 12, 11, 5, 4, 50, -20, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0,
-        1, 0, 0, 0, 1, 1, 0, 1, 2, 9, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0,
-        7, 0, 0, 0, 1, 1, 0, 8, 2, 3, 12, 12, 15235577, 12113483, 8377599, 16739163, 0, 0, 0, 0, 15053626, 0,
-        0, 1, 0, 0, 1, 1, 15, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0,
-        0, 0, 0, 0, 1, 1, 14, 13, 2, 15, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0,
-        99, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 1122867, 4478310, 7833753, 11189196, 4, 1, 0, 7, 1193046, 0,
-        0, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 0, 0, 0, 0, 4, 4, 4, 15, 16777215, 0,
-        0, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 1,
-        0, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 2,
-        0, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 0, 0, 0, 0, 4, 4, 4, 15, 16777215, 2
+    const V3_CONFIGS = [
+        0, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0, 0, 0,
+        99, 2, 1, 1, 0, 2, 9, 10, 13, 7, -20, 50, 16777215, 0, 1193046, 11259375, 3, 1, 0, 0, 15053626, 0, 0, 0,
+        8, 0, 0, 0, 1, 1, 12, 11, 5, 4, 50, -20, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0, 0, 0,
+        1, 0, 0, 0, 1, 1, 0, 1, 2, 9, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0, 0, 0,
+        7, 0, 0, 0, 1, 1, 0, 8, 2, 3, 12, 12, 15235577, 12113483, 8377599, 16739163, 0, 0, 0, 0, 15053626, 0, 0, 0,
+        0, 1, 0, 0, 1, 1, 15, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0, 0, 0,
+        0, 0, 0, 0, 1, 1, 14, 13, 2, 15, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0, 0, 0,
+        99, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 1122867, 4478310, 7833753, 11189196, 4, 1, 0, 7, 1193046, 0, 0, 0,
+        0, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 0, 0, 0, 0, 4, 4, 4, 15, 16777215, 0, 0, 0,
+        0, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 1, 0, 0,
+        0, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 2, 0, 0,
+        0, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 0, 0, 0, 0, 4, 4, 4, 15, 16777215, 2, 0, 0
     ] as Array<Number>;
-    //! Older codes, decode-only, and the ConfigCode.FIELDS numbers this
-    //! decoder makes of each: what a version lacks at its default.
     const V2_CODES = [
         "AgAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6ALwM",
         "AmMCAQEAAgkKDQcARv___wAAABI0VqvN7wcA5bM6AIQ9",
@@ -57,15 +91,15 @@ module ConfigCodeTest {
         "AgAAAAABAQAIAgMUQQAAAAAAAAAAAAAAAAAP____B7jr"
     ] as Array<String>;
     const V2_CONFIGS = [
-        0, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0,
-        99, 2, 1, 1, 0, 2, 9, 10, 13, 7, -20, 50, 16777215, 0, 1193046, 11259375, 3, 1, 0, 0, 15053626, 0,
-        8, 0, 0, 0, 1, 1, 12, 11, 5, 4, 50, -20, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0,
-        1, 0, 0, 0, 1, 1, 0, 1, 2, 9, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0,
-        7, 0, 0, 0, 1, 1, 0, 8, 2, 3, 12, 12, 15235577, 12113483, 8377599, 16739163, 0, 0, 0, 0, 15053626, 0,
-        0, 1, 0, 0, 1, 1, 15, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0,
-        0, 0, 0, 0, 1, 1, 14, 13, 2, 15, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0,
-        99, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 1122867, 4478310, 7833753, 11189196, 4, 1, 0, 7, 1193046, 0,
-        0, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 0, 0, 0, 0, 4, 4, 4, 15, 16777215, 0
+        0, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0, 0, 0,
+        99, 2, 1, 1, 0, 2, 9, 10, 13, 7, -20, 50, 16777215, 0, 1193046, 11259375, 3, 1, 0, 0, 15053626, 0, 0, 0,
+        8, 0, 0, 0, 1, 1, 12, 11, 5, 4, 50, -20, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0, 0, 0,
+        1, 0, 0, 0, 1, 1, 0, 1, 2, 9, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0, 0, 0,
+        7, 0, 0, 0, 1, 1, 0, 8, 2, 3, 12, 12, 15235577, 12113483, 8377599, 16739163, 0, 0, 0, 0, 15053626, 0, 0, 0,
+        0, 1, 0, 0, 1, 1, 15, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0, 0, 0,
+        0, 0, 0, 0, 1, 1, 14, 13, 2, 15, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0, 0, 0,
+        99, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 1122867, 4478310, 7833753, 11189196, 4, 1, 0, 7, 1193046, 0, 0, 0,
+        0, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 0, 0, 0, 0, 4, 4, 4, 15, 16777215, 0, 0, 0
     ] as Array<Number>;
     const V1_CODES = [
         "AQAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIEYw",
@@ -77,17 +111,17 @@ module ConfigCodeTest {
         "AQAAAAABAQ4NAg8UQeh5-bjWS3_U__9rWzLhnA"
     ] as Array<String>;
     const V1_CONFIGS = [
-        0, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0,
-        99, 2, 1, 1, 0, 2, 9, 10, 13, 7, -20, 50, 16777215, 0, 1193046, 11259375, 3, 1, 0, 0, 15053626, 0,
-        8, 0, 0, 0, 1, 1, 12, 11, 5, 4, 50, -20, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0,
-        1, 0, 0, 0, 1, 1, 0, 1, 2, 9, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0,
-        7, 0, 0, 0, 1, 1, 0, 8, 2, 3, 12, 12, 15235577, 12113483, 8377599, 16739163, 0, 0, 0, 0, 15053626, 0,
-        0, 1, 0, 0, 1, 1, 15, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0,
-        0, 0, 0, 0, 1, 1, 14, 13, 2, 15, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0
+        0, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0, 0, 0,
+        99, 2, 1, 1, 0, 2, 9, 10, 13, 7, -20, 50, 16777215, 0, 1193046, 11259375, 3, 1, 0, 0, 15053626, 0, 0, 0,
+        8, 0, 0, 0, 1, 1, 12, 11, 5, 4, 50, -20, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0, 0, 0,
+        1, 0, 0, 0, 1, 1, 0, 1, 2, 9, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0, 0, 0,
+        7, 0, 0, 0, 1, 1, 0, 8, 2, 3, 12, 12, 15235577, 12113483, 8377599, 16739163, 0, 0, 0, 0, 15053626, 0, 0, 0,
+        0, 1, 0, 0, 1, 1, 15, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0, 0, 0,
+        0, 0, 0, 0, 1, 1, 14, 13, 2, 15, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0, 0, 0
     ] as Array<Number>;
     const ALIAS_CODES = [
-        "A2MCAQEAAgkKDQcARv///wAAABI0VqvN7wcA5bM6AAC1Sg==",
-        "  A2MCAQEAAgkKDQcARv__\n _wAAABI0VqvN7wcA5bM6AAC1Sg\t"
+        "BGMCAQEAAgkKDQcARv///wAAABI0VqvN7wcA5bM6AAAAAOzu",
+        "  BGMCAQEAAgkKDQcARv__\n _wAAABI0VqvN7wcA5bM6AAAAAOzu\t"
     ] as Array<String>;
     //! Which VALID_CODES entry each alias spells.
     const ALIAS_OF = [1, 1] as Array<Number>;
@@ -116,7 +150,13 @@ module ConfigCodeTest {
         "BAAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AACt4g",
         "AwAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AAAAFzA",
         "AgAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AABqVw",
-        "AwAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AAMDcg"
+        "AwAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AAMDcg",
+        "BQAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AAAAACpr",
+        "BAAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AAAAALZP",
+        "BAAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AAAAAACJHQ",
+        "AwAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AAAAAFLW",
+        "BAAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AAACANAs",
+        "BAAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AAAAApYM"
     ] as Array<String>;
     const CRC_CHECK = 10673;
     // --- end of generated vectors ---
@@ -146,6 +186,8 @@ module ConfigCodeTest {
         keys.add(StatMap.PROPERTY_THEME);
         keys.add(StatMap.PROPERTY_RINGS[ConfigCode.CODE_RINGS]);
         keys.add(StatMap.PROPERTY_BOOST);
+        keys.add(StatMap.PROPERTY_HOUR_MARKS);
+        keys.add(StatMap.PROPERTY_SECONDS);
         keys.add(StatMap.PROPERTY_TEMP_AHEAD_LOW);
         keys.add(StatMap.PROPERTY_TEMP_AHEAD_HIGH);
         keys.add(ConfigCode.PROPERTY_CODE);
@@ -210,8 +252,8 @@ module ConfigCodeTest {
             var code = ConfigCode.encode(configAt(i));
             Test.assertMessage(code.equals(VALID_CODES[i]),
                 "vector " + i + " encodes to " + code + ", not " + VALID_CODES[i]);
-            Test.assertEqualMessage(code.length(), 46,
-                "a version-3 code is 46 characters");
+            Test.assertEqualMessage(code.length(), 48,
+                "a version-4 code is 48 characters");
         }
         return true;
     }
@@ -236,7 +278,7 @@ module ConfigCodeTest {
                                             (i + 1) * ConfigCode.FIELDS);
             Test.assertMessage(
                 sameConfig(ConfigCode.decode(V1_CODES[i]), expected),
-                "version-1 vector " + i + " does not decode as version 3 reads it");
+                "version-1 vector " + i + " does not decode as version 4 reads it");
         }
         return true;
     }
@@ -250,9 +292,29 @@ module ConfigCodeTest {
                                             (i + 1) * ConfigCode.FIELDS);
             var decoded = ConfigCode.decode(V2_CODES[i]);
             Test.assertMessage(sameConfig(decoded, expected),
-                "version-2 vector " + i + " does not decode as version 3 reads it");
+                "version-2 vector " + i + " does not decode as version 4 reads it");
             Test.assertEqualMessage((decoded as Array<Number>)[ConfigCode.FIELD_BOOST],
                 StatMap.BOOST_OFF, "a version-2 code asks for no boost");
+        }
+        return true;
+    }
+
+    //! A version-3 code still applies, with both time-ring extras Off: it was
+    //! written before the time ring had any.
+    (:test)
+    function aVersion3CodeDecodesWithTheTimeRingExtrasOff(logger as Logger)
+            as Boolean {
+        for (var i = 0; i < V3_CODES.size(); i++) {
+            var expected = V3_CONFIGS.slice(i * ConfigCode.FIELDS,
+                                            (i + 1) * ConfigCode.FIELDS);
+            var decoded = ConfigCode.decode(V3_CODES[i]);
+            Test.assertMessage(sameConfig(decoded, expected),
+                "version-3 vector " + i + " does not decode as version 4 reads it");
+            var config = decoded as Array<Number>;
+            Test.assertEqualMessage(config[ConfigCode.FIELD_HOUR_MARKS],
+                StatMap.TIME_EXTRA_OFF, "a version-3 code asks for no hour marks");
+            Test.assertEqualMessage(config[ConfigCode.FIELD_SECONDS],
+                StatMap.TIME_EXTRA_OFF, "a version-3 code asks for no seconds dot");
         }
         return true;
     }
@@ -309,11 +371,16 @@ module ConfigCodeTest {
             "a custom theme is five colours and three ramp stops");
         Test.assertEqualMessage(ConfigCode.FIELDS,
             1 + ConfigCode.ENUM_KEYS.size() + 2 + ConfigCode.CODE_COLOURS +
-                Palette.RAMP_POINTS + 3,
+                Palette.RAMP_POINTS + 5,
             "a config vector is theme, settings, temperatures, four custom " +
-            "colours, the stops, then ring 5, colour 5 and the boost");
-        Test.assertEqualMessage(ConfigCode.FIELD_BOOST, ConfigCode.FIELDS - 1,
-            "the boost is the last field, appended in version 3");
+            "colours, the stops, then ring 5, colour 5, the boost and the " +
+            "time ring's two extras");
+        Test.assertEqualMessage(ConfigCode.FIELD_BOOST, ConfigCode.FIELDS - 3,
+            "the boost is appended in version 3");
+        Test.assertEqualMessage(ConfigCode.FIELD_SECONDS, ConfigCode.FIELDS - 1,
+            "the seconds dot is the last field, appended in version 4");
+        Test.assertEqualMessage(ConfigCode.FIELD_HOUR_MARKS,
+            ConfigCode.FIELD_SECONDS - 1, "hour marks come before the seconds dot");
         Test.assertEqualMessage(StatMap.PROPERTY_RINGS[ConfigCode.CODE_RINGS],
             "ring5", "the appended ring is ring5");
         return true;

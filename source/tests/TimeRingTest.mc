@@ -463,8 +463,8 @@ module TimeRingTest {
     }
 
     //! Every theme stays under the always-on budget at its brightest with the
-    //! time: the ring all in the brightest colour either style draws, every
-    //! other ring full. White at 11:59 is the split's worst; the overlap's
+    //! time: the ring all in the brightest colour either style draws, its
+    //! twelve hour marks in white, every other ring full. White at 11:59 is the split's worst; the overlap's
     //! every colour is darker, which `brightestTimeColour` makes the test
     //! rather than an assumption.
     (:test)
@@ -481,15 +481,232 @@ module TimeRingTest {
                            MatrixTest.LIT_PIXELS_PER_DOT;
                 total += each * MatrixTest.ringSize(ring);
             }
+            // The twelve hour marks, which draw in always-on too: each a
+            // solid cell where a cross was, priced in white — brighter than
+            // anything a mark is painted, the lifted current hour included.
+            total += TimeRing.HOURS * MatrixTest.relativeLuminance(0xFFFFFF) *
+                     (DotGrid.DOT * DotGrid.DOT - MatrixTest.LIT_PIXELS_PER_DOT);
             var worst = total / (Math.PI * DotGrid.RADIUS * DotGrid.RADIUS);
             logger.debug("theme " + StatMap.THEME_IDS[t] +
-                         " worst always-on with the time: " + worst);
+                         " worst always-on with the time and hour marks: " +
+                         worst);
             Test.assertMessage(worst < MatrixTest.BUDGET,
                 "theme " + StatMap.THEME_IDS[t] + " with the time ring full " +
                 "exceeds the always-on budget: " + worst);
         }
         Properties.setValue(StatMap.PROPERTY_THEME, StatMap.THEME_TERRAIN);
         Config.reload();
+        return true;
+    }
+
+    // --- hour marks and the seconds dot -----------------------------------
+
+    //! How far apart two positions are round the ring, the short way.
+    function turnsApart(a as Float, b as Float) as Float {
+        var d = (a - b).abs();
+        return (d > 0.5) ? 1.0 - d : d;
+    }
+
+    function radiusSqOf(at as Number) as Number {
+        return DotGrid.xs[at] * DotGrid.xs[at] + DotGrid.ys[at] * DotGrid.ys[at];
+    }
+
+    //! The ring's middle, squared: a mark on the outer edge sits beyond it and
+    //! the seconds dot inside it.
+    function middleSq(ring as Number) as Number {
+        var outer = (ring == 0) ? DotGrid.RADIUS.toFloat()
+                                : Math.sqrt(DotGrid.ringEdge[ring - 1]).toFloat();
+        var middle = (outer + DotGrid.ringInner[ring]) / 2.0;
+        return (middle * middle).toNumber();
+    }
+
+    function inRing(ring as Number, at as Number) as Boolean {
+        return at >= DotGrid.ringStart[ring] && at < DotGrid.ringStart[ring + 1];
+    }
+
+    //! Twelve marks, one per hour, each a different dot of the time ring, on
+    //! its outer half and within a lattice pitch of arc of its hour.
+    (:test)
+    function theHourMarksSitOnTheOuterEdge(logger as Logger) as Boolean {
+        DotGrid.ensureBuilt();
+        var ring = StatMap.TIME_RING;
+        var dots = TimeRing.hourDotsFor(ring);
+        Test.assertEqualMessage(dots.size(), TimeRing.HOURS, "twelve hour marks");
+        var middle = middleSq(ring);
+        for (var h = 0; h < TimeRing.HOURS; h++) {
+            var at = dots[h];
+            Test.assertMessage(at >= 0 && inRing(ring, at),
+                "hour " + h + " has no dot on the time ring: " + at);
+            Test.assertMessage(radiusSqOf(at) > middle,
+                "hour " + h + "'s mark is not on the ring's outer half");
+            var off = turnsApart(DotGrid.positionOf[at], h.toFloat() / TimeRing.HOURS);
+            Test.assertMessage(off <= DotGrid.markerHalf[ring] + Angle.MAX_TURN_ERROR,
+                "hour " + h + "'s mark is " + off + " of a turn from its hour");
+            for (var k = 0; k < h; k++) {
+                Test.assertMessage(dots[k] != at,
+                    "hours " + k + " and " + h + " share a dot");
+            }
+        }
+        return true;
+    }
+
+    //! For every second of the minute the dot sits on the time ring's inner
+    //! half, near where a second hand would point — and never on an hour mark,
+    //! which is what lets a tick repaint a plain cross and nothing else.
+    (:test)
+    function theSecondsDotNeverLandsOnAnHourMark(logger as Logger) as Boolean {
+        DotGrid.ensureBuilt();
+        var ring = StatMap.TIME_RING;
+        var marks = TimeRing.hourDotsFor(ring);
+        var middle = middleSq(ring);
+        var last = -1;
+        for (var second = 0; second < 60; second++) {
+            var position = ClockData.secondFraction(second);
+            var at = TimeRing.secondDotFor(ring, position);
+            Test.assertMessage(at >= 0 && inRing(ring, at),
+                "second " + second + " has no dot on the time ring");
+            Test.assertMessage(radiusSqOf(at) < middle,
+                "second " + second + "'s dot is not on the ring's inner half");
+            var off = turnsApart(DotGrid.positionOf[at], position);
+            Test.assertMessage(off <= DotGrid.markerHalf[ring] + Angle.MAX_TURN_ERROR,
+                "second " + second + "'s dot is " + off + " of a turn away");
+            Test.assertMessage(marks.indexOf(at) < 0,
+                "second " + second + " lands on an hour mark");
+            Test.assertMessage(at != last,
+                "seconds " + (second - 1) + " and " + second + " share a dot");
+            last = at;
+        }
+        Test.assertEqualMessage(TimeRing.secondDotFor(ring, Source.NO_MARKER), -1,
+            "no second, no dot");
+        return true;
+    }
+
+    //! The seconds dot is a position, like the minute: empty on the minute and
+    //! a quarter at :15, never reaching 1.0.
+    (:test)
+    function theSecondReadsLikeAHand(logger as Logger) as Boolean {
+        Test.assertMessage(near(ClockData.secondFraction(0), 0.0), "0 at :00");
+        Test.assertMessage(near(ClockData.secondFraction(15), 0.25), "0.25 at :15");
+        Test.assertMessage(ClockData.secondFraction(59) < 1.0, "below 1.0 at :59");
+        Test.assertMessage(near(ClockData.secondFraction(60), 0.0),
+            "a leap second folds back onto the dial");
+        return true;
+    }
+
+    //! The current hour is the one the hour's fill last passed — on the hour
+    //! itself too, where floating point puts 10/12 a hair short of ten.
+    (:test)
+    function theCurrentHourIsTheLastTheFillPassed(logger as Logger) as Boolean {
+        var cases = [[10, 0, 10], [10, 59, 10], [11, 0, 11], [0, 0, 0],
+                     [12, 0, 0], [23, 59, 11], [6, 30, 6]] as Array<Array<Number> >;
+        for (var i = 0; i < cases.size(); i++) {
+            var c = cases[i];
+            var hour = TimeRing.currentHour(fractions(c[0], c[1])[0]);
+            Test.assertEqualMessage(hour, c[2],
+                c[0] + ":" + c[1] + " must light hour " + c[2] + "'s mark, not " + hour);
+        }
+        return true;
+    }
+
+    //! Only awake, only with the setting on, only on a watch with a time ring,
+    //! and only in the time ring's own slot.
+    (:test)
+    function theSecondsDotIsAwakeOnly(logger as Logger) as Boolean {
+        var saved = StatMap.seconds;
+        Properties.setValue(StatMap.PROPERTY_SECONDS, StatMap.TIME_EXTRA_ON);
+        Config.reload();
+        var marks = MatrixTest.noMarks();
+        StatMap.fillSecondMark(marks, false);
+        for (var ring = 0; ring < StatMap.RINGS; ring++) {
+            Test.assertEqualMessage(marks[ring], Source.NO_MARKER,
+                "always-on must carry no seconds dot");
+        }
+        StatMap.fillSecondMark(marks, true);
+        for (var ring = 0; ring < StatMap.RINGS; ring++) {
+            var expected = HandStyle.TIME_RING && ring == StatMap.TIME_RING;
+            Test.assertEqualMessage(marks[ring] >= 0.0, expected,
+                "ring " + ring + (expected ? " must" : " must not") +
+                " carry the seconds dot awake");
+        }
+        Properties.setValue(StatMap.PROPERTY_SECONDS, StatMap.TIME_EXTRA_OFF);
+        Config.reload();
+        marks = MatrixTest.noMarks();
+        StatMap.fillSecondMark(marks, true);
+        Test.assertEqualMessage(marks[StatMap.TIME_RING], Source.NO_MARKER,
+            "with the setting off there is no seconds dot");
+        Properties.setValue(StatMap.PROPERTY_SECONDS, saved);
+        Config.reload();
+        return true;
+    }
+
+    //! A second that moves nothing else repaints one dot and rubs out one
+    //! cell, not the ring — in both styles, with the hour marks on.
+    (:test)
+    function aSecondsTickRepaintsOneDot(logger as Logger) as Boolean {
+        var saved = StatMap.hourMarks;
+        Properties.setValue(StatMap.PROPERTY_HOUR_MARKS, StatMap.TIME_EXTRA_ON);
+        Config.reload();
+        DotGrid.ensureBuilt();
+        var dc = MatrixTest.probeDc(logger);
+        if (dc != null) {
+            var style = StatMap.rings[0];
+            for (var s = 0; s < Source.TIME_STYLES.size(); s++) {
+                StatMap.rings[0] = Source.TIME_STYLES[s];
+                ticksOneDot(logger, dc);
+            }
+            StatMap.rings[0] = style;
+        }
+        Properties.setValue(StatMap.PROPERTY_HOUR_MARKS, saved);
+        Config.reload();
+        return true;
+    }
+
+    function ticksOneDot(logger as Logger, dc as Graphics.Dc) as Void {
+        DateGlyph.active = false;
+        var spans = MatrixTest.everySpan(0.0, 0.5);
+        spans[0] = fractions(10, 27);
+        var marks = MatrixTest.noMarks();
+        marks[0] = ClockData.secondFraction(14);
+        var overs = MatrixTest.noOvers();
+        var blocks = MatrixTest.emptyBlocks();
+        MatrixRenderer.draw(dc, spans, marks, overs, blocks, Palette.active,
+                            Palette.rampActive, null, FrameGate.everything(), true);
+        marks[0] = ClockData.secondFraction(15);
+        MatrixRenderer.draw(dc, spans, marks, overs, blocks, Palette.active,
+                            Palette.rampActive, null,
+                            MatrixTest.onlyRingDirty(0), false);
+        logger.debug("style " + StatMap.rings[0] + " tick: painted " +
+                     MatrixRenderer.painted + ", erased " + MatrixRenderer.erased);
+        Test.assertEqualMessage(MatrixRenderer.painted, 1,
+            "a seconds tick must repaint the one dot the second left");
+        Test.assertEqualMessage(MatrixRenderer.erased, 1,
+            "a seconds tick must rub out the one cell the second left");
+
+        // And a minute is still the whole ring, seconds dot or not.
+        spans[0] = fractions(10, 28);
+        marks[0] = ClockData.secondFraction(0);
+        MatrixRenderer.draw(dc, spans, marks, overs, blocks, Palette.active,
+                            Palette.rampActive, null,
+                            MatrixTest.onlyRingDirty(0), false);
+        Test.assertEqualMessage(MatrixRenderer.painted, MatrixTest.ringSize(0),
+            "a minute must still repaint the time ring whole");
+    }
+
+    //! The two rows exist exactly where the time ring does, and each opens on
+    //! the value in use.
+    (:test)
+    function theTimeRingRowsAreOnlyWhereThereIsATimeRing(logger as Logger)
+            as Boolean {
+        var menu = new SettingsMenu();
+        var ids = [:hourMarks, :seconds] as Array<Symbol>;
+        for (var i = 0; i < ids.size(); i++) {
+            var row = menu.findItemById(ids[i]);
+            Test.assertEqualMessage(row >= 0, HandStyle.TIME_RING,
+                "row " + i + (HandStyle.TIME_RING ? " is missing" :
+                              " must not exist on a watch with hands"));
+        }
+        Test.assertEqualMessage(EXTRA_LABELS.size(), StatMap.TIME_EXTRA_ON + 1,
+            "every extra value needs a label");
         return true;
     }
 }

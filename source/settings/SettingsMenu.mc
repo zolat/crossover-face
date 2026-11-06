@@ -31,6 +31,12 @@ const BOOST_LABELS = [
 //! Source names, in Source.Kind order — every value, including the retired
 //! one, so this stays indexable by the enum. What the picker *offers* is
 //! Source.OFFERED, which is a different and shorter list.
+//! The time ring's extras, in StatMap.TimeExtra order.
+const EXTRA_LABELS = [
+    Rez.Strings.ExtraOff,
+    Rez.Strings.ExtraOn
+] as Array<ResourceId>;
+
 const SOURCE_LABELS = [
     Rez.Strings.SourceSteps,
     Rez.Strings.SourceRetired,
@@ -72,6 +78,14 @@ class SettingsMenu extends WatchUi.Menu2 {
             addItem(new WatchUi.MenuItem(
                 Rez.Strings.BackingTitle, backingLabel(), :backing, null));
         }
+        // And where there are none, the ring that tells the time instead gets
+        // its two extras in the same place.
+        if (HandStyle.TIME_RING) {
+            addItem(new WatchUi.MenuItem(Rez.Strings.HourMarksTitle,
+                EXTRA_LABELS[StatMap.hourMarks], :hourMarks, null));
+            addItem(new WatchUi.MenuItem(Rez.Strings.SecondsDotTitle,
+                EXTRA_LABELS[StatMap.seconds], :seconds, null));
+        }
         addItem(new WatchUi.MenuItem(Rez.Strings.AlwaysOnFillTitle,
             alwaysOnFillLabel(), :alwaysOnFill, null));
         addItem(new WatchUi.MenuItem(Rez.Strings.BoostTitle,
@@ -103,6 +117,10 @@ class SettingsMenu extends WatchUi.Menu2 {
         setSubLabelOf(:theme, themeLabel());
         if (HandStyle.HANDS) {
             setSubLabelOf(:backing, backingLabel());
+        }
+        if (HandStyle.TIME_RING) {
+            setSubLabelOf(:hourMarks, EXTRA_LABELS[StatMap.hourMarks]);
+            setSubLabelOf(:seconds, EXTRA_LABELS[StatMap.seconds]);
         }
         setSubLabelOf(:alwaysOnFill, alwaysOnFillLabel());
         setSubLabelOf(:boost, BOOST_LABELS[StatMap.boost]);
@@ -181,6 +199,14 @@ class SettingsMenuDelegate extends WatchUi.Menu2InputDelegate {
                  Rez.Strings.BackingWhite,
                  Rez.Strings.BackingDark] as Array<ResourceId>,
                 sequential(3), StatMap.backing));
+        } else if (id == :hourMarks) {
+            push(new ChoiceMenu(Rez.Strings.HourMarksTitle,
+                StatMap.PROPERTY_HOUR_MARKS, EXTRA_LABELS, sequential(2),
+                StatMap.hourMarks));
+        } else if (id == :seconds) {
+            push(new ChoiceMenu(Rez.Strings.SecondsDotTitle,
+                StatMap.PROPERTY_SECONDS, EXTRA_LABELS, sequential(2),
+                StatMap.seconds));
         } else if (id == :alwaysOnFill) {
             push(new ChoiceMenu(Rez.Strings.AlwaysOnFillTitle,
                 StatMap.PROPERTY_ALWAYS_ON_FILL,

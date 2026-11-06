@@ -23,6 +23,14 @@
     <!-- 0 50%, 1 65%, 2 80%: how bright the date's connecting lines are,
          against the dots they join. Kept in sync with StatMap.DateOutline. -->
     <property id="dateOutline" type="number">1</property>
+    <!-- The time ring's extras, 0 off / 1 on: a solid dot at each hour on its
+         outer edge (the current hour's brighter), and a dot running round its
+         inner edge with the second, awake only. Read only on a watch with a
+         time ring; not in settings.xml, like the time style, so Garmin
+         Connect never offers them to the Crossover. Kept in sync with
+         StatMap.TimeExtra. -->
+    <property id="timeHourMarks" type="number">0</property>
+    <property id="timeSeconds" type="number">0</property>
     <!-- Which Source each ring shows. See Source.Kind:
          0 steps, 1 retired, 2 battery, 3 body battery,
          4 temperature range, 5 rain chance, 6 intensity minutes,

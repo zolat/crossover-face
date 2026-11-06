@@ -1,5 +1,5 @@
 {
-  "_comment": "Shared vectors for the three config-code codecs; see docs/config-code.md. Colours are 0xRRGGBB as decimal. 'why' is Python's message, informative only. 'valid' codes are version 3; 'v1' and 'v2' codes are decode-only, with the config a version-3 decoder makes of them (what each version lacks at its default: ring 5 Steps, colour 5 gold, always-on boost Off).",
+  "_comment": "Shared vectors for the three config-code codecs; see docs/config-code.md. Colours are 0xRRGGBB as decimal. 'why' is Python's message, informative only. 'valid' codes are version 4; 'v1', 'v2' and 'v3' codes are decode-only, with the config a version-4 decoder makes of them (what each version lacks at its default: ring 5 Steps, colour 5 gold, always-on boost Off, hour marks and seconds dot Off).",
   "crc_check": {
     "input": "123456789",
     "crc": 10673
@@ -20,6 +20,8 @@
         "ring4": 3,
         "ring5": 0,
         "alwaysOnBoost": 0,
+        "timeHourMarks": 0,
+        "timeSeconds": 0,
         "tempAheadLow": 0,
         "tempAheadHigh": 45,
         "customColours": [
@@ -35,7 +37,7 @@
           3
         ]
       },
-      "code": "AwAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AAAzEQ"
+      "code": "BAAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AAAAALZO"
     },
     {
       "name": "custom-theme-every-field-moved",
@@ -52,6 +54,8 @@
         "ring4": 7,
         "ring5": 0,
         "alwaysOnBoost": 0,
+        "timeHourMarks": 0,
+        "timeSeconds": 0,
         "tempAheadLow": -20,
         "tempAheadHigh": 50,
         "customColours": [
@@ -67,7 +71,7 @@
           0
         ]
       },
-      "code": "A2MCAQEAAgkKDQcARv___wAAABI0VqvN7wcA5bM6AAC1Sg"
+      "code": "BGMCAQEAAgkKDQcARv___wAAABI0VqvN7wcA5bM6AAAAAOzu"
     },
     {
       "name": "inverted-temperatures-are-carried-not-normalised",
@@ -84,6 +88,8 @@
         "ring4": 4,
         "ring5": 0,
         "alwaysOnBoost": 0,
+        "timeHourMarks": 0,
+        "timeSeconds": 0,
         "tempAheadLow": 50,
         "tempAheadHigh": -20,
         "customColours": [
@@ -99,7 +105,7 @@
           3
         ]
       },
-      "code": "AwgAAAABAQwLBQRGAOh5-bjWS3_U__9rWzIA5bM6AADMWg"
+      "code": "BAgAAAABAQwLBQRGAOh5-bjWS3_U__9rWzIA5bM6AAAAAEwe"
     },
     {
       "name": "values-statmap-cleans-are-still-in-range",
@@ -116,6 +122,8 @@
         "ring4": 9,
         "ring5": 0,
         "alwaysOnBoost": 0,
+        "timeHourMarks": 0,
+        "timeSeconds": 0,
         "tempAheadLow": 0,
         "tempAheadHigh": 45,
         "customColours": [
@@ -131,7 +139,7 @@
           3
         ]
       },
-      "code": "AwEAAAABAQABAgkUQeh5-bjWS3_U__9rWzIA5bM6AACnEQ"
+      "code": "BAEAAAABAQABAgkUQeh5-bjWS3_U__9rWzIA5bM6AAAAAGJh"
     },
     {
       "name": "beacon-equal-temperatures",
@@ -148,6 +156,8 @@
         "ring4": 3,
         "ring5": 0,
         "alwaysOnBoost": 0,
+        "timeHourMarks": 0,
+        "timeSeconds": 0,
         "tempAheadLow": 12,
         "tempAheadHigh": 12,
         "customColours": [
@@ -163,7 +173,7 @@
           0
         ]
       },
-      "code": "AwcAAAABAQAIAgMgIOh5-bjWS3_U__9rWwAA5bM6AAAqdg"
+      "code": "BAcAAAABAQAIAgMgIOh5-bjWS3_U__9rWwAA5bM6AAAAABPk"
     },
     {
       "name": "drawn-hands-time-ring",
@@ -180,6 +190,8 @@
         "ring4": 3,
         "ring5": 0,
         "alwaysOnBoost": 0,
+        "timeHourMarks": 0,
+        "timeSeconds": 0,
         "tempAheadLow": 0,
         "tempAheadHigh": 45,
         "customColours": [
@@ -195,7 +207,7 @@
           3
         ]
       },
-      "code": "AwABAAABAQ8IAgMUQeh5-bjWS3_U__9rWzIA5bM6AAD_wQ"
+      "code": "BAABAAABAQ8IAgMUQeh5-bjWS3_U__9rWzIA5bM6AAAAAC4K"
     },
     {
       "name": "time-styles-anywhere-are-in-range",
@@ -212,6 +224,8 @@
         "ring4": 15,
         "ring5": 0,
         "alwaysOnBoost": 0,
+        "timeHourMarks": 0,
+        "timeSeconds": 0,
         "tempAheadLow": 0,
         "tempAheadHigh": 45,
         "customColours": [
@@ -227,7 +241,7 @@
           3
         ]
       },
-      "code": "AwAAAAABAQ4NAg8UQeh5-bjWS3_U__9rWzIA5bM6AAChhw"
+      "code": "BAAAAAABAQ4NAg8UQeh5-bjWS3_U__9rWzIA5bM6AAAAACu4"
     },
     {
       "name": "fifth-ring-and-a-fifth-colour",
@@ -244,6 +258,8 @@
         "ring4": 3,
         "ring5": 7,
         "alwaysOnBoost": 0,
+        "timeHourMarks": 0,
+        "timeSeconds": 0,
         "tempAheadLow": 0,
         "tempAheadHigh": 45,
         "customColours": [
@@ -259,7 +275,7 @@
           0
         ]
       },
-      "code": "A2MAAAABAQAIAgMUQREiM0RVZneImaq7zAQHEjRWAQAFzw"
+      "code": "BGMAAAABAQAIAgMUQREiM0RVZneImaq7zAQHEjRWAQAAADPO"
     },
     {
       "name": "every-version-2-field-at-its-top",
@@ -276,6 +292,8 @@
         "ring4": 3,
         "ring5": 15,
         "alwaysOnBoost": 0,
+        "timeHourMarks": 0,
+        "timeSeconds": 0,
         "tempAheadLow": 0,
         "tempAheadHigh": 45,
         "customColours": [
@@ -291,7 +309,7 @@
           4
         ]
       },
-      "code": "AwAAAAABAQAIAgMUQQAAAAAAAAAAAAAAAAAP____BwCUlQ"
+      "code": "BAAAAAABAQAIAgMUQQAAAAAAAAAAAAAAAAAP____BwAAAOOr"
     },
     {
       "name": "always-on-bright",
@@ -308,6 +326,8 @@
         "ring4": 3,
         "ring5": 0,
         "alwaysOnBoost": 1,
+        "timeHourMarks": 0,
+        "timeSeconds": 0,
         "tempAheadLow": 0,
         "tempAheadHigh": 45,
         "customColours": [
@@ -323,7 +343,7 @@
           3
         ]
       },
-      "code": "AwAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AAEjMA"
+      "code": "BAAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AAEAAIF-"
     },
     {
       "name": "always-on-brightest",
@@ -340,6 +360,8 @@
         "ring4": 3,
         "ring5": 0,
         "alwaysOnBoost": 2,
+        "timeHourMarks": 0,
+        "timeSeconds": 0,
         "tempAheadLow": 0,
         "tempAheadHigh": 45,
         "customColours": [
@@ -355,7 +377,7 @@
           3
         ]
       },
-      "code": "AwAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AAITUw"
+      "code": "BAAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AAIAANgu"
     },
     {
       "name": "every-version-3-field-at-its-top",
@@ -372,6 +394,8 @@
         "ring4": 3,
         "ring5": 15,
         "alwaysOnBoost": 2,
+        "timeHourMarks": 0,
+        "timeSeconds": 0,
         "tempAheadLow": 0,
         "tempAheadHigh": 45,
         "customColours": [
@@ -387,7 +411,109 @@
           4
         ]
       },
-      "code": "AwAAAAABAQAIAgMUQQAAAAAAAAAAAAAAAAAP____BwK01w"
+      "code": "BAAAAAABAQAIAgMUQQAAAAAAAAAAAAAAAAAP____BwIAAI3L"
+    },
+    {
+      "name": "time-ring-hour-marks",
+      "config": {
+        "theme": 0,
+        "handBacking": 0,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 15,
+        "ring2": 8,
+        "ring3": 2,
+        "ring4": 3,
+        "ring5": 0,
+        "alwaysOnBoost": 0,
+        "timeHourMarks": 1,
+        "timeSeconds": 0,
+        "tempAheadLow": 0,
+        "tempAheadHigh": 45,
+        "customColours": [
+          15235577,
+          12113483,
+          8377599,
+          16739163,
+          15053626
+        ],
+        "customRamp": [
+          2,
+          0,
+          3
+        ]
+      },
+      "code": "BAAAAAABAQ8IAgMUQeh5-bjWS3_U__9rWzIA5bM6AAABAER9"
+    },
+    {
+      "name": "time-ring-seconds-dot",
+      "config": {
+        "theme": 0,
+        "handBacking": 0,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 15,
+        "ring2": 8,
+        "ring3": 2,
+        "ring4": 3,
+        "ring5": 0,
+        "alwaysOnBoost": 0,
+        "timeHourMarks": 0,
+        "timeSeconds": 1,
+        "tempAheadLow": 0,
+        "tempAheadHigh": 45,
+        "customColours": [
+          15235577,
+          12113483,
+          8377599,
+          16739163,
+          15053626
+        ],
+        "customRamp": [
+          2,
+          0,
+          3
+        ]
+      },
+      "code": "BAAAAAABAQ8IAgMUQeh5-bjWS3_U__9rWzIA5bM6AAAAAWdt"
+    },
+    {
+      "name": "every-version-4-field-at-its-top",
+      "config": {
+        "theme": 0,
+        "handBacking": 0,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 0,
+        "ring2": 8,
+        "ring3": 2,
+        "ring4": 3,
+        "ring5": 15,
+        "alwaysOnBoost": 2,
+        "timeHourMarks": 1,
+        "timeSeconds": 1,
+        "tempAheadLow": 0,
+        "tempAheadHigh": 45,
+        "customColours": [
+          0,
+          0,
+          0,
+          0,
+          16777215
+        ],
+        "customRamp": [
+          4,
+          4,
+          4
+        ]
+      },
+      "code": "BAAAAAABAQAIAgMUQQAAAAAAAAAAAAAAAAAP____BwIBAa7b"
     }
   ],
   "v1": [
@@ -406,6 +532,8 @@
         "ring4": 3,
         "ring5": 0,
         "alwaysOnBoost": 0,
+        "timeHourMarks": 0,
+        "timeSeconds": 0,
         "tempAheadLow": 0,
         "tempAheadHigh": 45,
         "customColours": [
@@ -438,6 +566,8 @@
         "ring4": 7,
         "ring5": 0,
         "alwaysOnBoost": 0,
+        "timeHourMarks": 0,
+        "timeSeconds": 0,
         "tempAheadLow": -20,
         "tempAheadHigh": 50,
         "customColours": [
@@ -470,6 +600,8 @@
         "ring4": 4,
         "ring5": 0,
         "alwaysOnBoost": 0,
+        "timeHourMarks": 0,
+        "timeSeconds": 0,
         "tempAheadLow": 50,
         "tempAheadHigh": -20,
         "customColours": [
@@ -502,6 +634,8 @@
         "ring4": 9,
         "ring5": 0,
         "alwaysOnBoost": 0,
+        "timeHourMarks": 0,
+        "timeSeconds": 0,
         "tempAheadLow": 0,
         "tempAheadHigh": 45,
         "customColours": [
@@ -534,6 +668,8 @@
         "ring4": 3,
         "ring5": 0,
         "alwaysOnBoost": 0,
+        "timeHourMarks": 0,
+        "timeSeconds": 0,
         "tempAheadLow": 12,
         "tempAheadHigh": 12,
         "customColours": [
@@ -566,6 +702,8 @@
         "ring4": 3,
         "ring5": 0,
         "alwaysOnBoost": 0,
+        "timeHourMarks": 0,
+        "timeSeconds": 0,
         "tempAheadLow": 0,
         "tempAheadHigh": 45,
         "customColours": [
@@ -598,6 +736,8 @@
         "ring4": 15,
         "ring5": 0,
         "alwaysOnBoost": 0,
+        "timeHourMarks": 0,
+        "timeSeconds": 0,
         "tempAheadLow": 0,
         "tempAheadHigh": 45,
         "customColours": [
@@ -632,6 +772,8 @@
         "ring4": 3,
         "ring5": 0,
         "alwaysOnBoost": 0,
+        "timeHourMarks": 0,
+        "timeSeconds": 0,
         "tempAheadLow": 0,
         "tempAheadHigh": 45,
         "customColours": [
@@ -664,6 +806,8 @@
         "ring4": 7,
         "ring5": 0,
         "alwaysOnBoost": 0,
+        "timeHourMarks": 0,
+        "timeSeconds": 0,
         "tempAheadLow": -20,
         "tempAheadHigh": 50,
         "customColours": [
@@ -696,6 +840,8 @@
         "ring4": 4,
         "ring5": 0,
         "alwaysOnBoost": 0,
+        "timeHourMarks": 0,
+        "timeSeconds": 0,
         "tempAheadLow": 50,
         "tempAheadHigh": -20,
         "customColours": [
@@ -728,6 +874,8 @@
         "ring4": 9,
         "ring5": 0,
         "alwaysOnBoost": 0,
+        "timeHourMarks": 0,
+        "timeSeconds": 0,
         "tempAheadLow": 0,
         "tempAheadHigh": 45,
         "customColours": [
@@ -760,6 +908,8 @@
         "ring4": 3,
         "ring5": 0,
         "alwaysOnBoost": 0,
+        "timeHourMarks": 0,
+        "timeSeconds": 0,
         "tempAheadLow": 12,
         "tempAheadHigh": 12,
         "customColours": [
@@ -792,6 +942,8 @@
         "ring4": 3,
         "ring5": 0,
         "alwaysOnBoost": 0,
+        "timeHourMarks": 0,
+        "timeSeconds": 0,
         "tempAheadLow": 0,
         "tempAheadHigh": 45,
         "customColours": [
@@ -824,6 +976,8 @@
         "ring4": 15,
         "ring5": 0,
         "alwaysOnBoost": 0,
+        "timeHourMarks": 0,
+        "timeSeconds": 0,
         "tempAheadLow": 0,
         "tempAheadHigh": 45,
         "customColours": [
@@ -856,6 +1010,8 @@
         "ring4": 3,
         "ring5": 7,
         "alwaysOnBoost": 0,
+        "timeHourMarks": 0,
+        "timeSeconds": 0,
         "tempAheadLow": 0,
         "tempAheadHigh": 45,
         "customColours": [
@@ -888,6 +1044,8 @@
         "ring4": 3,
         "ring5": 15,
         "alwaysOnBoost": 0,
+        "timeHourMarks": 0,
+        "timeSeconds": 0,
         "tempAheadLow": 0,
         "tempAheadHigh": 45,
         "customColours": [
@@ -906,15 +1064,425 @@
       "code": "AgAAAAABAQAIAgMUQQAAAAAAAAAAAAAAAAAP____B7jr"
     }
   ],
+  "v3": [
+    {
+      "name": "defaults",
+      "config": {
+        "theme": 0,
+        "handBacking": 0,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 0,
+        "ring2": 8,
+        "ring3": 2,
+        "ring4": 3,
+        "ring5": 0,
+        "alwaysOnBoost": 0,
+        "timeHourMarks": 0,
+        "timeSeconds": 0,
+        "tempAheadLow": 0,
+        "tempAheadHigh": 45,
+        "customColours": [
+          15235577,
+          12113483,
+          8377599,
+          16739163,
+          15053626
+        ],
+        "customRamp": [
+          2,
+          0,
+          3
+        ]
+      },
+      "code": "AwAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AAAzEQ"
+    },
+    {
+      "name": "custom-theme-every-field-moved",
+      "config": {
+        "theme": 99,
+        "handBacking": 2,
+        "alwaysOnFill": 1,
+        "dotRotation": 1,
+        "showDate": 0,
+        "dateOutline": 2,
+        "ring1": 9,
+        "ring2": 10,
+        "ring3": 13,
+        "ring4": 7,
+        "ring5": 0,
+        "alwaysOnBoost": 0,
+        "timeHourMarks": 0,
+        "timeSeconds": 0,
+        "tempAheadLow": -20,
+        "tempAheadHigh": 50,
+        "customColours": [
+          16777215,
+          0,
+          1193046,
+          11259375,
+          15053626
+        ],
+        "customRamp": [
+          3,
+          1,
+          0
+        ]
+      },
+      "code": "A2MCAQEAAgkKDQcARv___wAAABI0VqvN7wcA5bM6AAC1Sg"
+    },
+    {
+      "name": "inverted-temperatures-are-carried-not-normalised",
+      "config": {
+        "theme": 8,
+        "handBacking": 0,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 12,
+        "ring2": 11,
+        "ring3": 5,
+        "ring4": 4,
+        "ring5": 0,
+        "alwaysOnBoost": 0,
+        "timeHourMarks": 0,
+        "timeSeconds": 0,
+        "tempAheadLow": 50,
+        "tempAheadHigh": -20,
+        "customColours": [
+          15235577,
+          12113483,
+          8377599,
+          16739163,
+          15053626
+        ],
+        "customRamp": [
+          2,
+          0,
+          3
+        ]
+      },
+      "code": "AwgAAAABAQwLBQRGAOh5-bjWS3_U__9rWzIA5bM6AADMWg"
+    },
+    {
+      "name": "values-statmap-cleans-are-still-in-range",
+      "config": {
+        "theme": 1,
+        "handBacking": 0,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 0,
+        "ring2": 1,
+        "ring3": 2,
+        "ring4": 9,
+        "ring5": 0,
+        "alwaysOnBoost": 0,
+        "timeHourMarks": 0,
+        "timeSeconds": 0,
+        "tempAheadLow": 0,
+        "tempAheadHigh": 45,
+        "customColours": [
+          15235577,
+          12113483,
+          8377599,
+          16739163,
+          15053626
+        ],
+        "customRamp": [
+          2,
+          0,
+          3
+        ]
+      },
+      "code": "AwEAAAABAQABAgkUQeh5-bjWS3_U__9rWzIA5bM6AACnEQ"
+    },
+    {
+      "name": "beacon-equal-temperatures",
+      "config": {
+        "theme": 7,
+        "handBacking": 0,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 0,
+        "ring2": 8,
+        "ring3": 2,
+        "ring4": 3,
+        "ring5": 0,
+        "alwaysOnBoost": 0,
+        "timeHourMarks": 0,
+        "timeSeconds": 0,
+        "tempAheadLow": 12,
+        "tempAheadHigh": 12,
+        "customColours": [
+          15235577,
+          12113483,
+          8377599,
+          16739163,
+          15053626
+        ],
+        "customRamp": [
+          0,
+          0,
+          0
+        ]
+      },
+      "code": "AwcAAAABAQAIAgMgIOh5-bjWS3_U__9rWwAA5bM6AAAqdg"
+    },
+    {
+      "name": "drawn-hands-time-ring",
+      "config": {
+        "theme": 0,
+        "handBacking": 1,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 15,
+        "ring2": 8,
+        "ring3": 2,
+        "ring4": 3,
+        "ring5": 0,
+        "alwaysOnBoost": 0,
+        "timeHourMarks": 0,
+        "timeSeconds": 0,
+        "tempAheadLow": 0,
+        "tempAheadHigh": 45,
+        "customColours": [
+          15235577,
+          12113483,
+          8377599,
+          16739163,
+          15053626
+        ],
+        "customRamp": [
+          2,
+          0,
+          3
+        ]
+      },
+      "code": "AwABAAABAQ8IAgMUQeh5-bjWS3_U__9rWzIA5bM6AAD_wQ"
+    },
+    {
+      "name": "time-styles-anywhere-are-in-range",
+      "config": {
+        "theme": 0,
+        "handBacking": 0,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 14,
+        "ring2": 13,
+        "ring3": 2,
+        "ring4": 15,
+        "ring5": 0,
+        "alwaysOnBoost": 0,
+        "timeHourMarks": 0,
+        "timeSeconds": 0,
+        "tempAheadLow": 0,
+        "tempAheadHigh": 45,
+        "customColours": [
+          15235577,
+          12113483,
+          8377599,
+          16739163,
+          15053626
+        ],
+        "customRamp": [
+          2,
+          0,
+          3
+        ]
+      },
+      "code": "AwAAAAABAQ4NAg8UQeh5-bjWS3_U__9rWzIA5bM6AAChhw"
+    },
+    {
+      "name": "fifth-ring-and-a-fifth-colour",
+      "config": {
+        "theme": 99,
+        "handBacking": 0,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 0,
+        "ring2": 8,
+        "ring3": 2,
+        "ring4": 3,
+        "ring5": 7,
+        "alwaysOnBoost": 0,
+        "timeHourMarks": 0,
+        "timeSeconds": 0,
+        "tempAheadLow": 0,
+        "tempAheadHigh": 45,
+        "customColours": [
+          1122867,
+          4478310,
+          7833753,
+          11189196,
+          1193046
+        ],
+        "customRamp": [
+          4,
+          1,
+          0
+        ]
+      },
+      "code": "A2MAAAABAQAIAgMUQREiM0RVZneImaq7zAQHEjRWAQAFzw"
+    },
+    {
+      "name": "every-version-2-field-at-its-top",
+      "config": {
+        "theme": 0,
+        "handBacking": 0,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 0,
+        "ring2": 8,
+        "ring3": 2,
+        "ring4": 3,
+        "ring5": 15,
+        "alwaysOnBoost": 0,
+        "timeHourMarks": 0,
+        "timeSeconds": 0,
+        "tempAheadLow": 0,
+        "tempAheadHigh": 45,
+        "customColours": [
+          0,
+          0,
+          0,
+          0,
+          16777215
+        ],
+        "customRamp": [
+          4,
+          4,
+          4
+        ]
+      },
+      "code": "AwAAAAABAQAIAgMUQQAAAAAAAAAAAAAAAAAP____BwCUlQ"
+    },
+    {
+      "name": "always-on-bright",
+      "config": {
+        "theme": 0,
+        "handBacking": 0,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 0,
+        "ring2": 8,
+        "ring3": 2,
+        "ring4": 3,
+        "ring5": 0,
+        "alwaysOnBoost": 1,
+        "timeHourMarks": 0,
+        "timeSeconds": 0,
+        "tempAheadLow": 0,
+        "tempAheadHigh": 45,
+        "customColours": [
+          15235577,
+          12113483,
+          8377599,
+          16739163,
+          15053626
+        ],
+        "customRamp": [
+          2,
+          0,
+          3
+        ]
+      },
+      "code": "AwAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AAEjMA"
+    },
+    {
+      "name": "always-on-brightest",
+      "config": {
+        "theme": 0,
+        "handBacking": 0,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 0,
+        "ring2": 8,
+        "ring3": 2,
+        "ring4": 3,
+        "ring5": 0,
+        "alwaysOnBoost": 2,
+        "timeHourMarks": 0,
+        "timeSeconds": 0,
+        "tempAheadLow": 0,
+        "tempAheadHigh": 45,
+        "customColours": [
+          15235577,
+          12113483,
+          8377599,
+          16739163,
+          15053626
+        ],
+        "customRamp": [
+          2,
+          0,
+          3
+        ]
+      },
+      "code": "AwAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AAITUw"
+    },
+    {
+      "name": "every-version-3-field-at-its-top",
+      "config": {
+        "theme": 0,
+        "handBacking": 0,
+        "alwaysOnFill": 0,
+        "dotRotation": 0,
+        "showDate": 1,
+        "dateOutline": 1,
+        "ring1": 0,
+        "ring2": 8,
+        "ring3": 2,
+        "ring4": 3,
+        "ring5": 15,
+        "alwaysOnBoost": 2,
+        "timeHourMarks": 0,
+        "timeSeconds": 0,
+        "tempAheadLow": 0,
+        "tempAheadHigh": 45,
+        "customColours": [
+          0,
+          0,
+          0,
+          0,
+          16777215
+        ],
+        "customRamp": [
+          4,
+          4,
+          4
+        ]
+      },
+      "code": "AwAAAAABAQAIAgMUQQAAAAAAAAAAAAAAAAAP____BwK01w"
+    }
+  ],
   "aliases": [
     {
       "name": "standard-alphabet-with-padding",
-      "code": "A2MCAQEAAgkKDQcARv///wAAABI0VqvN7wcA5bM6AAC1Sg==",
+      "code": "BGMCAQEAAgkKDQcARv///wAAABI0VqvN7wcA5bM6AAAAAOzu",
       "same_as": "custom-theme-every-field-moved"
     },
     {
       "name": "whitespace-and-line-breaks",
-      "code": "  A2MCAQEAAgkKDQcARv__\n _wAAABI0VqvN7wcA5bM6AAC1Sg\t",
+      "code": "  BGMCAQEAAgkKDQcARv__\n _wAAABI0VqvN7wcA5bM6AAAAAOzu\t",
       "same_as": "custom-theme-every-field-moved"
     }
   ],
@@ -1025,9 +1593,9 @@
       "why": "checksum does not match: the code is damaged or mistyped"
     },
     {
-      "name": "unknown-version-4",
+      "name": "version-4-at-version-3-length",
       "code": "BAAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AACt4g",
-      "why": "version 4 is not one this decoder reads (1, 2, 3)"
+      "why": "34 bytes, a version-4 code is 36"
     },
     {
       "name": "v3-one-byte-too-long",
@@ -1043,6 +1611,36 @@
       "name": "boost-out-of-range",
       "code": "AwAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AAMDcg",
       "why": "alwaysOnBoost=3 is outside 0..2"
+    },
+    {
+      "name": "unknown-version-5",
+      "code": "BQAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AAAAACpr",
+      "why": "version 5 is not one this decoder reads (1, 2, 3, 4)"
+    },
+    {
+      "name": "v4-checksum-mismatch",
+      "code": "BAAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AAAAALZP",
+      "why": "checksum does not match: the code is damaged or mistyped"
+    },
+    {
+      "name": "v4-one-byte-too-long",
+      "code": "BAAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AAAAAACJHQ",
+      "why": "37 bytes, a version-4 code is 36"
+    },
+    {
+      "name": "version-3-at-version-4-length",
+      "code": "AwAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AAAAAFLW",
+      "why": "36 bytes, a version-3 code is 34"
+    },
+    {
+      "name": "hour-marks-out-of-range",
+      "code": "BAAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AAACANAs",
+      "why": "timeHourMarks=2 is outside 0..1"
+    },
+    {
+      "name": "seconds-dot-out-of-range",
+      "code": "BAAAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AAAAApYM",
+      "why": "timeSeconds=2 is outside 0..1"
     }
   ]
 }

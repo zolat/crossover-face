@@ -151,6 +151,9 @@ class CrossoverView extends WatchUi.WatchFace {
         // does. See fillMarksFor().
         var markers = _markers;
         fillMarksFor(hideFills, markers, spans, overs);
+        // The time ring's seconds dot rides its otherwise empty mark slot,
+        // awake only.
+        StatMap.fillSecondMark(markers, !lowPower);
         // The sun dots follow the mark: both modes, held back with the fills.
         var suns = _suns;
         if (hideFills) {
