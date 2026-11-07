@@ -35,6 +35,11 @@ Phase 4.2, a time-colours control in the configurator.
     rather than once per sample, same answers; it needs a watch to show it matters.
   - [ ] Epix: the 416 with drawn hands fits one block ring, not two; the 454 trips on
     defaults. Both predate ring 3.
+- [x] Duo-tone themes — two colours alternating ring by ring, to quieten faces the data
+  already colours. Ten candidates were reviewed in the configurator; Lemon & Azure,
+  Emerald & Violet and Orchid & Lime ship as themes 9–11, and the other seven are the
+  configurator's extended library, loaded as the custom theme. Lemon & Azure is the new
+  brightest theme: 6.4% worst-case always-on on the Crossover.
 
 ## Web configurator
 

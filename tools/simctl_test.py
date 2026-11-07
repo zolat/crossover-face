@@ -94,6 +94,9 @@ class ThemeResources(unittest.TestCase):
                 ("1", "@Strings.ThemeActivity"),
                 ("7", "@Strings.ThemeBeacon"),
                 ("8", "@Strings.ThemePulse"),
+                ("9", "@Strings.ThemeLemonAzure"),
+                ("10", "@Strings.ThemeEmeraldViolet"),
+                ("11", "@Strings.ThemeOrchidLime"),
                 # Not a shipping theme: the colours a config code delivered.
                 ("99", "@Strings.ThemeCustom"),
             ],
@@ -111,7 +114,8 @@ class ThemeResources(unittest.TestCase):
         }
         self.assertEqual(
             theme_labels,
-            {"ThemeTerrain", "ThemeActivity", "ThemeBeacon", "ThemePulse", "ThemeCustom"},
+            {"ThemeTerrain", "ThemeActivity", "ThemeBeacon", "ThemePulse", "ThemeLemonAzure",
+             "ThemeEmeraldViolet", "ThemeOrchidLime", "ThemeCustom"},
         )
 
 

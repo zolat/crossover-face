@@ -1063,12 +1063,18 @@ module MatrixTest {
             "Beacon must use the first ID after the retired range");
         Test.assertEqualMessage(StatMap.THEME_PULSE, 8,
             "Pulse must follow Beacon without reusing a retired ID");
+        Test.assertEqualMessage(StatMap.THEME_LEMON_AZURE, 9,
+            "Lemon & Azure must take the next ID after Pulse");
+        Test.assertEqualMessage(StatMap.THEME_EMERALD_VIOLET, 10,
+            "Emerald & Violet's persisted ID must never move");
+        Test.assertEqualMessage(StatMap.THEME_ORCHID_LIME, 11,
+            "Orchid & Lime's persisted ID must never move");
         Test.assertEqualMessage(StatMap.THEME_RETIRED_FIRST, 2,
             "the retired theme reservation must begin at ID 2");
         Test.assertEqualMessage(StatMap.THEME_RETIRED_LAST, 6,
             "the retired theme reservation must end at ID 6");
-        Test.assertEqualMessage(StatMap.THEME_NEXT_ID, 9,
-            "the next production theme must use ID 9");
+        Test.assertEqualMessage(StatMap.THEME_NEXT_ID, 12,
+            "the next production theme must use ID 12");
 
         // 99 is Custom (ConfigCodeTest); one past it is out of range.
         Properties.setValue(StatMap.PROPERTY_THEME, StatMap.THEME_CUSTOM + 1);
@@ -1108,8 +1114,8 @@ module MatrixTest {
     //! unreachable, miscoloured, or unnamed.
     (:test)
     function themeTablesCoverEveryTheme(logger as Logger) as Boolean {
-        Test.assertEqualMessage(Palette.THEME_COUNT, 4,
-            "exactly four production themes must ship");
+        Test.assertEqualMessage(Palette.THEME_COUNT, 7,
+            "exactly seven production themes must ship");
         Test.assertEqualMessage(Palette.THEMES.size(),
             Palette.THEME_COUNT * Palette.THEME_COLOURS,
             "THEMES must hold exactly THEME_COLOURS entries per theme");
@@ -1128,6 +1134,13 @@ module MatrixTest {
             "Beacon must be third in the settings list");
         Test.assertEqualMessage(StatMap.THEME_IDS[3], StatMap.THEME_PULSE,
             "Pulse must be fourth in the settings list");
+        Test.assertEqualMessage(StatMap.THEME_IDS[4], StatMap.THEME_LEMON_AZURE,
+            "Lemon & Azure must be fifth in the settings list");
+        Test.assertEqualMessage(StatMap.THEME_IDS[5],
+            StatMap.THEME_EMERALD_VIOLET,
+            "Emerald & Violet must be sixth in the settings list");
+        Test.assertEqualMessage(StatMap.THEME_IDS[6], StatMap.THEME_ORCHID_LIME,
+            "Orchid & Lime must be seventh in the settings list");
 
         // Every shipping theme has three explicit temperature colours.
         for (var i = 0; i < Palette.RAMP_STOPS.size(); i++) {
@@ -1294,6 +1307,26 @@ module MatrixTest {
         assertExactTheme(StatMap.THEME_PULSE,
             [0xFE4646, 0x2FD9C5, 0xE879F9, 0xB8D64B, 0x7FD4FF] as Array<Number>,
             [1, 3, 0] as Array<Number>, "Pulse");
+
+        Properties.setValue(StatMap.PROPERTY_THEME, StatMap.THEME_TERRAIN);
+        Config.reload();
+        return true;
+    }
+
+    //! The duo-tones chosen from the configurator's candidates: two colours
+    //! alternating outside in, the ramp from the bluer to the warmer. Pinned
+    //! to web/configurator/src/face/candidates.ts's duoTone() rule.
+    (:test)
+    function theDuoTonesAlternateTwoColours(logger as Logger) as Boolean {
+        assertExactTheme(StatMap.THEME_LEMON_AZURE,
+            [0xF0DC50, 0x3D9BFF, 0xF0DC50, 0x3D9BFF, 0xF0DC50] as Array<Number>,
+            [1, 0, 2] as Array<Number>, "Lemon & Azure");
+        assertExactTheme(StatMap.THEME_EMERALD_VIOLET,
+            [0x3FE08A, 0xB07CFF, 0x3FE08A, 0xB07CFF, 0x3FE08A] as Array<Number>,
+            [1, 0, 2] as Array<Number>, "Emerald & Violet");
+        assertExactTheme(StatMap.THEME_ORCHID_LIME,
+            [0xE879F9, 0xB8D64B, 0xE879F9, 0xB8D64B, 0xE879F9] as Array<Number>,
+            [0, 1, 3] as Array<Number>, "Orchid & Lime");
 
         Properties.setValue(StatMap.PROPERTY_THEME, StatMap.THEME_TERRAIN);
         Config.reload();

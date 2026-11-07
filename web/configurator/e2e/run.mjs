@@ -221,20 +221,26 @@ try {
     python({ ...decodedRandom, customColours: colours, customRamp: [1, 0, 3] }) === beforeRandom);
   await page.screenshot({ path: join(shots, "desktop-random.png") });
 
-  // A duo-tone candidate is a custom theme of two colours, alternating outside in, with
+  // An extended-library theme is a custom theme of two colours, alternating outside in, with
   // the ramp from the bluer to the warmer; the Python codec is what says so.
   await pickLabel("Ember & Ice");
   const duo = decoded(await code());
-  check("A duo-tone candidate loads as the custom theme",
+  check("An extended-library theme loads as the custom theme",
     duo.theme === 99 && duo.customColours.join() === [0xff7a3d, 0x6fd3ff, 0xff7a3d, 0x6fd3ff, 0xff7a3d].join() &&
     duo.customRamp.join() === "1,0,2", JSON.stringify(duo));
   check("…changes nothing but the colours", python({ ...duo, customColours: decodedRandom.customColours,
     customRamp: decodedRandom.customRamp }) === randomised);
   check("…draws the outer ring in its first colour", (await pixel(...topDot)) === 0xff7a3d);
-  check("…and shows which candidate it is", await page.$$eval("input[type=radio]:checked + label",
+  check("…and shows which one it is", await page.$$eval("input[type=radio]:checked + label",
     (labels) => labels.some((label) => label.textContent.trim() === "Ember & Ice")));
   check("…that nothing warns about", (await page.$$(".warnings p")).length === 0);
   await page.screenshot({ path: join(shots, "desktop-duotone.png") });
+
+  // The three duo-tones the watch ships are themes 9-11, not custom colours.
+  await pickLabel("Lemon & Azure");
+  check("Lemon & Azure is shipping theme 9, and changes nothing else",
+    (await code()) === python({ ...duo, theme: 9 }), await code());
+  check("…drawn in lemon on the outer ring", (await pixel(...topDot)) === 0xf0dc50);
 
   await page.click(".actions .primary");
   await new Promise((r) => setTimeout(r, 200));

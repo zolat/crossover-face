@@ -5,6 +5,9 @@
             <listEntry value="1">@Strings.ThemeActivity</listEntry>
             <listEntry value="7">@Strings.ThemeBeacon</listEntry>
             <listEntry value="8">@Strings.ThemePulse</listEntry>
+            <listEntry value="9">@Strings.ThemeLemonAzure</listEntry>
+            <listEntry value="10">@Strings.ThemeEmeraldViolet</listEntry>
+            <listEntry value="11">@Strings.ThemeOrchidLime</listEntry>
             <listEntry value="99">@Strings.ThemeCustom</listEntry>
         </settingConfig>
     </setting>

@@ -286,7 +286,10 @@ module TimeRingTest {
         0x80ACFF, 0xFF8281,     // Terrain: orchid -> light blue, salmon
         0xD456DB, 0xB98C00,     // Activity: red -> magenta, mustard
         0x8BDBA0, 0xB1C3FF,     // Beacon: cyan -> mint, lavender
-        0xD456DB, 0xB98C00      // Pulse: red -> magenta, mustard
+        0xD456DB, 0xB98C00,     // Pulse: red -> magenta, mustard
+        0xFFCDBA, 0x67F9B8,     // Lemon & Azure: lemon -> peach, mint
+        0xE1BC00, 0x00D5F8,     // Emerald & Violet: emerald -> gold, cyan
+        0x80ACFF, 0xFF8281      // Orchid & Lime: as Terrain's orchid
     ] as Array<Number>;
 
     function near255(a as Number, b as Number) as Boolean {

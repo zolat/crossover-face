@@ -9,7 +9,10 @@ const THEME_LABELS = [
     Rez.Strings.ThemeTerrain,
     Rez.Strings.ThemeActivity,
     Rez.Strings.ThemeBeacon,
-    Rez.Strings.ThemePulse
+    Rez.Strings.ThemePulse,
+    Rez.Strings.ThemeLemonAzure,
+    Rez.Strings.ThemeEmeraldViolet,
+    Rez.Strings.ThemeOrchidLime
 ] as Array<ResourceId>;
 
 //! Date outline levels, in StatMap.DateOutline order. Shared by the row's

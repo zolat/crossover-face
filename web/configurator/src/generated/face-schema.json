@@ -30,6 +30,21 @@
           "labelDrawn": "Pulse"
         },
         {
+          "value": 9,
+          "label": "Lemon & Azure",
+          "labelDrawn": "Lemon & Azure"
+        },
+        {
+          "value": 10,
+          "label": "Emerald & Violet",
+          "labelDrawn": "Emerald & Violet"
+        },
+        {
+          "value": 11,
+          "label": "Orchid & Lime",
+          "labelDrawn": "Orchid & Lime"
+        },
+        {
           "value": 99,
           "label": "Custom",
           "labelDrawn": "Custom"
@@ -582,6 +597,54 @@
         1,
         3,
         0
+      ]
+    },
+    {
+      "id": 9,
+      "name": "Lemon & Azure",
+      "colours": [
+        15785040,
+        4037631,
+        15785040,
+        4037631,
+        15785040
+      ],
+      "ramp": [
+        1,
+        0,
+        2
+      ]
+    },
+    {
+      "id": 10,
+      "name": "Emerald & Violet",
+      "colours": [
+        4186250,
+        11566335,
+        4186250,
+        11566335,
+        4186250
+      ],
+      "ramp": [
+        1,
+        0,
+        2
+      ]
+    },
+    {
+      "id": 11,
+      "name": "Orchid & Lime",
+      "colours": [
+        15235577,
+        12113483,
+        15235577,
+        12113483,
+        15235577
+      ],
+      "ramp": [
+        0,
+        1,
+        3
       ]
     }
   ],

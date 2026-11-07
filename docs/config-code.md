@@ -19,7 +19,7 @@ The format is also the payload a later background sync would carry, unchanged.
 
     byte  field              stored as                      valid
     0     version            1                              1
-    1     theme              persisted theme ID             0, 1, 7, 8, 99
+    1     theme              persisted theme ID             0, 1, 7-11, 99
     2     handBacking        list index                     0..2
     3     alwaysOnFill       list index                     0..1
     4     dotRotation        list index                     0..1
@@ -93,7 +93,7 @@ The CRC is CRC-16/CCITT-FALSE: polynomial `0x1021`, initial value `0xFFFF`, no r
 no final XOR. `"123456789"` checks to `0x29B1`.
 
 Theme `99` is **Custom**: the rings take bytes 13–25. It sits outside the production ID
-sequence on purpose — the next shipping theme is still `9`. The custom theme is carried
+sequence on purpose — the next shipping theme is still `12`. The custom theme is carried
 whichever theme is selected, so switching to a shipping theme and back never loses it.
 
 A ramp stop is an index into the theme's colours, exactly as `Palette.RAMP_STOPS` is.

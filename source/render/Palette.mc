@@ -49,6 +49,13 @@ module Palette {
     //! lime. Both began as mockup candidates and keep the exact ring order and
     //! temperature stops reviewed there.
     //!
+    //! **Lemon & Azure**, **Emerald & Violet** and **Orchid & Lime** are
+    //! duo-tones: two colours alternating ring by ring, A B A B A, because
+    //! five hues plus the colour the data brings (the ramp, the sun dots, the
+    //! time ring's split) had made every theme busy. They were chosen from ten
+    //! candidates in the web configurator, which keeps the other seven. With
+    //! two hues the ramp runs from the bluer to the warmer and holds there.
+    //!
     //! The order is decorative in no theme. Neighbours blurring together,
     //! not the set average, decides whether two rings can be told apart.
     //! Activity puts gold on the innermost ring, which has by far the fewest
@@ -62,7 +69,7 @@ module Palette {
     //! Terrain's rust, indigo beside Activity's gold, lime beside Beacon's gold,
     //! ice beside Pulse's lime.
     const THEME_COLOURS = 5;
-    const THEME_COUNT = 4;
+    const THEME_COUNT = 7;
     const THEMES = [
         0xE879F9,   //! Terrain:  orchid
         0xB8D64B,   //!           moss
@@ -83,7 +90,22 @@ module Palette {
         0x2FD9C5,   //!           teal
         0xE879F9,   //!           orchid
         0xB8D64B,   //!           lime
-        0x7FD4FF    //!           ice
+        0x7FD4FF,   //!           ice
+        0xF0DC50,   //! Lemon & Azure:    lemon
+        0x3D9BFF,   //!                   azure
+        0xF0DC50,
+        0x3D9BFF,
+        0xF0DC50,
+        0x3FE08A,   //! Emerald & Violet: emerald
+        0xB07CFF,   //!                   violet
+        0x3FE08A,
+        0xB07CFF,
+        0x3FE08A,
+        0xE879F9,   //! Orchid & Lime:    orchid
+        0xB8D64B,   //!                   lime
+        0xE879F9,
+        0xB8D64B,
+        0xE879F9
     ] as Array<Number>;
 
     const WEAK_ACTIVE = 0.55;
@@ -285,13 +307,18 @@ module Palette {
     //! ordering answers to neighbour contrast, not to keeping the ramp's
     //! indices where they were. Terrain runs ice -> orchid -> rust, Activity
     //! blue -> gold -> red, Beacon cyan -> gold -> red, and Pulse teal -> lime
-    //! -> red. Every shipping theme has three explicit stops.
+    //! -> red. Every shipping theme has three explicit stops; a duo-tone's mid
+    //! and hot are both its warmer colour, so its ramp turns over the first
+    //! half of the scale, 0 to 30C, and holds there.
     const RAMP_POINTS = 3;
     const RAMP_STOPS = [
         2, 0, 3,                    //! Terrain:  ice -> orchid -> rust
         2, 3, 0,                    //! Activity: blue -> gold -> red
         0, 3, 1,                    //! Beacon:   cyan -> gold -> red
-        1, 3, 0                     //! Pulse:    teal -> lime -> red
+        1, 3, 0,                    //! Pulse:    teal -> lime -> red
+        1, 0, 2,                    //! Lemon & Azure:    azure -> lemon
+        1, 0, 2,                    //! Emerald & Violet: violet -> emerald
+        0, 1, 3                     //! Orchid & Lime:    orchid -> lime
     ] as Array<Number>;
 
     var active as Array<Number> = [] as Array<Number>;

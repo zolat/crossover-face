@@ -128,6 +128,14 @@ SHIPPING_THEMES = {
                (0x8E, 0x7B, 0xFF), (0xE5, 0x9A, 0x0A), (0xB8, 0xD6, 0x4B)],
     "pulse": [(0xFE, 0x46, 0x46), (0x2F, 0xD9, 0xC5),
               (0xE8, 0x79, 0xF9), (0xB8, 0xD6, 0x4B), (0x7F, 0xD4, 0xFF)],
+    # Duo-tones: two colours alternating ring by ring, chosen from the web
+    # configurator's candidates (web/configurator/src/face/candidates.ts).
+    "lemon-azure": [(0xF0, 0xDC, 0x50), (0x3D, 0x9B, 0xFF), (0xF0, 0xDC, 0x50),
+                    (0x3D, 0x9B, 0xFF), (0xF0, 0xDC, 0x50)],
+    "emerald-violet": [(0x3F, 0xE0, 0x8A), (0xB0, 0x7C, 0xFF), (0x3F, 0xE0, 0x8A),
+                       (0xB0, 0x7C, 0xFF), (0x3F, 0xE0, 0x8A)],
+    "orchid-lime": [(0xE8, 0x79, 0xF9), (0xB8, 0xD6, 0x4B), (0xE8, 0x79, 0xF9),
+                    (0xB8, 0xD6, 0x4B), (0xE8, 0x79, 0xF9)],
 }
 
 # Mockup-only candidates. They deliberately have no production IDs, resource
@@ -143,6 +151,9 @@ SHIPPING_RAMP_STOPS = {
     "activity": (2, 3, 0),          # blue -> gold -> red
     "beacon": (0, 3, 1),            # cyan -> gold -> red
     "pulse": (1, 3, 0),             # teal -> lime -> red
+    "lemon-azure": (1, 0, 2),       # azure -> lemon, held
+    "emerald-violet": (1, 0, 2),    # violet -> emerald, held
+    "orchid-lime": (0, 1, 3),       # orchid -> lime, held
 }
 
 CANDIDATE_RAMP_STOPS = {
@@ -1325,7 +1336,7 @@ def main(outdir: str = "build/mockups", device: str = DEFAULT_DEVICE) -> int:
 
     # 9. Themes — the same face in each set of ring colours, in both modes.
     panels = []
-    for name in ("terrain", "activity", "beacon", "pulse"):
+    for name in SHIPPING_THEMES:
         use_theme(name)
         for mode, always_on in (("awake", False), ("always-on", True)):
             face = render(values, always_on=always_on)
@@ -1334,8 +1345,8 @@ def main(outdir: str = "build/mockups", device: str = DEFAULT_DEVICE) -> int:
                            composite(face)))
     use_theme("terrain")
     path = os.path.join(outdir, "09-themes.png")
-    sheet(panels, "Shipping colour themes — Terrain, Activity, Beacon and "
-                  "Pulse; awake and always-on").save(path)
+    sheet(panels, "Shipping colour themes — Terrain, Activity, Beacon, Pulse "
+                  "and the three duo-tones; awake and always-on").save(path)
     written.append(path)
 
     # 10. Non-shipping candidates, kept together and visibly separate from the

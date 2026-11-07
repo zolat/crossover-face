@@ -1036,7 +1036,7 @@ from `StatMap.themeIndex()`, for the reason `DotGrid.ARMS` is flat: a const arra
 further than Monkey C's `const` is meant to go, and nesting it resolves in the simulator and
 comes back empty on the watch. `RAMP_STOPS` is flat for the same reason.
 
-There are four shipping themes, outermost to innermost. The fifth colour is the 454's
+There are seven shipping themes, outermost to innermost. The fifth colour is the 454's
 centre ball and no four-ring watch reads it; each was picked on the five-ring mockup as a hue
 the theme lacked and its neighbour does not crowd:
 
@@ -1044,6 +1044,18 @@ the theme lacked and its neighbour does not crowd:
 - Activity: red `#FE4646`, green `#6DC54F`, blue `#1F8FFE`, gold `#E59A0A`, indigo `#8E7BFF`.
 - Beacon: cyan `#5CD9F0`, red `#FE4646`, indigo `#8E7BFF`, gold `#E59A0A`, lime `#B8D64B`.
 - Pulse: red `#FE4646`, teal `#2FD9C5`, orchid `#E879F9`, lime `#B8D64B`, ice `#7FD4FF`.
+- Lemon & Azure (9): lemon `#F0DC50`, azure `#3D9BFF`, alternating A B A B A.
+- Emerald & Violet (10): emerald `#3FE08A`, violet `#B07CFF`, alternating.
+- Orchid & Lime (11): orchid `#E879F9`, lime `#B8D64B`, alternating.
+
+**The last three are duo-tones**: two colours ring by ring, because five hues plus what the
+data paints over them (ramp, sun dots, the time ring's split) had made every theme busy.
+They were picked from ten candidates in the web configurator; the other seven stay there as
+its *extended library*, loading as the custom theme, so they reach any watch with no ID.
+`web/configurator/src/face/extended.ts`'s `duoTone()` is the rule all ten are built by —
+ramp from the bluer colour to the warmer, both upper stops the warmer — and `extended.test.ts`
+pins the shipping three to it. On the Epix the time ring adds its own two split colours over
+the outer one, so a duo-tone there still shows four hues.
 
 The custom theme is five colours and three stops too (`CUSTOM_THEME_SIZE` 8). One stored
 before that, four and three, is read with `CUSTOM_FIFTH_DEFAULT` (Terrain's gold) slotted in.
@@ -1054,12 +1066,15 @@ malformed.
 The temperature ramp names three **indices into the theme, not colours**: a ramp stop *is* a
 ring colour, and writing the value a second time is how the two drift apart. Terrain runs ice
 → orchid → rust; Activity runs blue → gold → red; Beacon runs cyan → gold → red; and Pulse runs
-teal → lime → red. Every theme has three explicit stops, so `Palette.build()` does no per-theme
+teal → lime → red. A duo-tone runs its cold colour to its warm one by the midpoint (30°C) and
+holds. Every theme has three explicit stops, so `Palette.build()` does no per-theme
 branching while it constructs the ramp.
 
 Persisted theme IDs are deliberately sparse. Terrain remains `0`, Activity remains `1`, and
 IDs `2` through `6` are retired forever. Any watch still storing one of them falls back to
-Terrain. Beacon uses `7`, Pulse uses `8`, and the next production theme must use `9`.
+Terrain. Beacon uses `7`, Pulse uses `8`, the duo-tones `9`–`11`, and the next production
+theme must use `12`. The codecs list the IDs literally (`configcode.py`, `configCode.ts`), so a
+new theme moves them too, and a code naming a new ID is refused by a watch built before it.
 `99` is Custom — the wearer's colours from a config code — and is not a production theme.
 `StatMap.THEME_IDS` maps those sparse persisted IDs to dense Palette table slots. Never reuse a
 retired ID or index a palette table directly by the persisted ID.
@@ -1175,7 +1190,8 @@ about +0.15 points on the default field, on both rotations.
 ### The 10% luminance budget
 
 Garmin blanks an always-on face that exceeds 10% of screen luminance. Current design sits at
-~4.8% active / ~4.6% always-on, ~5.7% worst case on Terrain, and lower on every other theme —
+~4.8% active / ~4.6% always-on, and a worst case of 6.4% on Lemon & Azure, the brightest theme
+(Terrain 6.0%, measured on the Crossover in November 2026) —
 **and those figures hold on every screen size**, because `PITCH` and `DOT` do not move with
 the screen (see *One face, five watches*). The Epix's time ring prices its brightest colour
 on ring 0: the split's white takes the worst theme to 7.06% always-on, the overlap 4.22% on

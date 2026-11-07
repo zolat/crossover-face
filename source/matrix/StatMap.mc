@@ -87,12 +87,15 @@ module StatMap {
         THEME_TERRAIN = 0,          //! Orchid, moss, ice, rust.
         THEME_ACTIVITY = 1,         //! The watch's own activity accents.
         THEME_BEACON = 7,           //! Cyan, red, indigo, gold.
-        THEME_PULSE = 8             //! Red, teal, orchid, lime.
+        THEME_PULSE = 8,            //! Red, teal, orchid, lime.
+        THEME_LEMON_AZURE = 9,      //! Duo-tone: lemon and azure.
+        THEME_EMERALD_VIOLET = 10,  //! Duo-tone: emerald and violet.
+        THEME_ORCHID_LIME = 11      //! Duo-tone: orchid and lime.
     }
 
     const THEME_RETIRED_FIRST = 2;
     const THEME_RETIRED_LAST = 6;
-    const THEME_NEXT_ID = 9;
+    const THEME_NEXT_ID = 12;
 
     //! The wearer's own four colours, set only by a config code (see
     //! ConfigCode). Far outside the production sequence on purpose: the next
@@ -124,7 +127,7 @@ module StatMap {
     const CUSTOM_STOP_MAX = 4;
     // Literal values because Monkey C const arrays have failed on-device when
     // their initialisers refer to other consts. The tests pin these to the enum.
-    const THEME_IDS = [0, 1, 7, 8] as Array<Number>;
+    const THEME_IDS = [0, 1, 7, 8, 9, 10, 11] as Array<Number>;
 
     const PROPERTY_THEME = "theme";
     const PROPERTY_BACKING = "handBacking";

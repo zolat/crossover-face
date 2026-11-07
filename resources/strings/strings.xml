@@ -11,6 +11,9 @@
     <string id="ThemeActivity">Activity</string>
     <string id="ThemeBeacon">Beacon</string>
     <string id="ThemePulse">Pulse</string>
+    <string id="ThemeLemonAzure">Lemon &amp; Azure</string>
+    <string id="ThemeEmeraldViolet">Emerald &amp; Violet</string>
+    <string id="ThemeOrchidLime">Orchid &amp; Lime</string>
     <string id="ThemeCustom">Custom</string>
     <string id="BackingTitle">Behind hands</string>
     <string id="BackingPrompt">Clears the dots under the hands while the watch is awake</string>

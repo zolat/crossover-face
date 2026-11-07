@@ -12,7 +12,7 @@ const LENGTHS: Record<number, number> = { 1: 28, 2: 33, 3: 34, 4: LENGTH };
 const TEMP_OFFSET = 20;
 
 export const THEME_CUSTOM = 99;
-export const THEME_IDS = [0, 1, 7, 8, THEME_CUSTOM] as const;
+export const THEME_IDS = [0, 1, 7, 8, 9, 10, 11, THEME_CUSTOM] as const;
 export const TEMP_MIN = -20;
 export const TEMP_MAX = 50;
 /** Source.COUNT - 1. The two time styles, 14 and 15, are the top. */

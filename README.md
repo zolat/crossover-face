@@ -426,6 +426,13 @@ goal, and the temperature ramp.
 | **Activity** | red `#FE4646` | green `#6DC54F` | blue `#1F8FFE` | gold `#E59A0A` |
 | **Beacon** | cyan `#5CD9F0` | red `#FE4646` | indigo `#8E7BFF` | gold `#E59A0A` |
 | **Pulse** | red `#FE4646` | teal `#2FD9C5` | orchid `#E879F9` | lime `#B8D64B` |
+| **Lemon & Azure** | lemon `#F0DC50` | azure `#3D9BFF` | lemon | azure |
+| **Emerald & Violet** | emerald `#3FE08A` | violet `#B07CFF` | emerald | violet |
+| **Orchid & Lime** | orchid `#E879F9` | lime `#B8D64B` | orchid | lime |
+
+The last three are **duo-tones**: two colours alternating ring by ring, quieter under the
+colour the data itself adds. Seven more live in the web configurator's extended library and
+load as a custom theme.
 
 **Activity** is not a palette invented for the face — it is the accent colours *this watch*
 uses, the ones an activity profile picks from. They were read off the device's own artwork
@@ -483,7 +490,8 @@ range floats between its ends and reads as an arc.
 Temperature is the one source drawn on a ramp rather than a flat hue — cold through a middle
 to hot, in the theme's own colours — so the ring reads as a temperature rather than just a
 length. Terrain runs ice through orchid to rust; Activity blue through gold to red; Beacon cyan
-through gold to red; and Pulse teal through lime to red.
+through gold to red; Pulse teal through lime to red; and each duo-tone from its bluer colour to
+its warmer one.
 
 #### Past the goal — the second lap
 

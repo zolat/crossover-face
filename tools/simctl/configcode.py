@@ -29,7 +29,7 @@ LENGTHS = {1: 28, 2: 33, 3: 34, 4: 36}  # bytes, per version
 LENGTH = LENGTHS[VERSION]
 
 THEME_CUSTOM = 99
-THEME_IDS = (0, 1, 7, 8, THEME_CUSTOM)
+THEME_IDS = (0, 1, 7, 8, 9, 10, 11, THEME_CUSTOM)
 TEMP_OFFSET = 20
 TEMP_MIN, TEMP_MAX = -20, 50
 SOURCE_MAX = 15  # Source.COUNT - 1: the two time styles are 14 and 15

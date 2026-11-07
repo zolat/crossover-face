@@ -30,7 +30,9 @@ module ConfigCodeTest {
         "BAAAAAABAQAIAgMUQQAAAAAAAAAAAAAAAAAP____BwIAAI3L",
         "BAAAAAABAQ8IAgMUQeh5-bjWS3_U__9rWzIA5bM6AAABAER9",
         "BAAAAAABAQ8IAgMUQeh5-bjWS3_U__9rWzIA5bM6AAAAAWdt",
-        "BAAAAAABAQAIAgMUQQAAAAAAAAAAAAAAAAAP____BwIBAa7b"
+        "BAAAAAABAQAIAgMUQQAAAAAAAAAAAAAAAAAP____BwIBAa7b",
+        "BAkAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AAAAABX2",
+        "BAsAAAABAQAIAgMUQeh5-bjWS3_U__9rWzIA5bM6AAAAAB5v"
     ] as Array<String>;
     //! ConfigCode.FIELDS numbers per code, in VALID_CODES order.
     const VALID_CONFIGS = [
@@ -48,7 +50,9 @@ module ConfigCodeTest {
         0, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 0, 0, 0, 0, 4, 4, 4, 15, 16777215, 2, 0, 0,
         0, 0, 0, 0, 1, 1, 15, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0, 1, 0,
         0, 0, 0, 0, 1, 1, 15, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0, 0, 1,
-        0, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 0, 0, 0, 0, 4, 4, 4, 15, 16777215, 2, 1, 1
+        0, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 0, 0, 0, 0, 4, 4, 4, 15, 16777215, 2, 1, 1,
+        9, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0, 0, 0,
+        11, 0, 0, 0, 1, 1, 0, 8, 2, 3, 0, 45, 15235577, 12113483, 8377599, 16739163, 2, 0, 3, 0, 15053626, 0, 0, 0
     ] as Array<Number>;
     //! Older codes, decode-only, and the ConfigCode.FIELDS numbers this
     //! decoder makes of each: what a version lacks at its default.

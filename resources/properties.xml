@@ -1,6 +1,7 @@
 <properties xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://developer.garmin.com/downloads/connect-iq/resources.xsd">
-    <!-- 0 Terrain, 1 Activity, 7 Beacon, 8 Pulse. IDs 2-6 are retired and
-         reserved; the next production theme must use 9. 99 is Custom: the
+    <!-- 0 Terrain, 1 Activity, 7 Beacon, 8 Pulse, 9 Lemon & Azure,
+         10 Emerald & Violet, 11 Orchid & Lime. IDs 2-6 are retired and
+         reserved; the next production theme must use 12. 99 is Custom: the
          colours a config code delivered, kept in Storage. Kept in sync with
          StatMap.Theme. -->
     <property id="theme" type="number">0</property>
